@@ -42,6 +42,35 @@ export interface ResearchResponse {
   error?: string;
 }
 
+export interface ComparisonResponse {
+  success: boolean;
+  data?: StockReport[];
+  error?: string;
+}
+
+export interface RankingItem {
+  rank: number;
+  ticker: string;
+  company_name?: string;
+  score: number;
+  verdict: "BUY" | "HOLD" | "SELL" | "AVOID";
+  confidence: number;
+  summary: string;
+  price?: number;
+  change_percent?: number;
+}
+
+export interface ScreeningResponse {
+  success: boolean;
+  data?: RankingItem[];
+  error?: string;
+}
+
+export type AppResult =
+  | { type: "stock-report"; data: StockReport }
+  | { type: "comparison"; data: StockReport[] }
+  | { type: "ranking"; data: RankingItem[] };
+
 export async function researchStock(
   query: string,
   ticker?: string
@@ -50,5 +79,19 @@ export async function researchStock(
     query,
     ticker,
   });
+  return res.data;
+}
+
+export async function compareStocks(
+  tickers: string[]
+): Promise<ComparisonResponse> {
+  const res = await api.post<ComparisonResponse>("/api/compare", {
+    tickers,
+  });
+  return res.data;
+}
+
+export async function screenStocks(): Promise<ScreeningResponse> {
+  const res = await api.get<ScreeningResponse>("/api/screen");
   return res.data;
 }

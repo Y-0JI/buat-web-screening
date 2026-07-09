@@ -3,11 +3,47 @@
 import { useState } from "react";
 import { SearchBar } from "@/components/search-bar";
 import { DynamicRenderer } from "@/components/renderers";
-import { researchStock, type StockReport } from "@/lib/api";
+import {
+  researchStock,
+  compareStocks,
+  screenStocks,
+  type AppResult,
+} from "@/lib/api";
+
+function detectIntent(
+  query: string
+): "research" | "compare" | "screen" {
+  const q = query.toLowerCase();
+  if (
+    q.includes("bandingkan") ||
+    q.includes("compare") ||
+    q.includes("vs")
+  ) {
+    return "compare";
+  }
+  if (
+    q.includes("cari") ||
+    q.includes("terbaik") ||
+    q.includes("screen") ||
+    q.includes("rekomendasi")
+  ) {
+    return "screen";
+  }
+  return "research";
+}
+
+function extractTickers(query: string): string[] {
+  return (
+    query
+      .toUpperCase()
+      .match(/\b([A-Z]{2,5})\b/g)
+      ?.slice(0, 5) || []
+  );
+}
 
 export default function Home() {
   const [loading, setLoading] = useState(false);
-  const [result, setResult] = useState<StockReport | null>(null);
+  const [result, setResult] = useState<AppResult | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const handleSearch = async (query: string) => {
@@ -16,14 +52,38 @@ export default function Home() {
     setResult(null);
 
     try {
-      const res = await researchStock(query);
-      if (res.success && res.data) {
-        setResult(res.data);
+      const intent = detectIntent(query);
+
+      if (intent === "screen") {
+        const res = await screenStocks();
+        if (res.success && res.data) {
+          setResult({ type: "ranking", data: res.data });
+        } else {
+          setError(res.error || "Gagal screening");
+        }
+      } else if (intent === "compare") {
+        const tickers = extractTickers(query);
+        if (tickers.length < 2) {
+          setError("Setidaknya 2 ticker diperlukan untuk perbandingan");
+        } else {
+          const res = await compareStocks(tickers);
+          if (res.success && res.data) {
+            setResult({ type: "comparison", data: res.data });
+          } else {
+            setError(res.error || "Gagal membandingkan");
+          }
+        }
       } else {
-        setError(res.error || "Terjadi kesalahan");
+        const res = await researchStock(query);
+        if (res.success && res.data) {
+          setResult({ type: "stock-report", data: res.data });
+        } else {
+          setError(res.error || "Terjadi kesalahan");
+        }
       }
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : "Gagal menghubungi server";
+      const msg =
+        err instanceof Error ? err.message : "Gagal menghubungi server";
       setError(msg);
     } finally {
       setLoading(false);
@@ -53,7 +113,7 @@ export default function Home() {
         </div>
       )}
 
-      {result && <DynamicRenderer data={result} />}
+      {result && <DynamicRenderer result={result} />}
     </main>
   );
 }
