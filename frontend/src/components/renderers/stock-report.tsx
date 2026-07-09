@@ -37,7 +37,14 @@ export function StockReportCard({ data }: { data: StockReport }) {
           </h2>
           <span className="text-zinc-500 text-sm">{data.ticker}</span>
         </div>
-        <VerdictBadge verdict={data.verdict} />
+        <div className="flex items-center gap-2">
+          {data.mode && (
+            <span className="text-xs px-2 py-0.5 bg-zinc-800 border border-zinc-700 rounded text-zinc-400">
+              {data.mode}
+            </span>
+          )}
+          <VerdictBadge verdict={data.verdict} />
+        </div>
       </div>
 
       <div className="grid grid-cols-3 gap-4 mb-4">

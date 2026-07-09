@@ -35,8 +35,10 @@ async def research(
         )
 
     info = fetch_company_info(ticker)
-    report = calculate_score(df, ticker)
+    mode = (req.mode or "BSJP").upper()
+    report = calculate_score(df, ticker, mode)
     report.company_name = info.get("name", ticker)
+    report.mode = mode
 
     if user:
         session.add(ScanHistory(

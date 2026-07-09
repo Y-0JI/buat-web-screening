@@ -49,6 +49,7 @@ class StockReport(BaseModel):
     score_breakdown: list[ScoreBreakdown] = []
     stop_loss: Optional[float] = None
     risk_percent: Optional[float] = None
+    mode: Optional[str] = None
     disclaimer: str = (
         "Hasil AI adalah alat bantu riset, bukan rekomendasi investasi resmi."
     )
@@ -57,6 +58,7 @@ class StockReport(BaseModel):
 class ResearchRequest(BaseModel):
     query: str
     ticker: Optional[str] = None
+    mode: Optional[str] = None
 
 
 class ResearchResponse(BaseModel):

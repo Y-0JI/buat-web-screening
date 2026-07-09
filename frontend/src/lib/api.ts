@@ -15,6 +15,7 @@ export interface StockReport {
   verdict: "BUY" | "HOLD" | "SELL" | "AVOID";
   confidence: number;
   summary: string;
+  mode?: string;
   indicators: {
     ema: Record<string, number>;
     rsi?: number;
@@ -91,11 +92,13 @@ export type AppResult =
 
 export async function researchStock(
   query: string,
-  ticker?: string
+  ticker?: string,
+  mode?: string
 ): Promise<ResearchResponse> {
   const res = await api.post<ResearchResponse>("/api/research", {
     query,
     ticker,
+    mode,
   });
   return res.data;
 }
