@@ -2,11 +2,13 @@
 
 import { useState } from "react";
 import { SearchBar } from "@/components/search-bar";
+import { UploadArea } from "@/components/upload-area";
 import { DynamicRenderer } from "@/components/renderers";
 import {
   researchStock,
   compareStocks,
   screenStocks,
+  analyzeVision,
   type AppResult,
 } from "@/lib/api";
 
@@ -90,6 +92,27 @@ export default function Home() {
     }
   };
 
+  const handleFileUpload = async (file: File) => {
+    setLoading(true);
+    setError(null);
+    setResult(null);
+
+    try {
+      const res = await analyzeVision(file);
+      if (res.success && res.data) {
+        setResult({ type: "vision-analysis", data: res.data });
+      } else {
+        setError(res.error || "Gagal menganalisis gambar");
+      }
+    } catch (err: unknown) {
+      const msg =
+        err instanceof Error ? err.message : "Gagal menghubungi server";
+      setError(msg);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <main className="flex flex-col items-center px-4 py-16">
       <div className="mb-8 text-center">
@@ -100,6 +123,7 @@ export default function Home() {
       </div>
 
       <SearchBar onSearch={handleSearch} loading={loading} />
+      <UploadArea onFileSelect={handleFileUpload} disabled={loading} />
 
       {loading && (
         <div className="mt-8 text-zinc-500 text-sm animate-pulse">

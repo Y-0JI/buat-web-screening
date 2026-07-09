@@ -91,3 +91,22 @@ class ScreeningResponse(BaseModel):
     success: bool
     data: Optional[list[RankingItem]] = None
     error: Optional[str] = None
+
+
+class VisionReport(BaseModel):
+    render: RenderType = RenderType.vision_analysis
+    file_name: str
+    analysis_text: str
+    patterns_detected: list[str] = []
+    trend: Optional[str] = None
+    support_level: Optional[float] = None
+    resistance_level: Optional[float] = None
+    disclaimer: str = (
+        "Hasil AI adalah alat bantu riset, bukan rekomendasi investasi resmi."
+    )
+
+
+class VisionAnalysisResponse(BaseModel):
+    success: bool
+    data: Optional[VisionReport] = None
+    error: Optional[str] = None
