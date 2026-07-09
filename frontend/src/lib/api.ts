@@ -66,10 +66,28 @@ export interface ScreeningResponse {
   error?: string;
 }
 
+export interface VisionReport {
+  render: "vision-analysis";
+  file_name: string;
+  analysis_text: string;
+  patterns_detected: string[];
+  trend?: string;
+  support_level?: number;
+  resistance_level?: number;
+  disclaimer: string;
+}
+
+export interface VisionAnalysisResponse {
+  success: boolean;
+  data?: VisionReport;
+  error?: string;
+}
+
 export type AppResult =
   | { type: "stock-report"; data: StockReport }
   | { type: "comparison"; data: StockReport[] }
-  | { type: "ranking"; data: RankingItem[] };
+  | { type: "ranking"; data: RankingItem[] }
+  | { type: "vision-analysis"; data: VisionReport };
 
 export async function researchStock(
   query: string,
@@ -93,5 +111,17 @@ export async function compareStocks(
 
 export async function screenStocks(): Promise<ScreeningResponse> {
   const res = await api.get<ScreeningResponse>("/api/screen");
+  return res.data;
+}
+
+export async function analyzeVision(
+  file: File
+): Promise<VisionAnalysisResponse> {
+  const form = new FormData();
+  form.append("file", file);
+  const res = await api.post<VisionAnalysisResponse>(
+    "/api/vision-analysis",
+    form
+  );
   return res.data;
 }

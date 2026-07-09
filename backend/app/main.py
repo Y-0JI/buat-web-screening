@@ -5,6 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.config import settings
 from app.routers.research import router as research_router
 from app.routers.screening import router as screening_router
+from app.routers.vision import router as vision_router
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -48,6 +49,7 @@ app.add_middleware(
 
 app.include_router(research_router)
 app.include_router(screening_router)
+app.include_router(vision_router)
 
 
 @app.get("/")
