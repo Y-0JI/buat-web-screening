@@ -1,6 +1,9 @@
 "use client";
 
+import { useAuth } from "@/lib/auth-context";
+import { addWatchlist } from "@/lib/api";
 import type { StockReport } from "@/lib/api";
+import { useState } from "react";
 
 function VerdictBadge({ verdict }: { verdict: string }) {
   const colors: Record<string, string> = {
@@ -21,6 +24,8 @@ function VerdictBadge({ verdict }: { verdict: string }) {
 }
 
 export function StockReportCard({ data }: { data: StockReport }) {
+  const { user } = useAuth();
+  const [wlMsg, setWlMsg] = useState<string | null>(null);
   const priceColor =
     data.change_percent !== undefined
       ? data.change_percent >= 0
@@ -46,6 +51,13 @@ export function StockReportCard({ data }: { data: StockReport }) {
           <VerdictBadge verdict={data.verdict} />
         </div>
       </div>
+
+      {data.is_simulated && (
+        <div className="mb-4 p-3 bg-amber-950/30 border border-amber-800/50 rounded-xl text-sm">
+          <span className="text-amber-400 font-medium">Data simulasi</span>
+          <span className="text-amber-300/70 ml-2">Sumber data tidak tersedia, menampilkan data simulasi.</span>
+        </div>
+      )}
 
       <div className="grid grid-cols-3 gap-4 mb-4">
         <div className="bg-zinc-800 rounded-xl p-3 text-center">
@@ -93,25 +105,25 @@ export function StockReportCard({ data }: { data: StockReport }) {
           Indikator
         </h3>
         <div className="grid grid-cols-2 gap-2 text-sm">
-          {data.indicators.rsi !== undefined && (
+          {data.indicators.rsi != null && (
             <div className="bg-zinc-800 rounded-lg px-3 py-2 flex justify-between">
               <span className="text-zinc-400">RSI</span>
               <span className="text-zinc-200 font-mono">{data.indicators.rsi}</span>
             </div>
           )}
-          {data.indicators.volume_ratio !== undefined && (
+          {data.indicators.volume_ratio != null && (
             <div className="bg-zinc-800 rounded-lg px-3 py-2 flex justify-between">
               <span className="text-zinc-400">Vol Ratio</span>
               <span className="text-zinc-200 font-mono">{data.indicators.volume_ratio}x</span>
             </div>
           )}
-          {data.indicators.gap_percent !== undefined && (
+          {data.indicators.gap_percent != null && (
             <div className="bg-zinc-800 rounded-lg px-3 py-2 flex justify-between">
               <span className="text-zinc-400">Gap</span>
               <span className="text-zinc-200 font-mono">{data.indicators.gap_percent}%</span>
             </div>
           )}
-          {data.indicators.atr !== undefined && (
+          {data.indicators.atr != null && (
             <div className="bg-zinc-800 rounded-lg px-3 py-2 flex justify-between">
               <span className="text-zinc-400">ATR</span>
               <span className="text-zinc-200 font-mono">{data.indicators.atr}</span>
@@ -140,6 +152,32 @@ export function StockReportCard({ data }: { data: StockReport }) {
             ))}
           </div>
         </details>
+      )}
+
+      {user && (
+        <div className="mb-4">
+          <button
+            onClick={async () => {
+              setWlMsg(null);
+              try {
+                const res = await addWatchlist(data.ticker);
+                if (res.success) {
+                  setWlMsg("Ditambahkan ke watchlist");
+                } else {
+                  setWlMsg(res.error || "Gagal");
+                }
+              } catch {
+                setWlMsg("Gagal menghubungi server");
+              }
+            }}
+            className="w-full py-2 px-4 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 rounded-xl text-sm text-zinc-300 transition-colors"
+          >
+            + Tambah ke Watchlist
+          </button>
+          {wlMsg && (
+            <div className="text-xs text-zinc-400 mt-1 text-center">{wlMsg}</div>
+          )}
+        </div>
       )}
 
       <p className="text-xs text-zinc-600 italic">{data.disclaimer}</p>

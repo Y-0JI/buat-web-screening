@@ -26,13 +26,13 @@ async def compare(
 ):
     reports = []
     for ticker in req.tickers:
-        df = fetch_stock_data(ticker)
+        df, is_simulated = fetch_stock_data(ticker)
         if df is None or df.empty:
             return ComparisonResponse(
                 success=False, error=f"Data untuk {ticker} tidak ditemukan"
             )
         info = fetch_company_info(ticker)
-        report = calculate_score(df, ticker)
+        report = calculate_score(df, ticker, is_simulated=is_simulated)
         report.company_name = info.get("name", ticker)
         report.render = "comparison"
         reports.append(report)
@@ -73,11 +73,11 @@ async def screen(
 
     raw = []
     for ticker in MOCK_DATA:
-        df = fetch_stock_data(ticker)
+        df, is_simulated = fetch_stock_data(ticker)
         if df is None or df.empty:
             continue
         info = fetch_company_info(ticker)
-        report = calculate_score(df, ticker)
+        report = calculate_score(df, ticker, is_simulated=is_simulated)
         report.company_name = info.get("name", ticker)
         raw.append(report)
 

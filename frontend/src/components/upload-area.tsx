@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useRef, useState, useEffect } from "react";
 
 interface UploadAreaProps {
   onFileSelect: (file: File) => void;
@@ -11,11 +11,18 @@ export function UploadArea({ onFileSelect, disabled }: UploadAreaProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [preview, setPreview] = useState<string | null>(null);
 
+  useEffect(() => {
+    return () => {
+      if (preview) URL.revokeObjectURL(preview);
+    };
+  }, [preview]);
+
   const handleFile = (file: File | undefined) => {
     if (!file) return;
     if (!["image/png", "image/jpeg", "image/jpg"].includes(file.type)) {
       return;
     }
+    if (preview) URL.revokeObjectURL(preview);
     setPreview(URL.createObjectURL(file));
     onFileSelect(file);
   };

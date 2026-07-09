@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.schemas.stock import ResearchRequest, ResearchResponse, StockReport
 from app.data.fetcher import fetch_stock_data, fetch_company_info
+from app.data.idx_stocks import VALID_TICKERS
 from app.scoring.funnel import calculate_score
 from app.ai.orchestrator import enhance_with_ai
 from app.database import get_session
@@ -14,8 +15,11 @@ router = APIRouter(prefix="/api", tags=["research"])
 
 
 def extract_ticker(text: str) -> str | None:
-    match = re.search(r"\b([A-Z]{2,5})\b", text.upper())
-    return match.group(1) if match else None
+    candidates = re.findall(r"\b([A-Z]{2,5})\b", text.upper())
+    for c in candidates:
+        if c in VALID_TICKERS:
+            return c
+    return None
 
 
 @router.post("/research", response_model=ResearchResponse)
@@ -28,7 +32,7 @@ async def research(
     if not ticker:
         return ResearchResponse(success=False, error="Tidak ada ticker saham ditemukan")
 
-    df = fetch_stock_data(ticker)
+    df, is_simulated = fetch_stock_data(ticker)
     if df is None or df.empty:
         return ResearchResponse(
             success=False, error=f"Data untuk {ticker} tidak ditemukan"
@@ -36,7 +40,7 @@ async def research(
 
     info = fetch_company_info(ticker)
     mode = (req.mode or "BSJP").upper()
-    report = calculate_score(df, ticker, mode)
+    report = calculate_score(df, ticker, mode, is_simulated=is_simulated)
     report.company_name = info.get("name", ticker)
     report.mode = mode
 

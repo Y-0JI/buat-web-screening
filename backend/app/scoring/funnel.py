@@ -139,7 +139,7 @@ def evaluate_confluence(
     return verdict, confidence, flags
 
 
-def calculate_score(df: pd.DataFrame, ticker: str, mode: str = "BSJP") -> StockReport:
+def calculate_score(df: pd.DataFrame, ticker: str, mode: str = "BSJP", is_simulated: bool = False) -> StockReport:
     ind = compute_all(df)
     profile = get_profile(mode)
     close = float(df["Close"].iloc[-1]) if not df.empty else 0
@@ -193,10 +193,6 @@ def calculate_score(df: pd.DataFrame, ticker: str, mode: str = "BSJP") -> StockR
 
     if veto:
         verdict = Verdict.SELL if not is_bpjs else Verdict.AVOID
-    elif total >= 75 and verdict != Verdict.BUY:
-        verdict = Verdict.BUY
-    elif total < 35 and verdict != Verdict.HOLD:
-        verdict = Verdict.AVOID
 
     stop_loss = compute_stop_loss(df, ind, verdict)
 
@@ -229,4 +225,5 @@ def calculate_score(df: pd.DataFrame, ticker: str, mode: str = "BSJP") -> StockR
         stop_loss=stop_loss,
         price=round(close, 2),
         change_percent=round(change, 2),
+        is_simulated=is_simulated,
     )
