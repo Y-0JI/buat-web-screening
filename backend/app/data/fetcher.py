@@ -108,12 +108,12 @@ def _try_yfinance(symbol: str) -> pd.DataFrame | None:
     return None
 
 
-def fetch_stock_data(symbol: str) -> pd.DataFrame | None:
+def fetch_stock_data(symbol: str) -> tuple[pd.DataFrame | None, bool]:
     ticker_str = resolve_ticker(symbol)
 
     cached = _get_cached(ticker_str)
     if cached is not None:
-        return cached
+        return cached, False
 
     yf_result = None
     try:
@@ -127,11 +127,11 @@ def fetch_stock_data(symbol: str) -> pd.DataFrame | None:
 
     if yf_result is not None:
         _set_cache(ticker_str, yf_result)
-        return yf_result
+        return yf_result, False
 
     mock = _generate_mock_data(ticker_str, settings.yfinance_period)
     _set_cache(ticker_str, mock)
-    return mock
+    return mock, True
 
 
 def fetch_company_info(symbol: str) -> dict:

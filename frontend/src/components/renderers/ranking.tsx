@@ -90,9 +90,7 @@ export function RankingView({ items }: { items: RankingItem[] }) {
       </div>
 
       <p className="text-xs text-zinc-600 italic mt-4 text-center">
-        {items[0]?.summary?.includes("disclaimer")
-          ? "Hasil AI adalah alat bantu riset, bukan rekomendasi investasi resmi."
-          : "Hasil AI adalah alat bantu riset, bukan rekomendasi investasi resmi."}
+        Hasil AI adalah alat bantu riset, bukan rekomendasi investasi resmi.
       </p>
     </div>
   );

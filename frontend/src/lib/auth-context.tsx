@@ -16,6 +16,7 @@ interface AuthState {
   login: (token: string, user: UserProfile) => void;
   logout: () => void;
   isAuthenticated: boolean;
+  isLoading: boolean;
 }
 
 const AuthContext = createContext<AuthState>({
@@ -24,11 +25,13 @@ const AuthContext = createContext<AuthState>({
   login: () => {},
   logout: () => {},
   isAuthenticated: false,
+  isLoading: true,
 });
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<UserProfile | null>(null);
   const [token, setTokenState] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     const stored = localStorage.getItem("bsjp_token");
@@ -38,6 +41,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setToken(stored);
       setUser(JSON.parse(storedUser));
     }
+    setIsLoading(false);
   }, []);
 
   const login = useCallback((t: string, u: UserProfile) => {
@@ -58,7 +62,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   return (
     <AuthContext.Provider
-      value={{ user, token, login, logout, isAuthenticated: !!token }}
+      value={{ user, token, login, logout, isAuthenticated: !!token, isLoading }}
     >
       {children}
     </AuthContext.Provider>

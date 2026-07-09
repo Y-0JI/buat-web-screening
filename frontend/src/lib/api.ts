@@ -16,6 +16,7 @@ export interface StockReport {
   confidence: number;
   summary: string;
   mode?: string;
+  is_simulated?: boolean;
   indicators: {
     ema: Record<string, number>;
     rsi?: number;

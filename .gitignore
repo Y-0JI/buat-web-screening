@@ -6,4 +6,8 @@ __pycache__/
 *.pyc
 .venv/
 backend/.venv/
+backend/venv/
 .python-version
+next-env.d.ts
+bun.lock
+*.lock

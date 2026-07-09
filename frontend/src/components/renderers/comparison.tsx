@@ -36,6 +36,12 @@ function MiniCard({ report }: { report: StockReport }) {
         <VerdictBadge verdict={report.verdict} />
       </div>
 
+      {report.is_simulated && (
+        <div className="mb-3 p-2 bg-amber-950/30 border border-amber-800/50 rounded-lg text-xs">
+          <span className="text-amber-400 font-medium">Data simulasi</span>
+        </div>
+      )}
+
       <div className="grid grid-cols-3 gap-2 mb-3">
         <div className="bg-zinc-800 rounded-xl p-2 text-center">
           <div className="text-xs text-zinc-500">Harga</div>
@@ -61,25 +67,25 @@ function MiniCard({ report }: { report: StockReport }) {
       </div>
 
       <div className="grid grid-cols-2 gap-1 text-xs mb-2">
-        {report.indicators.rsi !== undefined && (
+        {report.indicators.rsi != null && (
           <div className="bg-zinc-800 rounded-lg px-2 py-1 flex justify-between">
             <span className="text-zinc-400">RSI</span>
             <span className="text-zinc-200">{report.indicators.rsi}</span>
           </div>
         )}
-        {report.indicators.volume_ratio !== undefined && (
+        {report.indicators.volume_ratio != null && (
           <div className="bg-zinc-800 rounded-lg px-2 py-1 flex justify-between">
             <span className="text-zinc-400">Vol</span>
             <span className="text-zinc-200">{report.indicators.volume_ratio}x</span>
           </div>
         )}
-        {report.indicators.gap_percent !== undefined && (
+        {report.indicators.gap_percent != null && (
           <div className="bg-zinc-800 rounded-lg px-2 py-1 flex justify-between">
             <span className="text-zinc-400">Gap</span>
             <span className="text-zinc-200">{report.indicators.gap_percent}%</span>
           </div>
         )}
-        {report.indicators.atr !== undefined && (
+        {report.indicators.atr != null && (
           <div className="bg-zinc-800 rounded-lg px-2 py-1 flex justify-between">
             <span className="text-zinc-400">ATR</span>
             <span className="text-zinc-200">{report.indicators.atr}</span>

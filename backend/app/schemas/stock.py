@@ -50,6 +50,7 @@ class StockReport(BaseModel):
     stop_loss: Optional[float] = None
     risk_percent: Optional[float] = None
     mode: Optional[str] = None
+    is_simulated: bool = False
     disclaimer: str = (
         "Hasil AI adalah alat bantu riset, bukan rekomendasi investasi resmi."
     )

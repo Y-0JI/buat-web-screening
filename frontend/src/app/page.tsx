@@ -4,6 +4,7 @@ import { useState } from "react";
 import { SearchBar } from "@/components/search-bar";
 import { UploadArea } from "@/components/upload-area";
 import { DynamicRenderer } from "@/components/renderers";
+import { VALID_TICKERS } from "@/lib/idx-stocks";
 import {
   researchStock,
   compareStocks,
@@ -35,12 +36,8 @@ function detectIntent(
 }
 
 function extractTickers(query: string): string[] {
-  return (
-    query
-      .toUpperCase()
-      .match(/\b([A-Z]{2,5})\b/g)
-      ?.slice(0, 5) || []
-  );
+  const candidates = query.toUpperCase().match(/\b([A-Z]{2,5})\b/g) || [];
+  return candidates.filter((c) => VALID_TICKERS.includes(c)).slice(0, 5);
 }
 
 export default function Home() {
