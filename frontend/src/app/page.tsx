@@ -47,6 +47,7 @@ export default function Home() {
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<AppResult | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [mode, setMode] = useState<string>("BSJP");
 
   const handleSearch = async (query: string) => {
     setLoading(true);
@@ -76,7 +77,7 @@ export default function Home() {
           }
         }
       } else {
-        const res = await researchStock(query);
+        const res = await researchStock(query, undefined, mode);
         if (res.success && res.data) {
           setResult({ type: "stock-report", data: res.data });
         } else {
@@ -122,7 +123,7 @@ export default function Home() {
         </p>
       </div>
 
-      <SearchBar onSearch={handleSearch} loading={loading} />
+      <SearchBar onSearch={handleSearch} loading={loading} mode={mode} onModeChange={setMode} />
       <UploadArea onFileSelect={handleFileUpload} disabled={loading} />
 
       {loading && (
