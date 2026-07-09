@@ -6,6 +6,9 @@ from app.config import settings
 from app.routers.research import router as research_router
 from app.routers.screening import router as screening_router
 from app.routers.vision import router as vision_router
+from app.routers.auth import router as auth_router
+from app.routers.watchlist import router as watchlist_router
+from app.routers.history import router as history_router
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -15,6 +18,15 @@ _scheduler = None
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    try:
+        from app.database import engine
+        from app.database.models import Base
+        async with engine.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
+        logger.info("Database tables ready")
+    except Exception as e:
+        logger.warning("Database tidak tersedia: %s", e)
+
     if settings.scheduler_enabled:
         try:
             from apscheduler.schedulers.asyncio import AsyncIOScheduler
@@ -50,6 +62,9 @@ app.add_middleware(
 app.include_router(research_router)
 app.include_router(screening_router)
 app.include_router(vision_router)
+app.include_router(auth_router)
+app.include_router(watchlist_router)
+app.include_router(history_router)
 
 
 @app.get("/")

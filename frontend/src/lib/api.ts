@@ -125,3 +125,106 @@ export async function analyzeVision(
   );
   return res.data;
 }
+
+export interface UserProfile {
+  id: number;
+  username: string;
+  email: string;
+}
+
+export interface AuthResponse {
+  access_token: string;
+  token_type: string;
+  user: UserProfile;
+}
+
+export interface WatchlistItem {
+  id: number;
+  ticker: string;
+  note?: string;
+  added_at: string;
+}
+
+export interface WatchlistResult {
+  success: boolean;
+  data?: WatchlistItem[];
+  error?: string;
+}
+
+export interface HistoryItem {
+  id: number;
+  ticker: string;
+  score?: number;
+  verdict?: string;
+  created_at: string;
+}
+
+export interface HistoryResult {
+  success: boolean;
+  data?: HistoryItem[];
+  error?: string;
+}
+
+export function setToken(token: string | null) {
+  if (token) {
+    api.defaults.headers.common["Authorization"] = `Bearer ${token}`;
+  } else {
+    delete api.defaults.headers.common["Authorization"];
+  }
+}
+
+export async function authRegister(
+  username: string,
+  email: string,
+  password: string
+): Promise<AuthResponse> {
+  const res = await api.post<AuthResponse>("/api/auth/register", {
+    username,
+    email,
+    password,
+  });
+  return res.data;
+}
+
+export async function authLogin(
+  username: string,
+  password: string
+): Promise<AuthResponse> {
+  const res = await api.post<AuthResponse>("/api/auth/login", {
+    username,
+    password,
+  });
+  return res.data;
+}
+
+export async function fetchWatchlist(): Promise<WatchlistResult> {
+  const res = await api.get<WatchlistResult>("/api/watchlist");
+  return res.data;
+}
+
+export async function addWatchlist(
+  ticker: string,
+  note?: string
+): Promise<WatchlistResult> {
+  const res = await api.post<WatchlistResult>("/api/watchlist", {
+    ticker,
+    note,
+  });
+  return res.data;
+}
+
+export async function removeWatchlist(
+  ticker: string
+): Promise<WatchlistResult> {
+  const res = await api.delete<WatchlistResult>(`/api/watchlist/${ticker}`);
+  return res.data;
+}
+
+export async function fetchHistory(
+  limit?: number
+): Promise<HistoryResult> {
+  const res = await api.get<HistoryResult>("/api/history", {
+    params: { limit },
+  });
+  return res.data;
+}

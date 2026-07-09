@@ -110,3 +110,35 @@ class VisionAnalysisResponse(BaseModel):
     success: bool
     data: Optional[VisionReport] = None
     error: Optional[str] = None
+
+
+class WatchlistItem(BaseModel):
+    id: int
+    ticker: str
+    note: Optional[str] = None
+    added_at: str
+
+
+class AddWatchlistRequest(BaseModel):
+    ticker: str = Field(min_length=2, max_length=10)
+    note: Optional[str] = None
+
+
+class WatchlistResponse(BaseModel):
+    success: bool
+    data: Optional[list[WatchlistItem]] = None
+    error: Optional[str] = None
+
+
+class HistoryItem(BaseModel):
+    id: int
+    ticker: str
+    score: Optional[float] = None
+    verdict: Optional[str] = None
+    created_at: str
+
+
+class HistoryResponse(BaseModel):
+    success: bool
+    data: Optional[list[HistoryItem]] = None
+    error: Optional[str] = None
