@@ -1,4 +1,6 @@
-from fastapi import APIRouter
+from typing import Optional
+from fastapi import APIRouter, Depends
+from sqlalchemy.ext.asyncio import AsyncSession
 from app.schemas.stock import (
     ComparisonRequest,
     ComparisonResponse,
@@ -9,12 +11,19 @@ from app.schemas.stock import (
 from app.data.fetcher import fetch_stock_data, fetch_company_info, MOCK_DATA
 from app.scoring.funnel import calculate_score
 from app.scheduler import get_cached_screening, run_batch_scan
+from app.database import get_session
+from app.database.models import User, ScanHistory
+from app.routers.auth import get_current_user_optional
 
 router = APIRouter(prefix="/api", tags=["screening"])
 
 
 @router.post("/compare", response_model=ComparisonResponse)
-async def compare(req: ComparisonRequest):
+async def compare(
+    req: ComparisonRequest,
+    user: Optional[User] = Depends(get_current_user_optional),
+    session: AsyncSession = Depends(get_session),
+):
     reports = []
     for ticker in req.tickers:
         df = fetch_stock_data(ticker)
@@ -28,11 +37,23 @@ async def compare(req: ComparisonRequest):
         report.render = "comparison"
         reports.append(report)
 
+        if user:
+            session.add(ScanHistory(
+                user_id=user.id, ticker=ticker.upper(),
+                score=report.score, verdict=report.verdict.value,
+            ))
+
+    if user:
+        await session.commit()
+
     return ComparisonResponse(success=True, data=reports)
 
 
 @router.get("/screen", response_model=ScreeningResponse)
-async def screen():
+async def screen(
+    user: Optional[User] = Depends(get_current_user_optional),
+    session: AsyncSession = Depends(get_session),
+):
     cached = get_cached_screening()
     if cached:
         items = []
@@ -59,6 +80,15 @@ async def screen():
         report = calculate_score(df, ticker)
         report.company_name = info.get("name", ticker)
         raw.append(report)
+
+        if user:
+            session.add(ScanHistory(
+                user_id=user.id, ticker=ticker.upper(),
+                score=report.score, verdict=report.verdict.value,
+            ))
+
+    if user:
+        await session.commit()
 
     raw.sort(key=lambda x: x.score, reverse=True)
     top = raw[:10]

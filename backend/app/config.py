@@ -3,7 +3,7 @@ from pydantic_settings import BaseSettings
 
 class Settings(BaseSettings):
     gemini_api_key: str = ""
-    database_url: str = "postgresql+asyncpg://localhost/bsjp"
+    database_url: str = "sqlite+aiosqlite:///./bsjp.db"
     yfinance_period: str = "6mo"
     cache_ttl_seconds: int = 3600
     rate_limit_per_minute: int = 15
