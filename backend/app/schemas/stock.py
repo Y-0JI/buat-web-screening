@@ -63,3 +63,31 @@ class ResearchResponse(BaseModel):
     success: bool
     data: Optional[StockReport] = None
     error: Optional[str] = None
+
+
+class ComparisonRequest(BaseModel):
+    tickers: list[str] = Field(min_length=2, max_length=5)
+
+
+class ComparisonResponse(BaseModel):
+    success: bool
+    data: Optional[list[StockReport]] = None
+    error: Optional[str] = None
+
+
+class RankingItem(BaseModel):
+    rank: int
+    ticker: str
+    company_name: Optional[str] = None
+    score: float = Field(ge=0, le=100)
+    verdict: Verdict
+    confidence: float = Field(ge=0, le=100)
+    summary: str
+    price: Optional[float] = None
+    change_percent: Optional[float] = None
+
+
+class ScreeningResponse(BaseModel):
+    success: bool
+    data: Optional[list[RankingItem]] = None
+    error: Optional[str] = None

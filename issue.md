@@ -1,4 +1,4 @@
-# BSJP AI — Blueprint Produk
+# BSJP dan BPJS AI — Blueprint Produk
 ### Full AI Search Platform untuk Analisis Saham Indonesia
 
 > **Catatan untuk agent:** Dokumen ini adalah spesifikasi produk level tinggi (high-level). Tujuannya menjadi acuan konsep dan arsitektur untuk membangun ("vibe coding") aplikasi ini — bukan spesifikasi teknis baris-per-baris. Detail implementasi (nama variabel, struktur folder, versi library, dsb.) diserahkan pada kebijakan agent/tim yang membangun. Ikuti prinsip dan urutan di dokumen ini, bukan kata-katanya secara harfiah.

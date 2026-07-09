@@ -7,6 +7,7 @@ class Settings(BaseSettings):
     yfinance_period: str = "6mo"
     cache_ttl_seconds: int = 3600
     rate_limit_per_minute: int = 15
+    scheduler_enabled: bool = True
 
     class Config:
         env_file = ".env"
