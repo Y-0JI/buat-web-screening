@@ -8,7 +8,7 @@ from yfinance.exceptions import YFRateLimitError
 
 
 _last_request_time: float = 0
-_cache: dict[str, tuple[float, pd.DataFrame]] = {}
+_cache: dict[str, tuple[float, pd.DataFrame, bool]] = {}
 _cache_ttl = settings.cache_ttl_seconds
 
 
@@ -49,18 +49,18 @@ def _flatten_columns(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-def _get_cached(ticker: str) -> pd.DataFrame | None:
+def _get_cached(ticker: str) -> tuple[pd.DataFrame, bool] | None:
     entry = _cache.get(ticker)
     if entry:
-        ts, df = entry
+        ts, df, is_simulated = entry
         if time.time() - ts < _cache_ttl:
-            return df
+            return df, is_simulated
         del _cache[ticker]
     return None
 
 
-def _set_cache(ticker: str, df: pd.DataFrame):
-    _cache[ticker] = (time.time(), df)
+def _set_cache(ticker: str, df: pd.DataFrame, is_simulated: bool = False):
+    _cache[ticker] = (time.time(), df, is_simulated)
 
 
 def _generate_mock_data(symbol: str, period: str = "6mo") -> pd.DataFrame:
@@ -113,7 +113,8 @@ def fetch_stock_data(symbol: str) -> tuple[pd.DataFrame | None, bool]:
 
     cached = _get_cached(ticker_str)
     if cached is not None:
-        return cached, False
+        df, is_simulated = cached
+        return df, is_simulated
 
     yf_result = None
     try:
@@ -126,11 +127,11 @@ def fetch_stock_data(symbol: str) -> tuple[pd.DataFrame | None, bool]:
         yf_result = None
 
     if yf_result is not None:
-        _set_cache(ticker_str, yf_result)
+        _set_cache(ticker_str, yf_result, is_simulated=False)
         return yf_result, False
 
     mock = _generate_mock_data(ticker_str, settings.yfinance_period)
-    _set_cache(ticker_str, mock)
+    _set_cache(ticker_str, mock, is_simulated=True)
     return mock, True
 
 
