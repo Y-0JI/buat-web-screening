@@ -32,13 +32,13 @@ async def research(
     if not ticker:
         return ResearchResponse(success=False, error="Tidak ada ticker saham ditemukan")
 
-    df, is_simulated = fetch_stock_data(ticker)
+    df, is_simulated = await fetch_stock_data(ticker)
     if df is None or df.empty:
         return ResearchResponse(
             success=False, error=f"Data untuk {ticker} tidak ditemukan"
         )
 
-    info = fetch_company_info(ticker)
+    info = await fetch_company_info(ticker)
     mode = (req.mode or "BSJP").upper()
     report = calculate_score(df, ticker, mode, is_simulated=is_simulated)
     report.company_name = info.get("name", ticker)
@@ -52,7 +52,7 @@ async def research(
         await session.commit()
 
     try:
-        report = enhance_with_ai(report)
+        report = await enhance_with_ai(report)
     except Exception as e:
         report.summary += f" | AI enhancement gagal: {str(e)}"
 

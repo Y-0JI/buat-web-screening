@@ -1,6 +1,6 @@
+import asyncio
 from typing import Optional
 import pandas as pd
-from concurrent.futures import ThreadPoolExecutor, as_completed
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.schemas.stock import (
@@ -18,6 +18,7 @@ from app.database.models import User, ScanHistory
 from app.routers.auth import get_current_user_optional
 
 router = APIRouter(prefix="/api", tags=["screening"])
+_screen_semaphore = asyncio.Semaphore(5)
 
 
 @router.post("/compare", response_model=ComparisonResponse)
@@ -26,24 +27,28 @@ async def compare(
     user: Optional[User] = Depends(get_current_user_optional),
     session: AsyncSession = Depends(get_session),
 ):
-    reports = []
-    for ticker in req.tickers:
-        df, is_simulated = fetch_stock_data(ticker)
+    async def process_ticker(ticker: str):
+        df, is_simulated = await fetch_stock_data(ticker)
         if df is None or df.empty:
-            return ComparisonResponse(
-                success=False, error=f"Data untuk {ticker} tidak ditemukan"
-            )
-        info = fetch_company_info(ticker)
+            return None
+        info = await fetch_company_info(ticker)
         report = calculate_score(df, ticker, is_simulated=is_simulated)
         report.company_name = info.get("name", ticker)
         report.render = "comparison"
-        reports.append(report)
-
         if user:
             session.add(ScanHistory(
                 user_id=user.id, ticker=ticker.upper(),
                 score=report.score, verdict=report.verdict.value,
             ))
+        return report
+
+    results = await asyncio.gather(*[process_ticker(t) for t in req.tickers])
+    reports = [r for r in results if r is not None]
+
+    if len(reports) != len(req.tickers):
+        return ComparisonResponse(
+            success=False, error="Data untuk beberapa saham tidak ditemukan"
+        )
 
     if user:
         await session.commit()
@@ -74,18 +79,19 @@ async def screen(
             ))
         return ScreeningResponse(success=True, data=items)
 
-    raw = []
     tickers = list(MOCK_DATA)
-    with ThreadPoolExecutor(max_workers=5) as ex:
-        fut_to_ticker = {ex.submit(fetch_stock_data, t): t for t in tickers}
-        results: dict[str, tuple[pd.DataFrame | None, bool]] = {}
-        for fut in as_completed(fut_to_ticker):
-            t = fut_to_ticker[fut]
-            try:
-                results[t] = fut.result()
-            except Exception:
-                continue
 
+    async def fetch_one(ticker: str):
+        async with _screen_semaphore:
+            return ticker, await fetch_stock_data(ticker)
+
+    tasks = [fetch_one(t) for t in tickers]
+    results_list = await asyncio.gather(*tasks)
+    results: dict[str, tuple[pd.DataFrame | None, bool]] = {}
+    for t, res in results_list:
+        results[t] = res
+
+    raw = []
     for ticker in tickers:
         item = results.get(ticker)
         if item is None:
@@ -93,7 +99,7 @@ async def screen(
         df, is_simulated = item
         if df is None or df.empty:
             continue
-        info = fetch_company_info(ticker)
+        info = await fetch_company_info(ticker)
         report = calculate_score(df, ticker, is_simulated=is_simulated)
         report.company_name = info.get("name", ticker)
         raw.append(report)
