@@ -11,7 +11,7 @@ def enhance_with_ai(report: StockReport) -> StockReport:
         return report
 
     genai.configure(api_key=settings.gemini_api_key)
-    model = genai.GenerativeModel("gemini-2.5-flash-lite")
+    model = genai.GenerativeModel("gemini-3.5-flash")
 
     info = fetch_company_info(report.ticker)
     company = info.get("name", report.ticker)
