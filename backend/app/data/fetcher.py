@@ -24,6 +24,7 @@ _session.headers.update({
 })
 
 _MIN_REQUEST_INTERVAL = 1.0
+_executor = ThreadPoolExecutor(max_workers=3)
 
 
 MOCK_DATA = {
@@ -113,11 +114,11 @@ def _generate_mock_data(symbol: str, period: str = "6mo") -> pd.DataFrame:
     return df
 
 
-def _try_yfinance(symbol: str, timeout: int = 20) -> pd.DataFrame | None:
+def _try_yfinance(symbol: str) -> pd.DataFrame | None:
     import yfinance as yf
-    yf_session = yf.Ticker(symbol)
-    yf_session._session = _session
-    df = yf_session.history(period=settings.yfinance_period)
+    tf = yf.Ticker(symbol)
+    tf._session = _session
+    df = tf.history(period=settings.yfinance_period)
     if df is not None and not df.empty:
         return _flatten_columns(df)
     return None
@@ -141,26 +142,25 @@ def fetch_stock_data(symbol: str) -> tuple[pd.DataFrame | None, bool]:
 
     _rate_limit()
 
-    delays = [20, 15, 10]
+    timeouts = [8, 5, 4]
     yf_result = None
-    for attempt, timeout in enumerate(delays):
+    for attempt, to in enumerate(timeouts):
+        future = _executor.submit(_try_yfinance, ticker_str)
         try:
-            with ThreadPoolExecutor(max_workers=1) as ex:
-                future = ex.submit(_try_yfinance, ticker_str, timeout)
-                yf_result = future.result(timeout=timeout + 5)
+            yf_result = future.result(timeout=to)
             if yf_result is not None:
                 break
         except YFRateLimitError:
-            if attempt < len(delays) - 1:
+            if attempt < len(timeouts) - 1:
                 time.sleep(10)
             continue
         except TimeoutError:
-            if attempt < len(delays) - 1:
-                time.sleep(2)
+            if attempt < len(timeouts) - 1:
+                time.sleep(1)
             continue
         except Exception:
-            if attempt < len(delays) - 1:
-                time.sleep(2)
+            if attempt < len(timeouts) - 1:
+                time.sleep(1)
             continue
 
     if yf_result is not None:
