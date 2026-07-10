@@ -11,7 +11,6 @@ from yfinance.exceptions import YFRateLimitError
 _cache: dict[str, tuple[float, pd.DataFrame, bool]] = {}
 _cache_ttl = settings.cache_ttl_seconds
 _cache_lock = asyncio.Lock()
-_rate_lock = asyncio.Lock()
 _last_request_time: float = 0
 _MIN_REQUEST_INTERVAL = 1.0
 
@@ -126,11 +125,10 @@ def _try_yfinance(symbol: str) -> pd.DataFrame | None:
 
 async def _rate_limit():
     global _last_request_time
-    async with _rate_lock:
-        elapsed = time.time() - _last_request_time
-        if elapsed < _MIN_REQUEST_INTERVAL:
-            await asyncio.sleep(_MIN_REQUEST_INTERVAL - elapsed)
-        _last_request_time = time.time()
+    elapsed = time.time() - _last_request_time
+    if elapsed < _MIN_REQUEST_INTERVAL:
+        await asyncio.sleep(_MIN_REQUEST_INTERVAL - elapsed)
+    _last_request_time = time.time()
 
 
 async def fetch_stock_data(symbol: str) -> tuple[pd.DataFrame | None, bool]:
