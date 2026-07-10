@@ -72,7 +72,7 @@ async def analyze_chart_image(image_bytes: bytes, filename: str) -> dict:
         }
 
     genai.configure(api_key=settings.gemini_api_key)
-    model = genai.GenerativeModel("gemini-2.0-flash-lite")
+    model = genai.GenerativeModel("gemini-2.5-flash-lite")
 
     image_part = {
         "mime_type": "image/jpeg" if filename.lower().endswith((".jpg", ".jpeg")) else "image/png",
