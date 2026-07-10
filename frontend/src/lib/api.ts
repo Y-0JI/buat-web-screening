@@ -60,6 +60,7 @@ export interface RankingItem {
   summary: string;
   price?: number;
   change_percent?: number;
+  is_simulated?: boolean;
 }
 
 export interface ScreeningResponse {

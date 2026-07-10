@@ -88,6 +88,7 @@ class RankingItem(BaseModel):
     summary: str
     price: Optional[float] = None
     change_percent: Optional[float] = None
+    is_simulated: bool = False
 
 
 class ScreeningResponse(BaseModel):
