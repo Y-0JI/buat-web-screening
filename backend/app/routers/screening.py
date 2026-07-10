@@ -1,4 +1,6 @@
 from typing import Optional
+import pandas as pd
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.schemas.stock import (
@@ -73,8 +75,22 @@ async def screen(
         return ScreeningResponse(success=True, data=items)
 
     raw = []
-    for ticker in MOCK_DATA:
-        df, is_simulated = fetch_stock_data(ticker)
+    tickers = list(MOCK_DATA)
+    with ThreadPoolExecutor(max_workers=5) as ex:
+        fut_to_ticker = {ex.submit(fetch_stock_data, t): t for t in tickers}
+        results: dict[str, tuple[pd.DataFrame | None, bool]] = {}
+        for fut in as_completed(fut_to_ticker):
+            t = fut_to_ticker[fut]
+            try:
+                results[t] = fut.result()
+            except Exception:
+                continue
+
+    for ticker in tickers:
+        item = results.get(ticker)
+        if item is None:
+            continue
+        df, is_simulated = item
         if df is None or df.empty:
             continue
         info = fetch_company_info(ticker)
