@@ -68,6 +68,7 @@ async def screen(
                 summary=r["summary"],
                 price=r.get("price"),
                 change_percent=r.get("change_percent"),
+                is_simulated=r.get("is_simulated", False),
             ))
         return ScreeningResponse(success=True, data=items)
 
@@ -104,6 +105,7 @@ async def screen(
             summary=r.summary,
             price=r.price,
             change_percent=r.change_percent,
+            is_simulated=r.is_simulated,
         ))
 
     return ScreeningResponse(success=True, data=items)

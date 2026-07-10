@@ -1,5 +1,6 @@
 import time
 import random
+import requests
 import pandas as pd
 from concurrent.futures import ThreadPoolExecutor, TimeoutError
 from datetime import datetime, timedelta
@@ -10,6 +11,19 @@ from yfinance.exceptions import YFRateLimitError
 _last_request_time: float = 0
 _cache: dict[str, tuple[float, pd.DataFrame, bool]] = {}
 _cache_ttl = settings.cache_ttl_seconds
+
+_session = requests.Session()
+_session.headers.update({
+    "User-Agent": (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) "
+        "Chrome/125.0.0.0 Safari/537.36"
+    ),
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+    "Accept-Language": "en-US,en;q=0.5",
+})
+
+_MIN_REQUEST_INTERVAL = 1.0
 
 
 MOCK_DATA = {
@@ -99,13 +113,22 @@ def _generate_mock_data(symbol: str, period: str = "6mo") -> pd.DataFrame:
     return df
 
 
-def _try_yfinance(symbol: str) -> pd.DataFrame | None:
+def _try_yfinance(symbol: str, timeout: int = 20) -> pd.DataFrame | None:
     import yfinance as yf
-    t = yf.Ticker(symbol)
-    df = t.history(period=settings.yfinance_period)
+    yf_session = yf.Ticker(symbol)
+    yf_session._session = _session
+    df = yf_session.history(period=settings.yfinance_period)
     if df is not None and not df.empty:
         return _flatten_columns(df)
     return None
+
+
+def _rate_limit():
+    global _last_request_time
+    elapsed = time.time() - _last_request_time
+    if elapsed < _MIN_REQUEST_INTERVAL:
+        time.sleep(_MIN_REQUEST_INTERVAL - elapsed)
+    _last_request_time = time.time()
 
 
 def fetch_stock_data(symbol: str) -> tuple[pd.DataFrame | None, bool]:
@@ -116,15 +139,29 @@ def fetch_stock_data(symbol: str) -> tuple[pd.DataFrame | None, bool]:
         df, is_simulated = cached
         return df, is_simulated
 
+    _rate_limit()
+
+    delays = [20, 15, 10]
     yf_result = None
-    try:
-        with ThreadPoolExecutor(max_workers=1) as ex:
-            future = ex.submit(_try_yfinance, ticker_str)
-            yf_result = future.result(timeout=20)
-    except TimeoutError:
-        yf_result = None
-    except Exception:
-        yf_result = None
+    for attempt, timeout in enumerate(delays):
+        try:
+            with ThreadPoolExecutor(max_workers=1) as ex:
+                future = ex.submit(_try_yfinance, ticker_str, timeout)
+                yf_result = future.result(timeout=timeout + 5)
+            if yf_result is not None:
+                break
+        except YFRateLimitError:
+            if attempt < len(delays) - 1:
+                time.sleep(10)
+            continue
+        except TimeoutError:
+            if attempt < len(delays) - 1:
+                time.sleep(2)
+            continue
+        except Exception:
+            if attempt < len(delays) - 1:
+                time.sleep(2)
+            continue
 
     if yf_result is not None:
         _set_cache(ticker_str, yf_result, is_simulated=False)

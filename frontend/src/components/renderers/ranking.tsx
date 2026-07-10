@@ -28,6 +28,11 @@ function RankingRow({ item }: { item: RankingItem }) {
           <span className="font-semibold text-zinc-100 text-sm">
             {item.ticker}
           </span>
+          {item.is_simulated && (
+            <span className="text-amber-400 text-xs font-medium bg-amber-950/30 px-1.5 py-0.5 rounded">
+              Data simulasi
+            </span>
+          )}
           {item.company_name && (
             <span className="text-zinc-500 text-xs truncate hidden sm:inline">
               {item.company_name}

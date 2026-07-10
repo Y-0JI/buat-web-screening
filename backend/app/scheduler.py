@@ -24,11 +24,11 @@ def run_batch_scan():
     results = []
     for ticker in MOCK_DATA:
         try:
-            df = fetch_stock_data(ticker)
+            df, is_simulated = fetch_stock_data(ticker)
             if df is None or df.empty:
                 continue
             info = fetch_company_info(ticker)
-            report = calculate_score(df, ticker)
+            report = calculate_score(df, ticker, is_simulated=is_simulated)
             report.company_name = info.get("name", ticker)
             results.append({
                 "ticker": report.ticker,
@@ -39,6 +39,7 @@ def run_batch_scan():
                 "summary": report.summary,
                 "price": report.price,
                 "change_percent": report.change_percent,
+                "is_simulated": is_simulated,
             })
         except Exception as e:
             logger.warning("Gagal scan %s: %s", ticker, e)
