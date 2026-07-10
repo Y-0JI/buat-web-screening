@@ -1,16 +1,19 @@
+import asyncio
 import time
 import random
 import requests
 import pandas as pd
-from concurrent.futures import ThreadPoolExecutor, TimeoutError
 from datetime import datetime, timedelta
 from app.config import settings
 from yfinance.exceptions import YFRateLimitError
 
 
-_last_request_time: float = 0
 _cache: dict[str, tuple[float, pd.DataFrame, bool]] = {}
 _cache_ttl = settings.cache_ttl_seconds
+_cache_lock = asyncio.Lock()
+_rate_lock = asyncio.Lock()
+_last_request_time: float = 0
+_MIN_REQUEST_INTERVAL = 1.0
 
 _session = requests.Session()
 _session.headers.update({
@@ -22,9 +25,6 @@ _session.headers.update({
     "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
     "Accept-Language": "en-US,en;q=0.5",
 })
-
-_MIN_REQUEST_INTERVAL = 1.0
-_executor = ThreadPoolExecutor(max_workers=3)
 
 
 MOCK_DATA = {
@@ -124,71 +124,78 @@ def _try_yfinance(symbol: str) -> pd.DataFrame | None:
     return None
 
 
-def _rate_limit():
+async def _rate_limit():
     global _last_request_time
-    elapsed = time.time() - _last_request_time
-    if elapsed < _MIN_REQUEST_INTERVAL:
-        time.sleep(_MIN_REQUEST_INTERVAL - elapsed)
-    _last_request_time = time.time()
+    async with _rate_lock:
+        elapsed = time.time() - _last_request_time
+        if elapsed < _MIN_REQUEST_INTERVAL:
+            await asyncio.sleep(_MIN_REQUEST_INTERVAL - elapsed)
+        _last_request_time = time.time()
 
 
-def fetch_stock_data(symbol: str) -> tuple[pd.DataFrame | None, bool]:
+async def fetch_stock_data(symbol: str) -> tuple[pd.DataFrame | None, bool]:
     ticker_str = resolve_ticker(symbol)
 
-    cached = _get_cached(ticker_str)
-    if cached is not None:
-        df, is_simulated = cached
-        return df, is_simulated
+    async with _cache_lock:
+        cached = _get_cached(ticker_str)
+        if cached is not None:
+            return cached
 
-    _rate_limit()
+    await _rate_limit()
 
     timeouts = [8, 5, 4]
     yf_result = None
     for attempt, to in enumerate(timeouts):
-        future = _executor.submit(_try_yfinance, ticker_str)
         try:
-            yf_result = future.result(timeout=to)
+            yf_result = await asyncio.wait_for(
+                asyncio.to_thread(_try_yfinance, ticker_str),
+                timeout=to,
+            )
             if yf_result is not None:
                 break
         except YFRateLimitError:
             if attempt < len(timeouts) - 1:
-                time.sleep(10)
+                await asyncio.sleep(10)
             continue
-        except TimeoutError:
+        except asyncio.TimeoutError:
             if attempt < len(timeouts) - 1:
-                time.sleep(1)
+                await asyncio.sleep(1)
             continue
         except Exception:
             if attempt < len(timeouts) - 1:
-                time.sleep(1)
+                await asyncio.sleep(1)
             continue
 
     if yf_result is not None:
-        _set_cache(ticker_str, yf_result, is_simulated=False)
+        async with _cache_lock:
+            _set_cache(ticker_str, yf_result, is_simulated=False)
         return yf_result, False
 
     mock = _generate_mock_data(ticker_str, settings.yfinance_period)
-    _set_cache(ticker_str, mock, is_simulated=True)
+    async with _cache_lock:
+        _set_cache(ticker_str, mock, is_simulated=True)
     return mock, True
 
 
-def fetch_company_info(symbol: str) -> dict:
+async def fetch_company_info(symbol: str) -> dict:
     clean = symbol.upper().replace(".JK", "")
-    company_name = f"PT {clean} Tbk"
-    sector = None
 
-    try:
-        import yfinance as yf
-        stock = yf.Ticker(resolve_ticker(symbol))
-        info = stock.info
-        n = info.get("longName", info.get("shortName", ""))
-        if n:
-            company_name = n
-        sector = info.get("sector")
-    except Exception:
-        pass
+    def _fetch() -> dict:
+        company_name = f"PT {clean} Tbk"
+        sector = None
+        try:
+            import yfinance as yf
+            stock = yf.Ticker(resolve_ticker(symbol))
+            info = stock.info
+            n = info.get("longName", info.get("shortName", ""))
+            if n:
+                company_name = n
+            sector = info.get("sector")
+        except Exception:
+            pass
+        return {"name": company_name, "sector": sector, "market_cap": None}
 
-    return {"name": company_name, "sector": sector, "market_cap": None}
+    return await asyncio.to_thread(_fetch)
 
 
 def clear_cache():

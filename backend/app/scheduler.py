@@ -1,3 +1,4 @@
+import asyncio
 import time
 import logging
 from app.config import settings
@@ -19,18 +20,18 @@ def get_cached_screening() -> list[dict] | None:
     return _screen_cache.get("results")
 
 
-def run_batch_scan():
+async def run_batch_scan():
     logger.info("Memulai batch scan...")
-    results = []
-    for ticker in MOCK_DATA:
+
+    async def scan_one(ticker: str) -> dict | None:
         try:
-            df, is_simulated = fetch_stock_data(ticker)
+            df, is_simulated = await fetch_stock_data(ticker)
             if df is None or df.empty:
-                continue
-            info = fetch_company_info(ticker)
+                return None
+            info = await fetch_company_info(ticker)
             report = calculate_score(df, ticker, is_simulated=is_simulated)
             report.company_name = info.get("name", ticker)
-            results.append({
+            return {
                 "ticker": report.ticker,
                 "company_name": report.company_name,
                 "score": report.score,
@@ -40,9 +41,13 @@ def run_batch_scan():
                 "price": report.price,
                 "change_percent": report.change_percent,
                 "is_simulated": is_simulated,
-            })
+            }
         except Exception as e:
             logger.warning("Gagal scan %s: %s", ticker, e)
+            return None
+
+    results_list = await asyncio.gather(*[scan_one(t) for t in MOCK_DATA])
+    results = [r for r in results_list if r is not None]
 
     results.sort(key=lambda x: x["score"], reverse=True)
     global _screen_cache, _cache_ts

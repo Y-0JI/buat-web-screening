@@ -1,3 +1,4 @@
+import asyncio
 import google.generativeai as genai
 from app.config import settings
 import base64
@@ -79,9 +80,12 @@ async def analyze_chart_image(image_bytes: bytes, filename: str) -> dict:
         "data": image_bytes,
     }
 
-    try:
+    def _call_gemini():
         response = model.generate_content([VISION_PROMPT, image_part])
-        raw_text = response.text.strip()
+        return response.text.strip()
+
+    try:
+        raw_text = await asyncio.to_thread(_call_gemini)
         parsed = parse_vision_response(raw_text)
         parsed["file_name"] = filename
         return parsed
