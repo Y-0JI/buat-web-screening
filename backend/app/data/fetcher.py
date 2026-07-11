@@ -1,4 +1,5 @@
 import asyncio
+import logging
 import time
 import random
 import requests
@@ -7,6 +8,8 @@ import pandas as pd
 from datetime import datetime, timedelta
 from app.config import settings
 from yfinance.exceptions import YFRateLimitError
+
+logger = logging.getLogger(__name__)
 
 
 _cache: dict[str, tuple[float, pd.DataFrame, bool]] = {}
@@ -173,15 +176,27 @@ async def fetch_stock_data(symbol: str) -> tuple[pd.DataFrame | None, bool]:
             )
             if yf_result is not None:
                 break
-        except YFRateLimitError:
+        except YFRateLimitError as e:
+            logger.warning(
+                "%s | yfinance rate-limit (attempt %d/%d) — %s",
+                ticker_str, attempt + 1, len(timeouts), e,
+            )
             if attempt < len(timeouts) - 1:
                 await asyncio.sleep(10)
             continue
-        except asyncio.TimeoutError:
+        except asyncio.TimeoutError as e:
+            logger.warning(
+                "%s | yfinance timeout (attempt %d/%d) — %s",
+                ticker_str, attempt + 1, len(timeouts), e,
+            )
             if attempt < len(timeouts) - 1:
                 await asyncio.sleep(1)
             continue
-        except Exception:
+        except Exception as e:
+            logger.warning(
+                "%s | yfinance error (attempt %d/%d) — %s",
+                ticker_str, attempt + 1, len(timeouts), e,
+            )
             if attempt < len(timeouts) - 1:
                 await asyncio.sleep(1)
             continue
