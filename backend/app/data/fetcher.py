@@ -1,4 +1,5 @@
 import asyncio
+import logging
 import time
 import random
 import requests
@@ -8,10 +9,13 @@ from datetime import datetime, timedelta
 from app.config import settings
 from yfinance.exceptions import YFRateLimitError
 
+logger = logging.getLogger(__name__)
+
 
 _cache: dict[str, tuple[float, pd.DataFrame, bool]] = {}
 _cache_ttl = settings.cache_ttl_seconds
 _cache_lock = asyncio.Lock()
+_rate_lock = asyncio.Lock()
 _last_request_time: float = 0
 _MIN_REQUEST_INTERVAL = 1.0
 
@@ -145,10 +149,11 @@ def _try_yfinance(symbol: str) -> pd.DataFrame | None:
 
 async def _rate_limit():
     global _last_request_time
-    elapsed = time.time() - _last_request_time
-    if elapsed < _MIN_REQUEST_INTERVAL:
-        await asyncio.sleep(_MIN_REQUEST_INTERVAL - elapsed)
-    _last_request_time = time.time()
+    async with _rate_lock:
+        elapsed = time.time() - _last_request_time
+        if elapsed < _MIN_REQUEST_INTERVAL:
+            await asyncio.sleep(_MIN_REQUEST_INTERVAL - elapsed)
+        _last_request_time = time.time()
 
 
 async def fetch_stock_data(symbol: str) -> tuple[pd.DataFrame | None, bool]:
@@ -171,15 +176,27 @@ async def fetch_stock_data(symbol: str) -> tuple[pd.DataFrame | None, bool]:
             )
             if yf_result is not None:
                 break
-        except YFRateLimitError:
+        except YFRateLimitError as e:
+            logger.warning(
+                "%s | yfinance rate-limit (attempt %d/%d) — %s",
+                ticker_str, attempt + 1, len(timeouts), e,
+            )
             if attempt < len(timeouts) - 1:
                 await asyncio.sleep(10)
             continue
-        except asyncio.TimeoutError:
+        except asyncio.TimeoutError as e:
+            logger.warning(
+                "%s | yfinance timeout (attempt %d/%d) — %s",
+                ticker_str, attempt + 1, len(timeouts), e,
+            )
             if attempt < len(timeouts) - 1:
                 await asyncio.sleep(1)
             continue
-        except Exception:
+        except Exception as e:
+            logger.warning(
+                "%s | yfinance error (attempt %d/%d) — %s",
+                ticker_str, attempt + 1, len(timeouts), e,
+            )
             if attempt < len(timeouts) - 1:
                 await asyncio.sleep(1)
             continue
@@ -203,7 +220,7 @@ async def fetch_company_info(symbol: str) -> dict:
         sector = None
         try:
             import yfinance as yf
-            stock = yf.Ticker(resolve_ticker(symbol))
+            stock = yf.Ticker(resolve_ticker(symbol), session=_session)
             info = stock.info
             n = info.get("longName", info.get("shortName", ""))
             if n:
