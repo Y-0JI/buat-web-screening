@@ -2,6 +2,7 @@ import asyncio
 import time
 import random
 import requests
+from requests.adapters import HTTPAdapter
 import pandas as pd
 from datetime import datetime, timedelta
 from app.config import settings
@@ -24,6 +25,26 @@ _session.headers.update({
     "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
     "Accept-Language": "en-US,en;q=0.5",
 })
+
+
+class _TimeoutAdapter(HTTPAdapter):
+    """Socket-level timeout for HTTP requests.
+
+    Without this a stuck TCP connection can hang the background thread
+    spawned by asyncio.to_thread indefinitely (resource leak, bug #8).
+    """
+
+    def __init__(self, timeout: float = 15.0):
+        self.timeout = timeout
+        super().__init__()
+
+    def send(self, *args, **kwargs):
+        kwargs.setdefault("timeout", self.timeout)
+        return super().send(*args, **kwargs)
+
+
+_session.mount("https://", _TimeoutAdapter(15))
+_session.mount("http://", _TimeoutAdapter(15))
 
 
 MOCK_DATA = {
@@ -115,8 +136,7 @@ def _generate_mock_data(symbol: str, period: str = "6mo") -> pd.DataFrame:
 
 def _try_yfinance(symbol: str) -> pd.DataFrame | None:
     import yfinance as yf
-    tf = yf.Ticker(symbol)
-    tf._session = _session
+    tf = yf.Ticker(symbol, session=_session)
     df = tf.history(period=settings.yfinance_period)
     if df is not None and not df.empty:
         return _flatten_columns(df)
