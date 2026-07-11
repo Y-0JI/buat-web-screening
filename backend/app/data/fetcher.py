@@ -205,7 +205,7 @@ async def fetch_company_info(symbol: str) -> dict:
         sector = None
         try:
             import yfinance as yf
-            stock = yf.Ticker(resolve_ticker(symbol))
+            stock = yf.Ticker(resolve_ticker(symbol), session=_session)
             info = stock.info
             n = info.get("longName", info.get("shortName", ""))
             if n:
