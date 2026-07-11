@@ -18,6 +18,8 @@ _cache_lock = asyncio.Lock()
 _rate_lock = asyncio.Lock()
 _last_request_time: float = 0
 _MIN_REQUEST_INTERVAL = 1.0
+_in_flight: dict[str, asyncio.Future] = {}
+_in_flight_lock = asyncio.Lock()
 
 _session = requests.Session()
 _session.headers.update({
@@ -164,52 +166,80 @@ async def fetch_stock_data(symbol: str) -> tuple[pd.DataFrame | None, bool]:
         if cached is not None:
             return cached
 
-    await _rate_limit()
+    existing: asyncio.Future | None = None
+    async with _in_flight_lock:
+        if ticker_str in _in_flight:
+            existing = _in_flight[ticker_str]
+        else:
+            loop = asyncio.get_running_loop()
+            _in_flight[ticker_str] = loop.create_future()
 
-    timeouts = [8, 5, 4]
-    yf_result = None
-    for attempt, to in enumerate(timeouts):
+    if existing is not None:
         try:
-            yf_result = await asyncio.wait_for(
-                asyncio.to_thread(_try_yfinance, ticker_str),
-                timeout=to,
-            )
-            if yf_result is not None:
-                break
-        except YFRateLimitError as e:
-            logger.warning(
-                "%s | yfinance rate-limit (attempt %d/%d) — %s",
-                ticker_str, attempt + 1, len(timeouts), e,
-            )
-            if attempt < len(timeouts) - 1:
-                await asyncio.sleep(10)
-            continue
-        except asyncio.TimeoutError as e:
-            logger.warning(
-                "%s | yfinance timeout (attempt %d/%d) — %s",
-                ticker_str, attempt + 1, len(timeouts), e,
-            )
-            if attempt < len(timeouts) - 1:
-                await asyncio.sleep(1)
-            continue
-        except Exception as e:
-            logger.warning(
-                "%s | yfinance error (attempt %d/%d) — %s",
-                ticker_str, attempt + 1, len(timeouts), e,
-            )
-            if attempt < len(timeouts) - 1:
-                await asyncio.sleep(1)
-            continue
+            return await existing
+        except Exception:
+            return None, False
 
-    if yf_result is not None:
-        async with _cache_lock:
-            _set_cache(ticker_str, yf_result, is_simulated=False)
-        return yf_result, False
+    try:
+        await _rate_limit()
 
-    mock = _generate_mock_data(ticker_str, settings.yfinance_period)
-    async with _cache_lock:
-        _set_cache(ticker_str, mock, is_simulated=True)
-    return mock, True
+        timeouts = [8, 5, 4]
+        yf_result = None
+        for attempt, to in enumerate(timeouts):
+            try:
+                yf_result = await asyncio.wait_for(
+                    asyncio.to_thread(_try_yfinance, ticker_str),
+                    timeout=to,
+                )
+                if yf_result is not None:
+                    break
+            except YFRateLimitError as e:
+                logger.warning(
+                    "%s | yfinance rate-limit (attempt %d/%d) — %s",
+                    ticker_str, attempt + 1, len(timeouts), e,
+                )
+                if attempt < len(timeouts) - 1:
+                    await asyncio.sleep(10)
+                continue
+            except asyncio.TimeoutError as e:
+                logger.warning(
+                    "%s | yfinance timeout (attempt %d/%d) — %s",
+                    ticker_str, attempt + 1, len(timeouts), e,
+                )
+                if attempt < len(timeouts) - 1:
+                    await asyncio.sleep(1)
+                continue
+            except Exception as e:
+                logger.warning(
+                    "%s | yfinance error (attempt %d/%d) — %s",
+                    ticker_str, attempt + 1, len(timeouts), e,
+                )
+                if attempt < len(timeouts) - 1:
+                    await asyncio.sleep(1)
+                continue
+
+        if yf_result is not None:
+            async with _cache_lock:
+                _set_cache(ticker_str, yf_result, is_simulated=False)
+            result = (yf_result, False)
+        else:
+            mock = _generate_mock_data(ticker_str, settings.yfinance_period)
+            async with _cache_lock:
+                _set_cache(ticker_str, mock, is_simulated=True)
+            result = (mock, True)
+
+        async with _in_flight_lock:
+            fut = _in_flight.pop(ticker_str, None)
+        if fut is not None and not fut.done():
+            fut.set_result(result)
+
+        return result
+    except Exception as exc:
+        async with _in_flight_lock:
+            fut = _in_flight.pop(ticker_str, None)
+        if fut is not None and not fut.done():
+            fut.set_exception(exc)
+        raise
 
 
 async def fetch_company_info(symbol: str) -> dict:
