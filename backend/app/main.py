@@ -9,6 +9,7 @@ from app.routers.vision import router as vision_router
 from app.routers.auth import router as auth_router
 from app.routers.watchlist import router as watchlist_router
 from app.routers.history import router as history_router
+from app.routers.chart import router as chart_router
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -65,6 +66,7 @@ app.include_router(vision_router)
 app.include_router(auth_router)
 app.include_router(watchlist_router)
 app.include_router(history_router)
+app.include_router(chart_router)
 
 
 @app.get("/")
