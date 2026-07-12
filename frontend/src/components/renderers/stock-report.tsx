@@ -1,9 +1,10 @@
 "use client";
 
 import { useAuth } from "@/lib/auth-context";
-import { addWatchlist } from "@/lib/api";
+import { addWatchlist, fetchStockHistory, type OHLCVPoint } from "@/lib/api";
 import type { StockReport } from "@/lib/api";
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { PriceChart } from "@/components/chart/PriceChart";
 
 function VerdictBadge({ verdict }: { verdict: string }) {
   const colors: Record<string, string> = {
@@ -26,6 +27,30 @@ function VerdictBadge({ verdict }: { verdict: string }) {
 export function StockReportCard({ data }: { data: StockReport }) {
   const { user } = useAuth();
   const [wlMsg, setWlMsg] = useState<string | null>(null);
+  const [chartData, setChartData] = useState<OHLCVPoint[]>([]);
+  const [chartLoading, setChartLoading] = useState(false);
+  const [chartOpen, setChartOpen] = useState(true);
+  const [period, setPeriod] = useState("6mo");
+
+  useEffect(() => {
+    let cancelled = false;
+    async function load() {
+      setChartLoading(true);
+      try {
+        const res = await fetchStockHistory(data.ticker, period);
+        if (!cancelled && res.success && res.data) {
+          setChartData(res.data);
+        }
+      } catch {
+        // silent
+      } finally {
+        if (!cancelled) setChartLoading(false);
+      }
+    }
+    load();
+    return () => { cancelled = true; };
+  }, [data.ticker, period]);
+
   const priceColor =
     data.change_percent !== undefined
       ? data.change_percent >= 0
@@ -58,6 +83,42 @@ export function StockReportCard({ data }: { data: StockReport }) {
           <span className="text-amber-300/70 ml-2">Sumber data tidak tersedia, menampilkan data simulasi.</span>
         </div>
       )}
+
+      <div className="mb-4">
+        <button
+          onClick={() => setChartOpen(!chartOpen)}
+          className="flex items-center justify-between w-full text-sm font-semibold text-zinc-400 hover:text-zinc-300 mb-2"
+        >
+          <span>Chart Harga</span>
+          <span className="text-xs">{chartOpen ? "▲" : "▼"}</span>
+        </button>
+        {chartOpen && (
+          <div>
+            <div className="flex gap-1 mb-2">
+              {["1mo", "3mo", "6mo", "1y"].map((p) => (
+                <button
+                  key={p}
+                  onClick={() => setPeriod(p)}
+                  className={`px-2 py-0.5 text-xs rounded-full border transition-colors ${
+                    period === p
+                      ? "bg-blue-600 border-blue-500 text-white"
+                      : "bg-zinc-800 border-zinc-700 text-zinc-400 hover:text-zinc-300"
+                  }`}
+                >
+                  {p}
+                </button>
+              ))}
+            </div>
+            {chartLoading ? (
+              <div className="h-[330px] flex items-center justify-center bg-zinc-900 rounded-xl">
+                <span className="text-zinc-500 text-sm animate-pulse">Memuat chart...</span>
+              </div>
+            ) : (
+              <PriceChart data={chartData} isSimulated={data.is_simulated} />
+            )}
+          </div>
+        )}
+      </div>
 
       <div className="grid grid-cols-3 gap-4 mb-4">
         <div className="bg-zinc-800 rounded-xl p-3 text-center">

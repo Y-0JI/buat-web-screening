@@ -209,6 +209,31 @@ async def fetch_stock_data(symbol: str) -> tuple[pd.DataFrame | None, bool]:
         raise
 
 
+async def fetch_history(symbol: str, period: str = "6mo") -> tuple[pd.DataFrame | None, bool]:
+    ticker_str = resolve_ticker(symbol)
+
+    def _sync() -> pd.DataFrame | None:
+        try:
+            import yfinance as yf
+            tf = yf.Ticker(ticker_str, session=_session)
+            df = tf.history(period=period)
+            if df is not None and not df.empty:
+                return _flatten_columns(df)
+        except Exception:
+            pass
+        return None
+
+    try:
+        df = await asyncio.to_thread(_sync)
+        if df is not None:
+            return df, False
+    except Exception:
+        pass
+
+    mock = _generate_mock_data(ticker_str, period)
+    return mock, True
+
+
 async def fetch_company_info(symbol: str) -> dict:
     clean = symbol.upper().replace(".JK", "")
 

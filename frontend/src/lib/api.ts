@@ -233,3 +233,32 @@ export async function fetchHistory(
   });
   return res.data;
 }
+
+export interface OHLCVPoint {
+  date: string;
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+  volume: number;
+}
+
+export interface PriceHistoryResponse {
+  success: boolean;
+  ticker: string;
+  period: string;
+  is_simulated: boolean;
+  data: OHLCVPoint[];
+  error?: string;
+}
+
+export async function fetchStockHistory(
+  ticker: string,
+  period: string = "6mo"
+): Promise<PriceHistoryResponse> {
+  const res = await api.get<PriceHistoryResponse>(
+    `/api/stock/${ticker}/history`,
+    { params: { period } }
+  );
+  return res.data;
+}
