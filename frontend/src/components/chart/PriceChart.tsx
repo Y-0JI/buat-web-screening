@@ -2,14 +2,13 @@
 
 import {
   ResponsiveContainer,
-  LineChart,
-  Line,
+  ComposedChart,
+  Bar,
   XAxis,
   YAxis,
   CartesianGrid,
   Tooltip,
-  BarChart,
-  Bar,
+  Customized,
   Cell,
 } from "recharts";
 
@@ -25,6 +24,60 @@ interface OHLCVPoint {
 interface PriceChartProps {
   data: OHLCVPoint[];
   isSimulated?: boolean;
+}
+
+interface CandlestickProps {
+  yAxisMap?: Record<string, { scale: (v: number) => number }>;
+  offset?: { left: number; right: number; width: number };
+  data?: OHLCVPoint[];
+}
+
+function CandlestickRenderer({ yAxisMap, offset, data }: CandlestickProps) {
+  if (!yAxisMap?.price || !offset || !data || data.length === 0) return null;
+
+  const yScale = yAxisMap.price.scale;
+  const chartWidth = offset.width - offset.left - offset.right;
+  const bandwidth = chartWidth / data.length;
+  const candleWidth = Math.max(bandwidth * 0.7, 4);
+
+  return (
+    <g>
+      {data.map((d, i) => {
+        const cx = offset.left + i * bandwidth + bandwidth / 2;
+        const yHigh = yScale(d.high);
+        const yLow = yScale(d.low);
+        const yOpen = yScale(d.open);
+        const yClose = yScale(d.close);
+        const isUp = d.close >= d.open;
+        const color = isUp ? "#10b981" : "#ef4444";
+        const bodyTop = Math.min(yOpen, yClose);
+        const bodyH = Math.max(Math.abs(yOpen - yClose), 1);
+
+        return (
+          <g key={i}>
+            <line
+              x1={cx}
+              y1={yHigh}
+              x2={cx}
+              y2={yLow}
+              stroke={color}
+              strokeWidth={1.5}
+            />
+            <rect
+              x={cx - candleWidth / 2}
+              y={bodyTop}
+              width={candleWidth}
+              height={bodyH}
+              fill={isUp ? "transparent" : color}
+              stroke={color}
+              strokeWidth={1.5}
+              rx={1}
+            />
+          </g>
+        );
+      })}
+    </g>
+  );
 }
 
 export function PriceChart({ data, isSimulated = false }: PriceChartProps) {
@@ -48,7 +101,10 @@ export function PriceChart({ data, isSimulated = false }: PriceChartProps) {
 
       <div className="h-[240px] bg-zinc-900 rounded-xl overflow-hidden">
         <ResponsiveContainer width="100%" height="100%">
-          <LineChart data={data} margin={{ top: 10, right: 50, bottom: 5, left: 10 }}>
+          <ComposedChart
+            data={data}
+            margin={{ top: 10, right: 50, bottom: 5, left: 10 }}
+          >
             <XAxis
               dataKey="date"
               axisLine={false}
@@ -67,7 +123,11 @@ export function PriceChart({ data, isSimulated = false }: PriceChartProps) {
               axisLine={false}
               tickLine={false}
             />
-            <CartesianGrid strokeDasharray="4 4" stroke="#27272a" vertical={false} />
+            <CartesianGrid
+              strokeDasharray="4 4"
+              stroke="#27272a"
+              vertical={false}
+            />
             <Tooltip
               contentStyle={{
                 backgroundColor: "#18181b",
@@ -78,27 +138,25 @@ export function PriceChart({ data, isSimulated = false }: PriceChartProps) {
               labelStyle={{ color: "#71717a", fontSize: 11 }}
               itemStyle={{ color: "#f4f4f5", fontSize: 12 }}
               labelFormatter={(v: string) => v}
-              formatter={(value: number, name: string) => [
-                name === "close" ? value.toLocaleString() : value,
-                name === "close" ? "Close" : name,
-              ]}
             />
-            <Line
-              yAxisId="price"
-              type="monotone"
-              dataKey="close"
-              stroke="#3b82f6"
-              strokeWidth={2}
-              dot={false}
-              activeDot={{ r: 4, fill: "#3b82f6", stroke: "#1e40af" }}
+            <Customized
+              component={(props: Record<string, unknown>) => (
+                <CandlestickRenderer
+                  {...(props as CandlestickProps)}
+                  data={data}
+                />
+              )}
             />
-          </LineChart>
+          </ComposedChart>
         </ResponsiveContainer>
       </div>
 
       <div className="h-[80px] bg-zinc-900 rounded-xl overflow-hidden">
         <ResponsiveContainer width="100%" height="100%">
-          <BarChart data={data} margin={{ top: 0, right: 50, bottom: 20, left: 10 }}>
+          <ComposedChart
+            data={data}
+            margin={{ top: 0, right: 50, bottom: 20, left: 10 }}
+          >
             <XAxis
               dataKey="date"
               axisLine={false}
@@ -125,7 +183,11 @@ export function PriceChart({ data, isSimulated = false }: PriceChartProps) {
               axisLine={false}
               tickLine={false}
             />
-            <CartesianGrid strokeDasharray="4 4" stroke="#27272a" vertical={false} />
+            <CartesianGrid
+              strokeDasharray="4 4"
+              stroke="#27272a"
+              vertical={false}
+            />
             <Bar
               yAxisId="vol"
               dataKey="volume"
@@ -143,7 +205,7 @@ export function PriceChart({ data, isSimulated = false }: PriceChartProps) {
                 />
               ))}
             </Bar>
-          </BarChart>
+          </ComposedChart>
         </ResponsiveContainer>
       </div>
     </div>

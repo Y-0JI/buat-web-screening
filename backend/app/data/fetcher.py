@@ -215,7 +215,7 @@ async def fetch_history(symbol: str, period: str = "6mo") -> tuple[pd.DataFrame 
     def _sync() -> pd.DataFrame | None:
         try:
             import yfinance as yf
-            tf = yf.Ticker(ticker_str, session=_session)
+            tf = yf.Ticker(ticker_str)
             df = tf.history(period=period)
             if df is not None and not df.empty:
                 return _flatten_columns(df)
