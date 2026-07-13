@@ -125,7 +125,7 @@ async def _rate_limit():
         _last_request_time = time.time()
 
 
-async def fetch_stock_data(symbol: str) -> tuple[pd.DataFrame | None, bool]:
+async def fetch_stock_data(symbol: str, fast_fail: bool = False) -> tuple[pd.DataFrame | None, bool]:
     ticker_str = resolve_ticker(symbol)
 
     async with _cache_lock:
@@ -148,9 +148,10 @@ async def fetch_stock_data(symbol: str) -> tuple[pd.DataFrame | None, bool]:
             return None, False
 
     try:
-        await _rate_limit()
+        if not fast_fail:
+            await _rate_limit()
 
-        timeouts = [8, 5, 4]
+        timeouts = [5] if fast_fail else [8, 5, 4]
         yf_result = None
         for attempt, to in enumerate(timeouts):
             try:
@@ -165,7 +166,7 @@ async def fetch_stock_data(symbol: str) -> tuple[pd.DataFrame | None, bool]:
                     "%s | yfinance rate-limit (attempt %d/%d) — %s",
                     ticker_str, attempt + 1, len(timeouts), e,
                 )
-                if attempt < len(timeouts) - 1:
+                if not fast_fail and attempt < len(timeouts) - 1:
                     await asyncio.sleep(10)
                 continue
             except asyncio.TimeoutError as e:
@@ -173,7 +174,7 @@ async def fetch_stock_data(symbol: str) -> tuple[pd.DataFrame | None, bool]:
                     "%s | yfinance timeout (attempt %d/%d) — %s",
                     ticker_str, attempt + 1, len(timeouts), e,
                 )
-                if attempt < len(timeouts) - 1:
+                if not fast_fail and attempt < len(timeouts) - 1:
                     await asyncio.sleep(1)
                 continue
             except Exception as e:
@@ -181,7 +182,7 @@ async def fetch_stock_data(symbol: str) -> tuple[pd.DataFrame | None, bool]:
                     "%s | yfinance error (attempt %d/%d) — %s",
                     ticker_str, attempt + 1, len(timeouts), e,
                 )
-                if attempt < len(timeouts) - 1:
+                if not fast_fail and attempt < len(timeouts) - 1:
                     await asyncio.sleep(1)
                 continue
 
