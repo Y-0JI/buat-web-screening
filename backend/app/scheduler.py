@@ -28,7 +28,7 @@ async def run_batch_scan():
     async def scan_one(ticker: str) -> dict | None:
         async with _screen_semaphore:
             try:
-                df, is_simulated = await fetch_stock_data(ticker, fast_fail=True)
+                df, is_simulated = await fetch_stock_data(ticker)
                 if df is None or df.empty:
                     return None
                 info = await fetch_company_info(ticker)
