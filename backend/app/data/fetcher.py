@@ -210,8 +210,13 @@ async def fetch_stock_data(symbol: str, fast_fail: bool = False) -> tuple[pd.Dat
         raise
 
 
-async def fetch_history(symbol: str, period: str = "6mo") -> tuple[pd.DataFrame | None, bool]:
+async def fetch_history(symbol: str, period: str = "6mo", use_cached_data: bool = True) -> tuple[pd.DataFrame | None, bool]:
     ticker_str = resolve_ticker(symbol)
+
+    # Reuse fetch_stock_data for same period to avoid double YF requests
+    if use_cached_data and period == settings.yfinance_period:
+        df, is_simulated = await fetch_stock_data(symbol)
+        return df, is_simulated
 
     def _sync() -> pd.DataFrame | None:
         try:
@@ -225,7 +230,11 @@ async def fetch_history(symbol: str, period: str = "6mo") -> tuple[pd.DataFrame 
         return None
 
     try:
-        df = await asyncio.to_thread(_sync)
+        await _rate_limit()
+        df = await asyncio.wait_for(
+            asyncio.to_thread(_sync),
+            timeout=10,
+        )
         if df is not None:
             return df, False
     except Exception:
