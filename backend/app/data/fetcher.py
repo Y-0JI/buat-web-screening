@@ -148,8 +148,7 @@ async def fetch_stock_data(symbol: str, fast_fail: bool = False) -> tuple[pd.Dat
             return None, False
 
     try:
-        if not fast_fail:
-            await _rate_limit()
+        await _rate_limit()
 
         timeouts = [5] if fast_fail else [8, 5, 4]
         yf_result = None

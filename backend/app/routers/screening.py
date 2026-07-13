@@ -10,8 +10,7 @@ from app.schemas.stock import (
     RankingItem,
     Verdict,
 )
-from app.data.fetcher import fetch_stock_data, fetch_company_info
-from app.data.idx_stocks import VALID_TICKERS
+from app.data.fetcher import fetch_stock_data, fetch_company_info, MOCK_DATA
 from app.scoring.funnel import calculate_score
 from app.scheduler import get_cached_screening, run_batch_scan
 from app.database import get_session
@@ -80,11 +79,11 @@ async def screen(
             ))
         return ScreeningResponse(success=True, data=items)
 
-    tickers = list(VALID_TICKERS)
+    tickers = list(MOCK_DATA)
 
     async def fetch_one(ticker: str):
         async with _screen_semaphore:
-            return ticker, await fetch_stock_data(ticker, fast_fail=True)
+            return ticker, await fetch_stock_data(ticker)
 
     tasks = [fetch_one(t) for t in tickers]
     results_list = await asyncio.gather(*tasks)
