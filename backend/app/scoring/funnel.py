@@ -175,7 +175,7 @@ def calculate_score(df: pd.DataFrame, ticker: str, mode: str = "BSJP", is_simula
         else:
             sc, note = 50, "Layer tidak dikenal"
 
-        layer_scores[name] = sc
+        layer_scores[name] = (sc, note)
         if sc == 0:
             veto = True
 
@@ -183,13 +183,14 @@ def calculate_score(df: pd.DataFrame, ticker: str, mode: str = "BSJP", is_simula
         total = 0
     else:
         total = sum(
-            layer_scores[d["name"]] * d["weight"]
+            layer_scores[d["name"]][0] * d["weight"]
             for d in profile["layers"]
             if d["name"] in layer_scores
         )
 
     total = round(total, 1)
-    verdict, confidence, _ = evaluate_confluence(profile, df, ind, veto, layer_scores)
+    layer_scores_num = {k: v[0] for k, v in layer_scores.items()}
+    verdict, confidence, _ = evaluate_confluence(profile, df, ind, veto, layer_scores_num)
 
     if veto:
         verdict = Verdict.SELL if not is_bpjs else Verdict.AVOID
@@ -202,9 +203,9 @@ def calculate_score(df: pd.DataFrame, ticker: str, mode: str = "BSJP", is_simula
         if nm in layer_scores:
             breakdown.append(ScoreBreakdown(
                 funnel_layer=nm,
-                score=layer_scores[nm],
+                score=layer_scores[nm][0],
                 weight=d["weight"],
-                note="",
+                note=layer_scores[nm][1],
             ))
 
     summary_parts = []

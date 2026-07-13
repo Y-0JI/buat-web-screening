@@ -14,15 +14,26 @@ async def enhance_with_ai(report: StockReport) -> StockReport:
     info = await fetch_company_info(report.ticker)
     company = info.get("name", report.ticker)
 
+    breakdown_text = "\n".join(
+        f"- {b.funnel_layer}: {b.score}/100 → {b.note}"
+        for b in report.score_breakdown
+    )
+
     prompt = f"""Kamu adalah analis saham Indonesia. Berikut data teknikal saham {company} ({report.ticker}):
 
 Skor: {report.score}/100
 Verdict: {report.verdict.value}
 Keyakinan: {report.confidence}%
-Indikator: {report.indicators.model_dump_json()}
-Breakdown: {[b.model_dump() for b in report.score_breakdown]}
 
-Beri narasi singkat (max 3 kalimat) dalam Bahasa Indonesia sebagai analisis riset.
+Breakdown per layer:
+{breakdown_text}
+
+Indikator: {report.indicators.model_dump_json()}
+
+Beri narasi (max 5 kalimat) dalam Bahasa Indonesia:
+1. Jelaskan alasan utama di balik verdict berdasarkan data di atas.
+2. Sebutkan kondisi atau skenario yang bisa membatalkan/mengubah analisis ini.
+
 Jangan buat rekomendasi investasi. Akhiri dengan disclaimer bahwa ini alat riset, bukan rekomendasi."""
 
     def _call_gemini():
