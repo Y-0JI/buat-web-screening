@@ -32,6 +32,12 @@ interface CandlestickProps {
   data?: OHLCVPoint[];
 }
 
+function isValidOHLC(d: OHLCVPoint): boolean {
+  return [d.open, d.high, d.low, d.close].every(
+    (v) => typeof v === "number" && Number.isFinite(v)
+  );
+}
+
 function CandlestickRenderer({ yAxisMap, offset, data }: CandlestickProps) {
   if (!yAxisMap?.price || !offset || !data || data.length === 0) return null;
 
@@ -43,6 +49,8 @@ function CandlestickRenderer({ yAxisMap, offset, data }: CandlestickProps) {
   return (
     <g>
       {data.map((d, i) => {
+        if (!isValidOHLC(d)) return null;
+
         const cx = offset.left + i * bandwidth + bandwidth / 2;
         const yHigh = yScale(d.high);
         const yLow = yScale(d.low);
@@ -89,7 +97,8 @@ export function PriceChart({ data, isSimulated = false }: PriceChartProps) {
     );
   }
 
-  const maxVol = Math.max(...data.map((d) => d.volume));
+  const validData = data.filter(isValidOHLC);
+  const maxVol = Math.max(...validData.map((d) => d.volume));
 
   return (
     <div className="space-y-2">
@@ -102,7 +111,7 @@ export function PriceChart({ data, isSimulated = false }: PriceChartProps) {
       <div className="h-[240px] bg-zinc-900 rounded-xl overflow-hidden">
         <ResponsiveContainer width="100%" height="100%">
           <ComposedChart
-            data={data}
+            data={validData}
             margin={{ top: 10, right: 50, bottom: 5, left: 10 }}
           >
             <XAxis
@@ -143,7 +152,7 @@ export function PriceChart({ data, isSimulated = false }: PriceChartProps) {
               component={(props: Record<string, unknown>) => (
                 <CandlestickRenderer
                   {...(props as CandlestickProps)}
-                  data={data}
+                  data={validData}
                 />
               )}
             />
@@ -154,7 +163,7 @@ export function PriceChart({ data, isSimulated = false }: PriceChartProps) {
       <div className="h-[80px] bg-zinc-900 rounded-xl overflow-hidden">
         <ResponsiveContainer width="100%" height="100%">
           <ComposedChart
-            data={data}
+            data={validData}
             margin={{ top: 0, right: 50, bottom: 20, left: 10 }}
           >
             <XAxis
@@ -194,7 +203,7 @@ export function PriceChart({ data, isSimulated = false }: PriceChartProps) {
               radius={[2, 2, 0, 0]}
               maxBarSize={8}
             >
-              {data.map((entry, idx) => (
+              {validData.map((entry, idx) => (
                 <Cell
                   key={idx}
                   fill={
