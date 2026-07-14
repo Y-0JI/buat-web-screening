@@ -32,7 +32,20 @@ class Watchlist(Base):
     user = relationship("User", back_populates="watchlists")
 
 
-class ScanHistory(Base):
+
+
+class ListedTicker(Base):
+    __tablename__ = "listed_tickers"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    ticker = Column(String(10), nullable=False, unique=True)
+    company_name = Column(String(255), nullable=True)
+    sector = Column(String(255), nullable=True)
+    is_active = Column(Integer, nullable=False, default=1)
+    last_synced_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    def __repr__(self):
+        return f"<ListedTicker(ticker={self.ticker})>"class ScanHistory(Base):
     __tablename__ = "scan_histories"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
