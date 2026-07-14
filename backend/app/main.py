@@ -42,14 +42,15 @@ async def lifespan(app: FastAPI):
                 CronTrigger(day_of_week="mon-fri", hour=16, minute=30, timezone="Asia/Jakarta"),
                 id="batch_scan",
                 replace_existing=True,
+            )
             _scheduler.add_job(
                 fetch_and_store_tickers,
-                CronTrigger(day_of_week="mon-fri", hour=16, minute=30, timezone="Asia/Jakarta"),
+                CronTrigger(day_of_week="mon-fri", hour=16, minute=0, timezone="Asia/Jakarta"),
                 id="ticker_sync",
                 replace_existing=True,
             )
             _scheduler.start()
-            logger.info("Scheduler batch scan aktif (16:30 WIB, Sen-Jum)")
+            logger.info("Scheduler aktif: ticker_sync 16:00, batch_scan 16:30 WIB (Sen-Jum)")
         except Exception as e:
             logger.warning("Scheduler tidak bisa diaktifkan: %s", e)
     yield
