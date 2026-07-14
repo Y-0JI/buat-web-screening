@@ -45,7 +45,10 @@ class ListedTicker(Base):
     last_synced_at = Column(DateTime(timezone=True), server_default=func.now())
 
     def __repr__(self):
-        return f"<ListedTicker(ticker={self.ticker})>"class ScanHistory(Base):
+        return f"<ListedTicker(ticker={self.ticker})>"
+
+
+class ScanHistory(Base):
     __tablename__ = "scan_histories"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
