@@ -98,6 +98,18 @@ export function PriceChart({ data, isSimulated = false }: PriceChartProps) {
   }
 
   const validData = data.filter(isValidOHLC);
+
+  if (!validData.length) {
+    return (
+      <div className="h-[320px] flex items-center justify-center bg-zinc-900 rounded-xl">
+        <p className="text-zinc-500">Tidak ada data harga</p>
+      </div>
+    );
+  }
+
+  const minLow = Math.min(...validData.map((d) => d.low));
+  const maxHigh = Math.max(...validData.map((d) => d.high));
+  const priceDomain: [number, number] = [minLow * 0.995, maxHigh * 1.005];
   const maxVol = Math.max(...validData.map((d) => d.volume));
 
   return (
@@ -125,7 +137,7 @@ export function PriceChart({ data, isSimulated = false }: PriceChartProps) {
             <YAxis
               yAxisId="price"
               orientation="right"
-              domain={["auto", "auto"]}
+              domain={priceDomain}
               width={60}
               tick={{ fill: "#71717a", fontSize: 10 }}
               tickFormatter={(v: number) => v.toLocaleString()}
