@@ -3,7 +3,8 @@ import time
 import logging
 from app.config import settings
 from app.data.fetcher import fetch_stock_data, fetch_company_info
-from app.data.idx_stocks import VALID_TICKERS
+# from app.data.idx_stocks import VALID_TICKERS
+from app.data.ticker_sync import get_listed_tickers
 from app.scoring.funnel import calculate_score
 
 logger = logging.getLogger(__name__)
@@ -49,7 +50,8 @@ async def run_batch_scan():
                 logger.warning("Gagal scan %s: %s", ticker, e)
                 return None
 
-    results_list = await asyncio.gather(*[scan_one(t) for t in VALID_TICKERS])
+    tickers = await get_listed_tickers()
+    results_list = await asyncio.gather(*[scan_one(t) for t in tickers])
     results = [r for r in results_list if r is not None]
 
     results.sort(key=lambda x: x["score"], reverse=True)

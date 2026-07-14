@@ -9,6 +9,7 @@ from app.routers.vision import router as vision_router
 from app.routers.auth import router as auth_router
 from app.routers.watchlist import router as watchlist_router
 from app.routers.history import router as history_router
+from app.data.ticker_sync import fetch_and_store_tickers
 from app.routers.chart import router as chart_router
 
 logging.basicConfig(level=logging.INFO)
@@ -40,6 +41,11 @@ async def lifespan(app: FastAPI):
                 run_batch_scan,
                 CronTrigger(day_of_week="mon-fri", hour=16, minute=30, timezone="Asia/Jakarta"),
                 id="batch_scan",
+                replace_existing=True,
+            _scheduler.add_job(
+                fetch_and_store_tickers,
+                CronTrigger(day_of_week="mon-fri", hour=16, minute=30, timezone="Asia/Jakarta"),
+                id="ticker_sync",
                 replace_existing=True,
             )
             _scheduler.start()
