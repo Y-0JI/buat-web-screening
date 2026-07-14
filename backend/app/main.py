@@ -29,6 +29,36 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning("Database tidak tersedia: %s", e)
 
+    # Bootstrap: kalau tabel listed_tickers kosong, seed dari VALID_TICKERS
+    # supaya screening & /api/research tetap pakai daftar lengkap walaupun
+    # sync eksternal (idx.co.id/sectors.app) gagal.
+    try:
+        from sqlalchemy import text
+        from app.database import get_session
+        from app.database.models import ListedTicker
+        from app.data.idx_stocks import VALID_TICKERS
+        from datetime import datetime
+
+        async for session in get_session():
+            count = (await session.execute(text("SELECT COUNT(*) FROM listed_tickers"))).scalar()
+            if not count:
+                logger.info("listed_tickers kosong — seeding dari VALID_TICKERS (%d ticker)", len(VALID_TICKERS))
+                for t in VALID_TICKERS:
+                    session.merge(ListedTicker(
+                        ticker=t,
+                        company_name=None,
+                        sector=None,
+                        is_active=1,
+                        last_synced_at=datetime.utcnow(),
+                    ))
+                await session.commit()
+                logger.info("Seeding selesai: %d ticker", len(VALID_TICKERS))
+            else:
+                logger.info("listed_tickers sudah terisi (%d ticker)", count)
+            break
+    except Exception as e:
+        logger.warning("Bootstrap listed_tickers gagal: %s", e)
+
     if settings.scheduler_enabled:
         try:
             from apscheduler.schedulers.asyncio import AsyncIOScheduler
