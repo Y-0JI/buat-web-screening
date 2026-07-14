@@ -48,7 +48,7 @@ async def fetch_and_store_tickers():
                 ticker = str(item.get("ticker") or "").upper()
                 if not ticker:
                     continue
-                session.merge(
+                await session.merge(
                     ListedTicker(
                         ticker=ticker,
                         company_name=item.get("company_name") or item.get("name"),
@@ -140,7 +140,7 @@ async def _fetch_idx():
                 })
             return out
         except Exception as e:
-            logger.warning("Error parsing idx.co.id response: %s", e)
+            logger.warning("IDX.co.id diblokir Cloudflare atau URL belum valid — cek manual via browser. Menggunakan fallback statis. Error: %s", e)
             return []
     return await asyncio.to_thread(_sync)
 
