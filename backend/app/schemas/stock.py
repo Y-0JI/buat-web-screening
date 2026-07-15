@@ -51,6 +51,8 @@ class StockReport(BaseModel):
     risk_percent: Optional[float] = None
     mode: Optional[str] = None
     is_simulated: bool = False
+    news: Optional[list[dict]] = None
+    fundamentals: Optional[dict] = None
     disclaimer: str = (
         "Hasil AI adalah alat bantu riset, bukan rekomendasi investasi resmi."
     )

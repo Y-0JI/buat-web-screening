@@ -4,7 +4,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.schemas.stock import ResearchRequest, ResearchResponse
-from app.data.fetcher import fetch_stock_data, fetch_company_info, verify_ticker
+from app.data.fetcher import fetch_stock_data, fetch_company_info, fetch_news, fetch_fundamentals, verify_ticker
 from app.scoring.funnel import calculate_score
 from app.ai.orchestrator import enhance_with_ai
 from app.database import get_session
@@ -53,6 +53,14 @@ async def research(
             score=report.score, verdict=report.verdict.value,
         ))
         await session.commit()
+
+    if not is_simulated:
+        news_result, fund_result = await asyncio.gather(
+            fetch_news(ticker, limit=10),
+            fetch_fundamentals(ticker),
+        )
+        report.news = news_result.get("items") if not news_result.get("error") else None
+        report.fundamentals = fund_result if not fund_result.get("error") else None
 
     try:
         report = await enhance_with_ai(report)

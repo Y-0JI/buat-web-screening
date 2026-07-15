@@ -269,5 +269,173 @@ async def fetch_company_info(symbol: str) -> dict:
     return await asyncio.to_thread(_fetch)
 
 
+# ── Modular data category caches ──────────────────────────────────────────────
+# Each category has independent cache dict, TTL, and fetch function.
+# Design: easy to add new categories (earnings, recommendations, etc.) later.
+
+_NEWS_CACHE: dict[str, tuple[float, dict]] = {}
+_NEWS_TTL = 900  # 15 minutes
+_FUNDAMENTALS_CACHE: dict[str, tuple[float, dict]] = {}
+_FUNDAMENTALS_TTL = 3600  # 1 hour
+
+
+def _modular_cache_get(cache: dict, key: str, ttl: int) -> dict | None:
+    entry = cache.get(key)
+    if entry:
+        ts, data = entry
+        if time.time() - ts < ttl:
+            return data
+        del cache[key]
+    return None
+
+
+def _modular_cache_set(cache: dict, key: str, data: dict):
+    cache[key] = (time.time(), data)
+
+
+async def fetch_news(symbol: str, limit: int = 10) -> dict:
+    """Fetch recent news for a ticker from Yahoo Finance.
+
+    Returns:
+        {\"items\": [...], \"fetched_at\": \"...\"} on success
+        {\"error\": \"...\", \"fetched_at\": null} on failure
+    """
+    clean = symbol.upper().replace(".JK", "")
+    cache_key = f"{clean}:{limit}"
+
+    async with _cache_lock:
+        cached = _modular_cache_get(_NEWS_CACHE, cache_key, _NEWS_TTL)
+        if cached is not None:
+            return cached
+
+    def _fetch() -> dict:
+        try:
+            import yfinance as yf
+            stock = yf.Ticker(resolve_ticker(symbol))
+            raw_news = stock.news
+            if not raw_news:
+                return {
+                    "items": [],
+                    "fetched_at": datetime.now().isoformat(),
+                }
+            items = []
+            for n in raw_news[:limit]:
+                content = n.get("content", {})
+                items.append({
+                    "title": content.get("title", n.get("title", "")),
+                    "publisher": content.get("provider", {}).get("displayName", ""),
+                    "link": content.get("canonicalUrl", {}).get("url", ""),
+                    "published": content.get("pubDate", ""),
+                    "summary": content.get("summary", ""),
+                })
+            return {
+                "items": items,
+                "fetched_at": datetime.now().isoformat(),
+            }
+        except Exception as e:
+            logger.warning("%s | fetch_news error: %s", clean, e)
+            return {
+                "error": f"Gagal mengambil berita: {e}",
+                "fetched_at": None,
+            }
+
+    try:
+        await _rate_limit()
+        result = await asyncio.wait_for(asyncio.to_thread(_fetch), timeout=10)
+    except asyncio.TimeoutError:
+        logger.warning("%s | fetch_news timeout", clean)
+        result = {"error": "Timeout mengambil berita", "fetched_at": None}
+    except Exception as e:
+        logger.warning("%s | fetch_news error: %s", clean, e)
+        result = {"error": f"Gagal mengambil berita: {e}", "fetched_at": None}
+
+    async with _cache_lock:
+        if not result.get("error"):
+            _modular_cache_set(_NEWS_CACHE, cache_key, result)
+    return result
+
+
+async def fetch_fundamentals(symbol: str) -> dict:
+    """Fetch fundamental data for a ticker from Yahoo Finance.
+
+    Returns:
+        {\"market_cap\": ..., \"pe\": ..., ...} on success
+        {\"error\": \"...\", \"fetched_at\": null} on failure
+    """
+    clean = symbol.upper().replace(".JK", "")
+
+    async with _cache_lock:
+        cached = _modular_cache_get(_FUNDAMENTALS_CACHE, clean, _FUNDAMENTALS_TTL)
+        if cached is not None:
+            return cached
+
+    def _fetch() -> dict:
+        try:
+            import yfinance as yf
+            stock = yf.Ticker(resolve_ticker(symbol))
+            info = stock.info or {}
+
+            fast = {}
+            try:
+                fi = stock.fast_info
+                fast = {
+                    "market_cap": getattr(fi, "market_cap", None),
+                    "shares_outstanding": getattr(fi, "shares", None),
+                    "previous_close": getattr(fi, "previous_close", None),
+                    "last_price": getattr(fi, "last_price", None),
+                }
+            except Exception:
+                pass
+
+            return {
+                "market_cap": fast.get("market_cap") or info.get("marketCap"),
+                "previous_close": fast.get("previous_close") or info.get("previousClose"),
+                "last_price": fast.get("last_price"),
+                "shares_outstanding": fast.get("shares_outstanding") or info.get("sharesOutstanding"),
+                "pe": info.get("trailingPE") or info.get("forwardPE"),
+                "forward_pe": info.get("forwardPE"),
+                "pb": info.get("priceToBook"),
+                "dividend_yield": info.get("dividendYield"),
+                "trailing_annual_dividend_yield": info.get("trailingAnnualDividendYield"),
+                "beta": info.get("beta"),
+                "fifty_two_week_high": info.get("fiftyTwoWeekHigh"),
+                "fifty_two_week_low": info.get("fiftyTwoWeekLow"),
+                "fifty_day_average": info.get("fiftyDayAverage"),
+                "two_hundred_day_average": info.get("twoHundredDayAverage"),
+                "avg_volume_10d": info.get("averageDailyVolume10Day"),
+                "avg_volume_3m": info.get("averageDailyVolume3Month"),
+                "sector": info.get("sector"),
+                "industry": info.get("industry"),
+                "description": info.get("longBusinessSummary", ""),
+                "website": info.get("website"),
+                "currency": info.get("currency"),
+                "exchange": info.get("exchange"),
+                "fetched_at": datetime.now().isoformat(),
+            }
+        except Exception as e:
+            logger.warning("%s | fetch_fundamentals error: %s", clean, e)
+            return {
+                "error": f"Gagal mengambil data fundamental: {e}",
+                "fetched_at": None,
+            }
+
+    try:
+        await _rate_limit()
+        result = await asyncio.wait_for(asyncio.to_thread(_fetch), timeout=10)
+    except asyncio.TimeoutError:
+        logger.warning("%s | fetch_fundamentals timeout", clean)
+        result = {"error": "Timeout mengambil data fundamental", "fetched_at": None}
+    except Exception as e:
+        logger.warning("%s | fetch_fundamentals error: %s", clean, e)
+        result = {"error": f"Gagal mengambil data fundamental: {e}", "fetched_at": None}
+
+    async with _cache_lock:
+        if not result.get("error"):
+            _modular_cache_set(_FUNDAMENTALS_CACHE, clean, result)
+    return result
+
+
 def clear_cache():
     _cache.clear()
+    _NEWS_CACHE.clear()
+    _FUNDAMENTALS_CACHE.clear()
