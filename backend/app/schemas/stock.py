@@ -95,6 +95,7 @@ class ScreeningResponse(BaseModel):
     success: bool
     data: Optional[list[RankingItem]] = None
     error: Optional[str] = None
+    generated_at: Optional[str] = None
 
 
 class VisionReport(BaseModel):

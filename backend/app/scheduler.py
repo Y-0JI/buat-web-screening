@@ -23,6 +23,14 @@ def get_cached_screening() -> list[dict] | None:
     return _screen_cache.get("results")
 
 
+def get_screening_timestamp() -> float | None:
+    if not _screen_cache:
+        return None
+    if time.time() - _cache_ts > _CACHE_TTL:
+        return None
+    return _cache_ts if _cache_ts > 0 else None
+
+
 async def run_batch_scan():
     logger.info("Memulai batch scan...")
 
