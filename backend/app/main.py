@@ -12,6 +12,8 @@ from app.routers.history import router as history_router
 from app.data.ticker_sync import fetch_and_store_tickers
 from app.routers.chart import router as chart_router
 from app.routers.chat import router as chat_router
+from app.routers.insight import router as insight_router
+from app.routers.news import router as news_router
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -106,6 +108,8 @@ app.include_router(watchlist_router)
 app.include_router(history_router)
 app.include_router(chart_router)
 app.include_router(chat_router)
+app.include_router(insight_router)
+app.include_router(news_router)
 
 
 @app.get("/")

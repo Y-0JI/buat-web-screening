@@ -1,13 +1,12 @@
 "use client";
 
 import { AuthProvider } from "@/lib/auth-context";
-import { Navbar } from "@/components/navbar";
+import { AppShell } from "@/components/layout/app-shell";
 
 export function ClientLayout({ children }: { children: React.ReactNode }) {
   return (
     <AuthProvider>
-      <Navbar />
-      {children}
+      <AppShell>{children}</AppShell>
     </AuthProvider>
   );
 }
