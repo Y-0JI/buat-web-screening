@@ -270,6 +270,32 @@ export async function fetchStockHistory(
   return res.data;
 }
 
+export interface NewsItem {
+  title: string;
+  publisher: string;
+  link: string;
+  published: string;
+  summary?: string;
+}
+
+export interface StockNewsResponse {
+  success: boolean;
+  ticker: string;
+  data?: NewsItem[];
+  fetched_at?: string;
+  error?: string;
+}
+
+export async function fetchStockNews(
+  ticker: string,
+  limit: number = 5
+): Promise<StockNewsResponse> {
+  const res = await api.get<StockNewsResponse>(`/api/stock/${ticker}/news`, {
+    params: { limit },
+  });
+  return res.data;
+}
+
 export interface ChatMessage {
   role: string;
   content: string;

@@ -38,7 +38,7 @@ export function UploadArea({ onFileSelect, disabled }: UploadAreaProps) {
         onDrop={handleDrop}
         onDragOver={(e) => e.preventDefault()}
         onClick={() => !disabled && inputRef.current?.click()}
-        className="border-2 border-dashed border-zinc-700 hover:border-emerald-600 rounded-2xl p-4 text-center cursor-pointer transition-colors"
+        className="border-2 border-dashed border-zinc-700 hover:border-blue-600 rounded-2xl p-4 text-center cursor-pointer transition-colors"
       >
         {preview ? (
           <img

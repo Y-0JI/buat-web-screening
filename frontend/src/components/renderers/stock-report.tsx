@@ -1,26 +1,98 @@
 "use client";
 
 import { useAuth } from "@/lib/auth-context";
-import { addWatchlist, fetchStockHistory, type OHLCVPoint } from "@/lib/api";
-import type { StockReport } from "@/lib/api";
+import {
+  addWatchlist,
+  fetchStockHistory,
+  fetchStockNews,
+  type OHLCVPoint,
+  type StockReport,
+} from "@/lib/api";
 import { useState, useEffect } from "react";
 import { PriceChart } from "@/components/chart/PriceChart";
+import { Card, Badge, VerdictBadge, Button, Section, Bar, Skeleton } from "@/components/ui";
 
-function VerdictBadge({ verdict }: { verdict: string }) {
-  const colors: Record<string, string> = {
-    BUY: "bg-emerald-600 text-emerald-100",
-    HOLD: "bg-amber-600 text-amber-100",
-    SELL: "bg-red-600 text-red-100",
-    AVOID: "bg-zinc-600 text-zinc-100",
-  };
+function IndicatorGrid({ data }: { data: StockReport["indicators"] }) {
+  const items: Array<{ label: string; value: string; tone?: string }> = [];
+  if (data.rsi != null) items.push({ label: "RSI", value: `${data.rsi}` });
+  if (data.volume_ratio != null) items.push({ label: "Volume Ratio", value: `${data.volume_ratio}x` });
+  if (data.gap_percent != null) items.push({ label: "Gap", value: `${data.gap_percent}%` });
+  if (data.atr != null) items.push({ label: "ATR", value: `${data.atr}` });
+  if (data.vwap != null) items.push({ label: "VWAP", value: `${data.vwap}` });
+  if (data.support_resistance) {
+    items.push({ label: "Support", value: `${data.support_resistance.support}` });
+    items.push({ label: "Resistance", value: `${data.support_resistance.resistance}` });
+  }
+  const emaEntries = Object.entries(data.ema || {});
+  for (const [k, v] of emaEntries) items.push({ label: k, value: `${v}` });
+
+  if (items.length === 0) {
+    return <p className="text-zinc-500 text-sm">Tidak ada indikator tersedia.</p>;
+  }
+
   return (
-    <span
-      className={`px-3 py-1 rounded-full text-sm font-bold ${
-        colors[verdict] || "bg-zinc-600"
-      }`}
-    >
-      {verdict}
-    </span>
+    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+      {items.map((it, i) => (
+        <div key={i} className="bg-zinc-800 rounded-lg px-3 py-2 flex justify-between items-center">
+          <span className="text-zinc-400 text-xs">{it.label}</span>
+          <span className="text-zinc-200 font-mono text-sm">{it.value}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function NewsSection({ ticker }: { ticker: string }) {
+  const [news, setNews] = useState<Array<{ title: string; publisher: string; link: string; published: string }>>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function load() {
+      try {
+        const res = await fetchStockNews(ticker, 5);
+        if (!cancelled && res.success && res.data) {
+          setNews(res.data.map((n: { title: string; publisher: string; link: string; published: string }) => ({
+            title: n.title, publisher: n.publisher, link: n.link, published: n.published,
+          })));
+        }
+      } catch {
+        // silent
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+    load();
+    return () => { cancelled = true; };
+  }, [ticker]);
+
+  if (loading) {
+    return (
+      <div className="space-y-2">
+        {[...Array(3)].map((_, i) => <Skeleton key={i} variant="text" />)}
+      </div>
+    );
+  }
+
+  if (news.length === 0) {
+    return <p className="text-zinc-500 text-sm">Belum ada berita terbaru.</p>;
+  }
+
+  return (
+    <div className="space-y-2">
+      {news.map((n, i) => (
+        <a
+          key={i}
+          href={n.link}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="block p-3 bg-zinc-800 rounded-lg hover:bg-zinc-700 transition-colors"
+        >
+          <div className="text-sm text-zinc-200 font-medium leading-snug">{n.title}</div>
+          <div className="text-xs text-zinc-500 mt-1">{n.publisher} · {n.published}</div>
+        </a>
+      ))}
+    </div>
   );
 }
 
@@ -53,38 +125,57 @@ export function StockReportCard({ data }: { data: StockReport }) {
 
   const priceColor =
     data.change_percent !== undefined
-      ? data.change_percent >= 0
-        ? "text-emerald-400"
-        : "text-red-400"
+      ? data.change_percent >= 0 ? "text-green-400" : "text-red-400"
       : "text-zinc-100";
 
   return (
-    <div className="w-full max-w-2xl mx-auto mt-6 p-6 bg-zinc-900 border border-zinc-800 rounded-2xl">
-      <div className="flex items-center justify-between mb-4">
-        <div>
-          <h2 className="text-2xl font-bold text-zinc-100">
-            {data.company_name || data.ticker}
-          </h2>
-          <span className="text-zinc-500 text-sm">{data.ticker}</span>
+    <div className="w-full max-w-3xl mx-auto mt-6 space-y-4">
+      {/* Hero */}
+      <Card padding="lg">
+        <div className="flex items-start justify-between gap-4">
+          <div className="min-w-0">
+            <h2 className="text-2xl font-bold text-zinc-100 truncate">{data.company_name || data.ticker}</h2>
+            <div className="flex items-center gap-2 mt-1">
+              <span className="text-zinc-500 text-sm font-mono">{data.ticker}</span>
+              {data.mode && <Badge variant="mode" size="sm">{data.mode}</Badge>}
+            </div>
+          </div>
+          <div className="flex flex-col items-end gap-2 shrink-0">
+            <VerdictBadge verdict={data.verdict} />
+            {data.is_simulated && <Badge variant="status-sim" size="sm">Simulasi</Badge>}
+          </div>
         </div>
-        <div className="flex items-center gap-2">
-          {data.mode && (
-            <span className="text-xs px-2 py-0.5 bg-zinc-800 border border-zinc-700 rounded text-zinc-400">
-              {data.mode}
-            </span>
-          )}
-          <VerdictBadge verdict={data.verdict} />
-        </div>
-      </div>
 
-      {data.is_simulated && (
-        <div className="mb-4 p-3 bg-amber-950/30 border border-amber-800/50 rounded-xl text-sm">
-          <span className="text-amber-400 font-medium">Data simulasi</span>
-          <span className="text-amber-300/70 ml-2">Sumber data tidak tersedia, menampilkan data simulasi.</span>
+        <div className="flex items-end gap-4 mt-4">
+          <div>
+            <div className={`text-3xl font-bold ${priceColor}`}>
+              {data.price != null ? data.price.toLocaleString() : "-"}
+            </div>
+            {data.change_percent !== undefined && (
+              <div className={`text-sm ${priceColor}`}>
+                {data.change_percent >= 0 ? "+" : ""}{data.change_percent}%
+              </div>
+            )}
+          </div>
+          <div className="flex-1">
+            <div className="flex items-center justify-between mb-1">
+              <span className="text-xs text-zinc-500">Skor {data.score}</span>
+              <span className="text-xs text-zinc-500">Keyakinan {data.confidence}%</span>
+            </div>
+            <Bar variant="score" value={data.score} height="md" />
+          </div>
         </div>
-      )}
 
-      <div className="mb-4">
+        {data.stop_loss && (
+          <div className="mt-4 p-3 bg-red-950/30 border border-red-900/50 rounded-xl text-sm">
+            <span className="text-red-400 font-medium">Rekomendasi stop-loss: </span>
+            <span className="text-red-300">{data.stop_loss.toLocaleString()}</span>
+          </div>
+        )}
+      </Card>
+
+      {/* Chart */}
+      <Card padding="md">
         <button
           onClick={() => setChartOpen(!chartOpen)}
           className="flex items-center justify-between w-full text-sm font-semibold text-zinc-400 hover:text-zinc-300 mb-2"
@@ -118,130 +209,61 @@ export function StockReportCard({ data }: { data: StockReport }) {
             )}
           </div>
         )}
-      </div>
+      </Card>
 
-      <div className="grid grid-cols-3 gap-4 mb-4">
-        <div className="bg-zinc-800 rounded-xl p-3 text-center">
-          <div className="text-xs text-zinc-500 mb-1">Harga</div>
-          <div className={`text-lg font-bold ${priceColor}`}>
-            {data.price?.toLocaleString() || "-"}
-          </div>
-          {data.change_percent !== undefined && (
-            <div className={`text-xs ${priceColor}`}>
-              {data.change_percent >= 0 ? "+" : ""}
-              {data.change_percent}%
+      {/* AI Narrative */}
+      <Card padding="md">
+        <div className="flex items-center gap-2 mb-3">
+          <svg className="w-5 h-5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+          </svg>
+          <h3 className="text-sm font-semibold text-zinc-300">Insight AI</h3>
+        </div>
+        <p className="text-sm text-zinc-300 leading-relaxed">{data.summary}</p>
+      </Card>
+
+      {/* Collapsible sections */}
+      <Section title="Teknikal" defaultOpen>
+        <IndicatorGrid data={data.indicators} />
+      </Section>
+
+      <Section title="Skor Breakdown" defaultOpen={false}>
+        <div className="space-y-1">
+          {data.score_breakdown.map((b, i) => (
+            <div key={i} className="flex justify-between text-sm px-2 py-1.5 bg-zinc-800 rounded-lg">
+              <span className="text-zinc-400">{b.funnel_layer}</span>
+              <span className="text-zinc-200">{b.score} <span className="text-zinc-500">×{b.weight}</span></span>
             </div>
-          )}
+          ))}
         </div>
-        <div className="bg-zinc-800 rounded-xl p-3 text-center">
-          <div className="text-xs text-zinc-500 mb-1">Skor</div>
-          <div className="text-lg font-bold text-zinc-100">{data.score}</div>
-        </div>
-        <div className="bg-zinc-800 rounded-xl p-3 text-center">
-          <div className="text-xs text-zinc-500 mb-1">Keyakinan</div>
-          <div className="text-lg font-bold text-zinc-100">
-            {data.confidence}%
-          </div>
-        </div>
-      </div>
+      </Section>
 
-      <div className="mb-4">
-        <div className="w-full bg-zinc-800 rounded-full h-3">
-          <div
-            className="h-3 rounded-full transition-all bg-gradient-to-r from-red-500 via-amber-500 to-emerald-500"
-            style={{ width: `${data.score}%` }}
-          />
-        </div>
-      </div>
-
-      {data.stop_loss && (
-        <div className="mb-4 p-3 bg-red-950/30 border border-red-900/50 rounded-xl text-sm">
-          <span className="text-red-400 font-medium">Stop-loss: </span>
-          <span className="text-red-300">{data.stop_loss.toLocaleString()}</span>
-        </div>
-      )}
-
-      <div className="space-y-2 mb-4">
-        <h3 className="text-sm font-semibold text-zinc-400 uppercase tracking-wide">
-          Indikator
-        </h3>
-        <div className="grid grid-cols-2 gap-2 text-sm">
-          {data.indicators.rsi != null && (
-            <div className="bg-zinc-800 rounded-lg px-3 py-2 flex justify-between">
-              <span className="text-zinc-400">RSI</span>
-              <span className="text-zinc-200 font-mono">{data.indicators.rsi}</span>
-            </div>
-          )}
-          {data.indicators.volume_ratio != null && (
-            <div className="bg-zinc-800 rounded-lg px-3 py-2 flex justify-between">
-              <span className="text-zinc-400">Vol Ratio</span>
-              <span className="text-zinc-200 font-mono">{data.indicators.volume_ratio}x</span>
-            </div>
-          )}
-          {data.indicators.gap_percent != null && (
-            <div className="bg-zinc-800 rounded-lg px-3 py-2 flex justify-between">
-              <span className="text-zinc-400">Gap</span>
-              <span className="text-zinc-200 font-mono">{data.indicators.gap_percent}%</span>
-            </div>
-          )}
-          {data.indicators.atr != null && (
-            <div className="bg-zinc-800 rounded-lg px-3 py-2 flex justify-between">
-              <span className="text-zinc-400">ATR</span>
-              <span className="text-zinc-200 font-mono">{data.indicators.atr}</span>
-            </div>
-          )}
-        </div>
-      </div>
-
-      <div className="p-4 bg-zinc-800 rounded-xl mb-4">
-        <p className="text-zinc-300 text-sm leading-relaxed">{data.summary}</p>
-      </div>
-
-      {data.score_breakdown.length > 0 && (
-        <details className="mb-4">
-          <summary className="text-sm text-zinc-500 cursor-pointer hover:text-zinc-300">
-            Detail skor
-          </summary>
-          <div className="mt-2 space-y-1">
-            {data.score_breakdown.map((b, i) => (
-              <div key={i} className="flex justify-between text-xs text-zinc-400 px-2 py-1">
-                <span>{b.funnel_layer}</span>
-                <span>
-                  {b.score} (x{b.weight})
-                </span>
-              </div>
-            ))}
-          </div>
-        </details>
-      )}
+      <Section title="Berita Terkait" defaultOpen={false}>
+        <NewsSection ticker={data.ticker} />
+      </Section>
 
       {user && (
-        <div className="mb-4">
-          <button
+        <div>
+          <Button
+            variant="secondary"
+            className="w-full"
             onClick={async () => {
               setWlMsg(null);
               try {
                 const res = await addWatchlist(data.ticker);
-                if (res.success) {
-                  setWlMsg("Ditambahkan ke watchlist");
-                } else {
-                  setWlMsg(res.error || "Gagal");
-                }
+                setWlMsg(res.success ? "Ditambahkan ke watchlist" : res.error || "Gagal");
               } catch {
                 setWlMsg("Gagal menghubungi server");
               }
             }}
-            className="w-full py-2 px-4 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 rounded-xl text-sm text-zinc-300 transition-colors"
           >
             + Tambah ke Watchlist
-          </button>
-          {wlMsg && (
-            <div className="text-xs text-zinc-400 mt-1 text-center">{wlMsg}</div>
-          )}
+          </Button>
+          {wlMsg && <div className="text-xs text-zinc-400 mt-1 text-center">{wlMsg}</div>}
         </div>
       )}
 
-      <p className="text-xs text-zinc-600 italic">{data.disclaimer}</p>
+      <p className="text-xs text-zinc-600 italic text-center">{data.disclaimer}</p>
     </div>
   );
 }
