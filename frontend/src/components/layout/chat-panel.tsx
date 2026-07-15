@@ -3,6 +3,73 @@
 import { useState, useRef, useEffect, type KeyboardEvent } from "react";
 import { sendChatMessage, type ChatMessage } from "@/lib/api";
 
+function renderMarkdown(text: string) {
+  const lines = text.split("\n");
+  const elements: React.ReactNode[] = [];
+  let inList = false;
+  let listItems: React.ReactNode[] = [];
+
+  function flushList() {
+    if (inList && listItems.length > 0) {
+      elements.push(
+        <ul key={`ul-${elements.length}`} className="list-disc list-inside space-y-0.5 my-1">
+          {listItems}
+        </ul>
+      );
+      listItems = [];
+      inList = false;
+    }
+  }
+
+  for (let i = 0; i < lines.length; i++) {
+    let line = lines[i];
+
+    // Bold **text**
+    line = line.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
+    // Italic *text*
+    line = line.replace(/(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)/g, "<em>$1</em>");
+    // Inline code `text`
+    line = line.replace(/`(.+?)`/g, '<code class="bg-zinc-700 px-1 py-0.5 rounded text-xs">$1</code>');
+
+    // Bullet points
+    if (line.match(/^[\s]*[-*]\s/)) {
+      inList = true;
+      const content = line.replace(/^[\s]*[-*]\s/, "");
+      listItems.push(
+        <li key={i} dangerouslySetInnerHTML={{ __html: content }} />
+      );
+      continue;
+    }
+
+    flushList();
+
+    // Headers
+    if (line.startsWith("### ")) {
+      elements.push(
+        <h4 key={i} className="text-sm font-bold text-zinc-200 mt-2 mb-1" dangerouslySetInnerHTML={{ __html: line.slice(4) }} />
+      );
+    } else if (line.startsWith("## ")) {
+      elements.push(
+        <h3 key={i} className="text-sm font-bold text-zinc-200 mt-2 mb-1" dangerouslySetInnerHTML={{ __html: line.slice(3) }} />
+      );
+    } else if (line.startsWith("# ")) {
+      elements.push(
+        <h2 key={i} className="text-base font-bold text-zinc-200 mt-2 mb-1" dangerouslySetInnerHTML={{ __html: line.slice(2) }} />
+      );
+    } else if (line.trim() === "") {
+      elements.push(<br key={i} />);
+    } else {
+      elements.push(
+        <span key={i} dangerouslySetInnerHTML={{ __html: line }} />
+      );
+      elements.push(<br key={`br-${i}`} />);
+    }
+  }
+
+  flushList();
+  return elements;
+}
+
 interface ChatPanelProps {
   open: boolean;
   onClose: () => void;
@@ -63,17 +130,10 @@ export function ChatPanel({ open, onClose, mode }: ChatPanelProps) {
       <div className="flex items-center justify-between px-4 h-14 border-b border-zinc-800">
         <div className="flex items-center gap-2">
           <svg className="w-5 h-5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={1.5}
-              d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"
-            />
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
           </svg>
           <h2 className="text-sm font-semibold text-zinc-200">Asisten AI</h2>
-          <span className="text-[10px] text-zinc-500 bg-zinc-800 px-1.5 py-0.5 rounded">
-            {mode}
-          </span>
+          <span className="text-[10px] text-zinc-500 bg-zinc-800 px-1.5 py-0.5 rounded">{mode}</span>
         </div>
         <button
           onClick={onClose}
@@ -91,27 +151,15 @@ export function ChatPanel({ open, onClose, mode }: ChatPanelProps) {
         {messages.length === 0 && (
           <div className="text-center py-8">
             <svg className="w-10 h-10 text-zinc-700 mx-auto mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={1}
-                d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"
-              />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
             </svg>
-            <p className="text-zinc-500 text-sm">
-              Tanya apa saja tentang saham Indonesia
-            </p>
-            <p className="text-zinc-600 text-xs mt-1">
-              Contoh: &quot;Gimana BBCA sekarang?&quot;
-            </p>
+            <p className="text-zinc-500 text-sm">Tanya apa saja tentang saham Indonesia</p>
+            <p className="text-zinc-600 text-xs mt-1">Contoh: &quot;Gimana BBCA sekarang?&quot;</p>
           </div>
         )}
 
         {messages.map((msg, i) => (
-          <div
-            key={i}
-            className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
-          >
+          <div key={i} className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
             <div
               className={`max-w-[85%] px-3 py-2 rounded-2xl text-sm leading-relaxed ${
                 msg.role === "user"
@@ -119,7 +167,7 @@ export function ChatPanel({ open, onClose, mode }: ChatPanelProps) {
                   : "bg-zinc-800 text-zinc-200 rounded-bl-md"
               }`}
             >
-              {msg.content}
+              {msg.role === "model" ? renderMarkdown(msg.content) : msg.content}
             </div>
           </div>
         ))}

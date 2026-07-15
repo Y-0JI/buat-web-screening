@@ -31,7 +31,7 @@ export function SearchBar({ onSearch, loading, mode, onModeChange }: SearchBarPr
             value={mode}
             onChange={(e) => onModeChange(e.target.value)}
             disabled={loading}
-            className="bg-zinc-800 border border-zinc-700 rounded-lg text-zinc-300 text-xs py-1.5 px-2 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+            className="bg-zinc-800 border border-zinc-700 rounded-lg text-zinc-300 text-xs py-1.5 px-2 focus:outline-none focus:ring-1 focus:ring-blue-500"
           >
             <option value="BSJP">BSJP</option>
             <option value="BPJS">BPJS</option>
@@ -42,13 +42,13 @@ export function SearchBar({ onSearch, loading, mode, onModeChange }: SearchBarPr
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder="Tanya tentang saham..."
-          className="w-full pl-20 pr-24 py-4 bg-zinc-800 border border-zinc-700 rounded-2xl text-zinc-100 placeholder-zinc-500 text-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all"
+          className="w-full pl-20 pr-24 py-4 bg-zinc-800 border border-zinc-700 rounded-2xl text-zinc-100 placeholder-zinc-500 text-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
           disabled={loading}
         />
         <button
           type="submit"
           disabled={loading || !query.trim()}
-          className="absolute right-2 top-1/2 -translate-y-1/2 px-5 py-2 bg-emerald-600 hover:bg-emerald-500 disabled:bg-zinc-700 disabled:text-zinc-500 text-white rounded-xl text-sm font-medium transition-colors"
+          className="absolute right-2 top-1/2 -translate-y-1/2 px-5 py-2 bg-blue-600 hover:bg-blue-500 disabled:bg-zinc-700 disabled:text-zinc-500 text-white rounded-xl text-sm font-medium transition-colors"
         >
           {loading ? "Memproses..." : "Cari"}
         </button>

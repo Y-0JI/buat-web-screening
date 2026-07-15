@@ -13,25 +13,85 @@ import {
 } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 import { AuthGuard } from "@/components/auth-guard";
-import { MarketOverview } from "@/components/dashboard/market-overview";
-import { AIPicks } from "@/components/dashboard/ai-picks";
-import { WatchlistSection } from "@/components/dashboard/watchlist-section";
-import { RecentHistory } from "@/components/dashboard/recent-history";
+import { Card, Section, Button, Skeleton, Badge, VerdictBadge } from "@/components/ui";
+import { SummaryCards } from "@/components/dashboard/summary-cards";
+import { MarketInsight } from "@/components/dashboard/market-insight";
 
-function SectionError({ message }: { message: string }) {
+function PickCard({ item }: { item: RankingItem }) {
+  const priceColor =
+    item.change_percent !== undefined
+      ? item.change_percent >= 0 ? "text-green-400" : "text-red-400"
+      : "text-zinc-100";
+
   return (
-    <p className="text-red-400 text-sm bg-red-950/30 border border-red-900/50 rounded-xl px-4 py-3">
-      {message}
-    </p>
+    <Card variant="interactive" padding="sm">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <span className="w-5 text-center text-zinc-500 font-mono text-xs font-bold">
+            {item.rank}
+          </span>
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="font-semibold text-zinc-100 text-sm">{item.ticker}</span>
+              {item.is_simulated && <Badge variant="status-sim" size="sm">Simulasi</Badge>}
+              {item.company_name && (
+                <span className="text-zinc-500 text-xs truncate hidden sm:inline">{item.company_name}</span>
+              )}
+            </div>
+          </div>
+        </div>
+        <div className="flex items-center gap-3">
+          {item.price !== undefined && (
+            <div className="text-right hidden sm:block">
+              <div className={`text-sm font-bold ${priceColor}`}>{item.price?.toLocaleString()}</div>
+              {item.change_percent !== undefined && (
+                <div className={`text-xs ${priceColor}`}>
+                  {item.change_percent >= 0 ? "+" : ""}{item.change_percent}%
+                </div>
+              )}
+            </div>
+          )}
+          <div className="w-16">
+            <div className="w-full bg-zinc-800 rounded-full h-1.5">
+              <div className="h-1.5 rounded-full bg-gradient-to-r from-red-500 via-amber-500 to-green-500" style={{ width: `${item.score}%` }} />
+            </div>
+            <div className="text-[10px] text-zinc-500 text-center mt-0.5">{item.score}</div>
+          </div>
+          <VerdictBadge verdict={item.verdict} size="sm" />
+        </div>
+      </div>
+    </Card>
   );
 }
 
-function SectionSkeleton() {
+function WatchlistCard({ item, onRemove }: { item: WatchlistItem; onRemove: (t: string) => void }) {
   return (
-    <div className="animate-pulse space-y-2">
-      <div className="h-4 bg-zinc-800 rounded w-32" />
-      <div className="h-16 bg-zinc-900 rounded-2xl" />
-      <div className="h-16 bg-zinc-900 rounded-2xl" />
+    <Card variant="interactive" padding="sm" className="flex items-center justify-between">
+      <div className="min-w-0">
+        <span className="text-zinc-100 font-semibold text-sm">{item.ticker}</span>
+        {item.note && <span className="text-zinc-500 text-xs ml-2 truncate">{item.note}</span>}
+      </div>
+      <button onClick={() => onRemove(item.ticker)} className="text-zinc-500 hover:text-red-400 text-xs transition-colors ml-2 shrink-0">
+        Hapus
+      </button>
+    </Card>
+  );
+}
+
+function HistoryRow({ item }: { item: HistoryItem }) {
+  const verdictColor: Record<string, string> = { BUY: "text-green-400", HOLD: "text-amber-400", SELL: "text-red-400", AVOID: "text-zinc-400" };
+  return (
+    <div className="flex items-center justify-between px-3 py-2">
+      <div className="min-w-0 flex items-center gap-2">
+        <span className="text-zinc-100 font-semibold text-sm">{item.ticker}</span>
+        <span className="text-zinc-500 text-xs">
+          {item.created_at ? new Date(item.created_at).toLocaleDateString("id-ID", { day: "numeric", month: "short" }) : ""}
+        </span>
+      </div>
+      <div className="flex items-center gap-3 shrink-0">
+        {item.score != null && <span className="text-zinc-400 text-sm">{item.score}</span>}
+        {item.verdict && <span className={`text-sm font-bold ${verdictColor[item.verdict] || "text-zinc-400"}`}>{item.verdict}</span>}
+      </div>
     </div>
   );
 }
@@ -42,142 +102,132 @@ export default function DashboardPage() {
   const [generatedAt, setGeneratedAt] = useState<string | undefined>();
   const [watchlist, setWatchlist] = useState<WatchlistItem[]>([]);
   const [history, setHistory] = useState<HistoryItem[]>([]);
+  const [wlInput, setWlInput] = useState("");
+  const [wlNote, setWlNote] = useState("");
+  const [wlAdding, setWlAdding] = useState(false);
+  const [loading, setLoading] = useState({ screen: true, wl: true, hist: true });
 
-  const [screenLoading, setScreenLoading] = useState(true);
-  const [watchlistLoading, setWatchlistLoading] = useState(true);
-  const [historyLoading, setHistoryLoading] = useState(true);
+  useEffect(() => { loadAll(); }, []);
 
-  const [screenError, setScreenError] = useState("");
-  const [watchlistError, setWatchlistError] = useState("");
-  const [historyError, setHistoryError] = useState("");
+  async function loadAll() {
+    setLoading({ screen: true, wl: true, hist: true });
+    const [screenRes, wlRes, histRes] = await Promise.allSettled([
+      screenStocks().then(r => { if (r.success && r.data) { setScreenItems(r.data); setGeneratedAt(r.generated_at); } }),
+      fetchWatchlist().then(r => { if (r.success && r.data) setWatchlist(r.data); }),
+      fetchHistory(20).then(r => { if (r.success && r.data) setHistory(r.data); }),
+    ]);
+    setLoading({ screen: false, wl: false, hist: false });
+  }
 
-  useEffect(() => {
-    loadScreen();
-    loadWatchlist();
-    loadHistory();
-  }, []);
-
-  const loadScreen = async () => {
-    setScreenLoading(true);
-    setScreenError("");
+  async function handleAddWl() {
+    const t = wlInput.trim().toUpperCase();
+    if (!t || wlAdding) return;
+    setWlAdding(true);
     try {
-      const res = await screenStocks();
-      if (res.success && res.data) {
-        setScreenItems(res.data);
-        setGeneratedAt(res.generated_at);
-      } else {
-        setScreenError(res.error || "Gagal memuat rekomendasi AI");
-      }
-    } catch {
-      setScreenError("Gagal memuat rekomendasi AI");
-    } finally {
-      setScreenLoading(false);
-    }
-  };
+      const res = await addWatchlist(t, wlNote.trim() || undefined);
+      if (res.success && res.data) { setWatchlist(res.data); setWlInput(""); setWlNote(""); }
+    } finally { setWlAdding(false); }
+  }
 
-  const loadWatchlist = async () => {
-    setWatchlistLoading(true);
-    setWatchlistError("");
-    try {
-      const res = await fetchWatchlist();
-      if (res.success && res.data) setWatchlist(res.data);
-      else setWatchlistError(res.error || "Gagal memuat watchlist");
-    } catch {
-      setWatchlistError("Gagal memuat watchlist");
-    } finally {
-      setWatchlistLoading(false);
-    }
-  };
+  async function handleRemoveWl(ticker: string) {
+    try { await removeWatchlist(ticker); setWatchlist(p => p.filter(w => w.ticker !== ticker)); } catch {}
+  }
 
-  const loadHistory = async () => {
-    setHistoryLoading(true);
-    setHistoryError("");
-    try {
-      const res = await fetchHistory(30);
-      if (res.success && res.data) setHistory(res.data);
-      else setHistoryError(res.error || "Gagal memuat riwayat");
-    } catch {
-      setHistoryError("Gagal memuat riwayat");
-    } finally {
-      setHistoryLoading(false);
-    }
-  };
-
-  const handleRemoveWatchlist = async (ticker: string) => {
-    try {
-      await removeWatchlist(ticker);
-      setWatchlist((prev) => prev.filter((w) => w.ticker !== ticker));
-    } catch {
-      setWatchlistError("Gagal menghapus");
-    }
-  };
-
-  const handleAddWatchlist = async (ticker: string, note?: string) => {
-    const res = await addWatchlist(ticker, note);
-    if (res.success && res.data) {
-      setWatchlist(res.data);
-      setWatchlistError("");
-    } else {
-      setWatchlistError(res.error || "Gagal menambah");
-    }
-  };
+  const topPicks = screenItems.slice(0, 5);
+  const visibleHistory = history.slice(0, 5);
 
   return (
     <AuthGuard>
-      <main className="max-w-5xl mx-auto px-4 sm:px-6 py-10">
-        <header className="mb-8">
-          <h1 className="text-2xl font-bold text-zinc-100">
-            Halo, {user?.username} 👋
-          </h1>
-          <p className="text-zinc-500 text-sm mt-1">
-            Pantau pasar dan temukan peluang terbaik hari ini
-          </p>
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 py-8 space-y-6">
+        {/* Header */}
+        <header>
+          <h1 className="text-2xl font-bold text-zinc-100">Halo, {user?.username}</h1>
+          <p className="text-zinc-500 text-sm mt-1">Pantau pasar dan temukan peluang terbaik hari ini</p>
         </header>
 
-        <div className="space-y-8">
-          <section>
-            {screenLoading ? (
-              <SectionSkeleton />
-            ) : screenError ? (
-              <SectionError message={screenError} />
-            ) : (
-              <>
-                <MarketOverview
-                  items={screenItems}
-                  generated_at={generatedAt}
-                />
-                <div className="mt-6">
-                  <AIPicks items={screenItems} />
+        {/* Summary Cards */}
+        {loading.screen ? (
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+            {[...Array(4)].map((_, i) => <Skeleton key={i} variant="card" height="h-24" />)}
+          </div>
+        ) : (
+          <SummaryCards items={screenItems} generatedAt={generatedAt} />
+        )}
+
+        {/* AI Market Insight */}
+        <MarketInsight />
+
+        {/* Main content grid */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Left: AI Picks + Watchlist */}
+          <div className="lg:col-span-2 space-y-6">
+            {/* Top AI Picks */}
+            <Section title="Top Rekomendasi AI" defaultOpen>
+              {loading.screen ? (
+                <div className="space-y-2">
+                  {[...Array(3)].map((_, i) => <Skeleton key={i} variant="row" />)}
                 </div>
-              </>
-            )}
-          </section>
+              ) : topPicks.length === 0 ? (
+                <p className="text-zinc-500 text-sm">Belum ada data screening.</p>
+              ) : (
+                <div className="space-y-2">
+                  {topPicks.map(item => <PickCard key={item.ticker} item={item} />)}
+                </div>
+              )}
+            </Section>
 
-          <section>
-            {watchlistLoading ? (
-              <SectionSkeleton />
-            ) : watchlistError ? (
-              <SectionError message={watchlistError} />
-            ) : (
-              <WatchlistSection
-                items={watchlist}
-                onRemove={handleRemoveWatchlist}
-                onAdd={handleAddWatchlist}
-              />
-            )}
-          </section>
+            {/* Watchlist */}
+            <Section title="Watchlist" defaultOpen={false}
+              action={
+                <div className="flex gap-1.5">
+                  <input
+                    type="text" value={wlInput} onChange={e => setWlInput(e.target.value)}
+                    placeholder="Tambah..."
+                    className="w-20 bg-zinc-800 border border-zinc-700 rounded-md px-2 py-1 text-xs text-zinc-200 placeholder-zinc-500 focus:outline-none focus:border-blue-500"
+                    onKeyDown={e => e.key === "Enter" && handleAddWl()}
+                  />
+                  <button onClick={handleAddWl} disabled={!wlInput.trim() || wlAdding}
+                    className="px-2 py-1 bg-blue-600 hover:bg-blue-500 disabled:bg-zinc-700 disabled:text-zinc-500 text-white text-xs rounded-md transition-colors">
+                    +
+                  </button>
+                </div>
+              }
+            >
+              {loading.wl ? (
+                <div className="space-y-2">{[...Array(2)].map((_, i) => <Skeleton key={i} variant="row" />)}</div>
+              ) : watchlist.length === 0 ? (
+                <p className="text-zinc-500 text-sm">Belum ada saham di watchlist.</p>
+              ) : (
+                <div className="space-y-1.5">
+                  {watchlist.map(w => <WatchlistCard key={w.id} item={w} onRemove={handleRemoveWl} />)}
+                </div>
+              )}
+            </Section>
+          </div>
 
-          <section>
-            {historyLoading ? (
-              <SectionSkeleton />
-            ) : historyError ? (
-              <SectionError message={historyError} />
-            ) : (
-              <RecentHistory items={history} />
-            )}
-          </section>
+          {/* Right: Recent History */}
+          <div>
+            <Section title="Riwayat Terakhir" defaultOpen>
+              {loading.hist ? (
+                <div className="space-y-2">{[...Array(3)].map((_, i) => <Skeleton key={i} variant="row" />)}</div>
+              ) : visibleHistory.length === 0 ? (
+                <p className="text-zinc-500 text-sm">Belum ada riwayat riset.</p>
+              ) : (
+                <div className="divide-y divide-zinc-800">
+                  {visibleHistory.map(h => <HistoryRow key={h.id} item={h} />)}
+                </div>
+              )}
+              {history.length > 5 && (
+                <div className="mt-2 pt-2 border-t border-zinc-800">
+                  <button className="text-xs text-blue-400 hover:text-blue-300 transition-colors">
+                    Lihat semua ({history.length})
+                  </button>
+                </div>
+              )}
+            </Section>
+          </div>
         </div>
-      </main>
+      </div>
     </AuthGuard>
   );
 }
