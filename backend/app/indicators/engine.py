@@ -17,7 +17,10 @@ def compute_rsi(df: pd.DataFrame, period: int = 14) -> float | None:
     delta = df["Close"].diff()
     gain = delta.where(delta > 0, 0).rolling(period).mean()
     loss = (-delta.where(delta < 0, 0)).rolling(period).mean()
-    rs = gain / loss.replace(0, np.nan)
+    # Handle case where there are no losses in the period → RSI should be 100.
+    if loss.iloc[-1] == 0:
+        return 100.0
+    rs = gain / loss
     rsi = 100 - (100 / (1 + rs))
     return round(rsi.iloc[-1], 2)
 
