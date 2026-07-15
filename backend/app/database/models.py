@@ -48,6 +48,15 @@ class ListedTicker(Base):
         return f"<ListedTicker(ticker={self.ticker})>"
 
 
+class SyncStatus(Base):
+    __tablename__ = "sync_status"
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    last_attempt_at = Column(DateTime(timezone=True), nullable=True)
+    last_success_at = Column(DateTime(timezone=True), nullable=True)
+    consecutive_failures = Column(Integer, nullable=False, default=0)
+    last_ticker_count = Column(Integer, nullable=False, default=0)
+
+
 class ScanHistory(Base):
     __tablename__ = "scan_histories"
 

@@ -44,7 +44,7 @@ async def lifespan(app: FastAPI):
             if not count:
                 logger.info("listed_tickers kosong — seeding dari VALID_TICKERS (%d ticker)", len(VALID_TICKERS))
                 for t in VALID_TICKERS:
-                    session.merge(ListedTicker(
+                    session.add(ListedTicker(
                         ticker=t,
                         company_name=None,
                         sector=None,

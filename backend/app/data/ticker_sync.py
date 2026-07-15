@@ -4,13 +4,14 @@ import logging
 from datetime import datetime
 from typing import Any
 
-import pandas as pd
 import requests
+from curl_cffi import requests as curl_requests
+import pandas as pd
 from sqlalchemy import text
 
 from app.config import settings
 from app.database import get_session
-from app.database.models import ListedTicker
+from app.database.models import ListedTicker, SyncStatus
 
 logger = logging.getLogger(__name__)
 
@@ -27,41 +28,73 @@ SECTORS_HEADERS = {"Authorization": SECTORS_API_KEY} if SECTORS_API_KEY else {}
 
 # 2️⃣ IDX.co.id (publik, tapi harus pakai header browser‑like)
 IDX_HEADERS = {
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36",
-    "Accept": "application/vnd.ms-excel, text/csv, */*",
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36",
+    "Accept": "application/json",
 }
-# URL publik daftar emiten (Excel) – hanya bisa diakses lewat browser biasa (User-Agent)
-IDX_EXCEL_URL = "https://www.idx.co.id/umbraco/Surface/ListedCompany/GetListedCompany?format=excel"
+# URL publik daftar emiten (JSON) – lebih ringan dan peluang lebih besar lolos Cloudflare
+IDX_JSON_URL = "https://www.idx.co.id/primary/ListedCompany/GetCompanyProfiles"
 
 # -------- Fungsi fetch ----------
 async def fetch_and_store_tickers():
-    """Sync tickers dari sumber eksternal ke DB; fallback ke whitelist statis."""
+    """Sync tickers dari sumber eksternal ke DB.
+    Jika semua sumber gagal, tidak overwrite DB (fallback statis dihilangkan) dan
+    catat kegagalan sync. Jika data anomali (penurunan drastis), juga tidak overwrite.
+    """
     logger.info("Memulai sync ticker...")
     tickers_data = await _fetch_from_sources()
+
     if not tickers_data:
-        logger.warning("Semua sumber eksternal gagal; fallback ke whitelist statis.")
-        tickers_data = [{"ticker": t} for t in _static_tickers()]
+        logger.error(
+            "SYNC GAGAL TOTAL: semua sumber eksternal (Sectors.app, IDX) tidak "
+            "mengembalikan data. DB TIDAK diubah, data lama tetap dipakai."
+        )
+        await _record_sync_failure()
+        return  # <-- JANGAN overwrite DB dengan static fallback
+
+    # Sanity check: tolak kalau jumlah data anjlok drastis (indikasi response
+    # rusak / salah parse, bukan penurunan emiten beneran)
+    current_count = await _get_current_ticker_count()
+    if current_count > 0 and len(tickers_data) < current_count * 0.9:
+        logger.error(
+            "SYNC DITOLAK: hasil fetch baru (%d ticker) anjlok >10%% dari data "
+            "lama (%d ticker). Kemungkinan response rusak. DB tidak diubah.",
+            len(tickers_data), current_count,
+        )
+        await _record_sync_failure()
+        return
 
     try:
         async for session in get_session():
+            # Upsert per ticker pakai SQL langsung (INSERT OR REPLACE)
+            # supaya update-by-ticker jalan benar (bukan by id internal).
             for item in tickers_data:
                 ticker = str(item.get("ticker") or "").upper()
                 if not ticker:
                     continue
-                await session.merge(
-                    ListedTicker(
-                        ticker=ticker,
-                        company_name=item.get("company_name") or item.get("name"),
-                        sector=item.get("sector"),
-                        is_active=1,
-                        last_synced_at=datetime.utcnow(),
-                    )
+                await session.execute(
+                    text("""
+                        INSERT INTO listed_tickers (ticker, company_name, sector, is_active, last_synced_at)
+                        VALUES (:ticker, :company_name, :sector, 1, :last_synced_at)
+                        ON CONFLICT(ticker) DO UPDATE SET
+                            company_name = excluded.company_name,
+                            sector = excluded.sector,
+                            is_active = 1,
+                            last_synced_at = excluded.last_synced_at
+                    """),
+                    {
+                        "ticker": ticker,
+                        "company_name": item.get("company_name") or item.get("name"),
+                        "sector": item.get("sector"),
+                        "last_synced_at": datetime.utcnow(),
+                    },
                 )
             await session.commit()
             break
+        await _record_sync_success(len(tickers_data))
         logger.info("Sync ticker selesai: %d entri", len(tickers_data))
     except Exception as e:
         logger.error("Gagal simpan ticker ke DB: %s", e, exc_info=True)
+        await _record_sync_failure()
 
 
 def _static_tickers():
@@ -78,7 +111,7 @@ async def _fetch_from_sources():
                 return data
         except Exception as e:
             logger.warning("Sectors.app gagal: %s", e)
-    # ② IDX.co.id publik (Excel/CSV)
+    # ② IDX.co.id publik (JSON)
     try:
         data = await _fetch_idx()
         if data:
@@ -105,44 +138,97 @@ async def _fetch_sectors():
                             "sector": item.get("sector"),
                         })
             except Exception:
-                continue
+                continue  # Skip this URL if any error occurs
         return out
+    
+    # Since main function is async, wrap in asyncio.to_thread
     return await asyncio.to_thread(_sync)
 
 
 async def _fetch_idx():
-    """Fetch tickers dari idx.co.id (Excel/CSV publik)."""
-    def _sync():
+    """Fetch tickers dari idx.co.id (JSON endpoint)."""
+    async def _parse_rows(rows):
+        """Parse raw rows into standardized tickers."""
+        out = []
+        for row in rows:
+            out.append({
+                "ticker": str(row.get("KodeEmiten") or row.get("Kode") or "").strip().upper(),
+                "company_name": row.get("NamaEmiten") or row.get("Nama") or "",
+                "sector": row.get("Sektor") or "",
+            })
+        return out
+    
+    async def _sync():
         try:
-            resp = requests.get(IDX_EXCEL_URL, headers=IDX_HEADERS, timeout=15)
+            resp = curl_requests.get(
+                IDX_JSON_URL,
+                params={"emitenType": "s", "start": 0, "length": 9999},
+                headers=IDX_HEADERS,
+                impersonate="chrome124",
+                timeout=15,
+            )
             resp.raise_for_status()
-            content_type = resp.headers.get("Content-Type", "")
-            if "excel" in content_type or resp.content[:4] == b"PK\x03\x04":  # xlsx signature
-                df = pd.read_excel(io.BytesIO(resp.content), engine="openpyxl")
-            elif "csv" in content_type:
-                df = pd.read_csv(io.BytesIO(resp.content))
-            else:  # fallback: coba excel engine selain CSV
-                df = pd.read_excel(io.BytesIO(resp.content), engine="openpyxl")
-            logger.debug("Parsed %d rows from %s", len(df), IDX_EXCEL_URL)
-
-            # Buat mapping kolom (biasanya kode ticker & nama perusahaan)
-            cols = {c.lower(): c for c in df.columns}
-            ticker_col = cols.get("kode") or cols.get("ticker") or cols.get("kode emiten") or (df.columns[0] if len(df.columns) > 0 else None)
-            name_col = cols.get("nama") or cols.get("company_name") or cols.get("company") or cols.get("name") or ("" if len(df.columns) <= 1 else df.columns[1] if len(df.columns) > 1 else None)
-            sector_col = cols.get("sektor") or cols.get("sector") or cols.get("industry") or cols.get("industri") or (df.columns[2] if len(df.columns) > 2 else None)
-
-            out = []
-            for _, row in df.iterrows():
-                out.append({
-                    "ticker": str(row[ticker_col]).strip().upper(),
-                    "company_name": str(row[name_col]).strip() if name_col else None,
-                    "sector": str(row[sector_col]).strip() if sector_col else None,
-                })
-            return out
+            data = resp.json()
+            
+            if isinstance(data, dict) and "data" in data:
+                raw_rows = data["data"]
+            elif isinstance(data, list):
+                raw_rows = data
+            else:
+                # fallback: asumsikan data langsung adalah list
+                raw_rows = data if isinstance(data, list) else []
+            
+            parsed = await _parse_rows(raw_rows)
+            # Filter ticker kosong
+            return [r for r in parsed if r["ticker"]]
         except Exception as e:
-            logger.warning("IDX.co.id diblokir Cloudflare atau URL belum valid — cek manual via browser. Menggunakan fallback statis. Error: %s", e)
+            logger.warning("IDX JSON endpoint gagal: %s", e)
             return []
     return await asyncio.to_thread(_sync)
+
+
+async def _get_current_ticker_count() -> int:
+    async for session in get_session():
+        result = await session.execute(text("SELECT COUNT(*) FROM listed_tickers WHERE is_active = 1"))
+        row = result.fetchone()
+        return row[0] if row else 0
+    return 0
+
+
+async def _record_sync_failure():
+    """Catat kegagalan sync biar bisa dipantau, tanpa mengubah data ticker."""
+    async for session in get_session():
+        status = await session.get(SyncStatus, 1)
+        if status is None:
+            status = SyncStatus(id=1, consecutive_failures=0)
+            session.add(status)
+        last_attempt = datetime.utcnow()
+        status.last_attempt_at = last_attempt
+        status.consecutive_failures += 1
+        await session.commit()
+        if status.consecutive_failures >= 3:
+            logger.error(
+                "PERINGATAN: sync ticker gagal %d kali berturut-turut. "
+                "Cek koneksi ke IDX/Sectors.app secara manual.",
+                status.consecutive_failures,
+            )
+        break
+
+
+async def _record_sync_success(count: int):
+    """Catat keberhasilan sync."""
+    async for session in get_session():
+        status = await session.get(SyncStatus, 1)
+        if status is None:
+            status = SyncStatus(id=1)
+            session.add(status)
+        now = datetime.utcnow()
+        status.last_attempt_at = now
+        status.last_success_at = now
+        status.consecutive_failures = 0
+        status.last_ticker_count = count
+        await session.commit()
+        break
 
 
 async def get_listed_tickers() -> list[str]:
