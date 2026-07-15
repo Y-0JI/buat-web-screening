@@ -35,7 +35,7 @@ SYSTEM_INSTRUCTION = (
 def _run_chat(messages: list[ChatMessage]) -> str:
     genai.configure(api_key=settings.gemini_api_key)
     model = genai.GenerativeModel(
-        "gemini-2.0-flash",
+        "gemini-3.5-flash",
         tools=[get_stock_data],
         system_instruction=SYSTEM_INSTRUCTION,
     )
