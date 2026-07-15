@@ -44,8 +44,14 @@ def score_gap_classification(df: pd.DataFrame) -> tuple[float, str]:
 def score_vwap_bias(df: pd.DataFrame) -> tuple[float, str]:
     if df.empty:
         return 50, "Data tidak cukup"
-    close = df["Close"].iloc[-1]
-    vwap = (df["Volume"] * (df["High"] + df["Low"] + df["Close"]) / 3).sum() / df["Volume"].sum()
+    window = min(20, len(df))
+    segment = df.iloc[-window:]
+    close = segment["Close"].iloc[-1]
+    typical = (segment["High"] + segment["Low"] + segment["Close"]) / 3
+    total_vol = segment["Volume"].sum()
+    if total_vol == 0:
+        return 50, "Volume 0"
+    vwap = (segment["Volume"] * typical).sum() / total_vol
     if vwap == 0:
         return 50, "VWAP 0"
     bias = ((close - vwap) / vwap) * 100

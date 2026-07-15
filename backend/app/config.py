@@ -1,7 +1,11 @@
+import os
+import warnings
+from pydantic import field_validator
 from pydantic_settings import BaseSettings
 
 
 class Settings(BaseSettings):
+    env: str = "development"
     gemini_api_key: str = ""
     database_url: str = "sqlite+aiosqlite:///./bsjp.db"
     yfinance_period: str = "6mo"
@@ -14,8 +18,18 @@ class Settings(BaseSettings):
     cors_origins: str = "http://localhost:3000"
     sectors_api_key: str = ""
 
-    class Config:
-        env_file = ".env"
+    model_config = {"env_file": ".env", "extra": "ignore"}
+
+    @field_validator("jwt_secret")
+    @classmethod
+    def validate_jwt_secret(cls, v: str, info) -> str:
+        env = info.data.get("env", os.getenv("ENV", "development"))
+        if env == "production" and v in ("change-me-in-production", ""):
+            raise ValueError(
+                "JWT_SECRET must be set to a secure value in production. "
+                "The default value is not allowed."
+            )
+        return v
 
 
 settings = Settings()

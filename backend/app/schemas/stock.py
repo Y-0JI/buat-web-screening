@@ -72,6 +72,7 @@ class ResearchResponse(BaseModel):
 
 class ComparisonRequest(BaseModel):
     tickers: list[str] = Field(min_length=2, max_length=5)
+    mode: str = "BSJP"
 
 
 class ComparisonResponse(BaseModel):

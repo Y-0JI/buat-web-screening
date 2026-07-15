@@ -55,7 +55,7 @@ export default function Home() {
       const intent = detectIntent(query);
 
       if (intent === "screen") {
-        const res = await screenStocks();
+        const res = await screenStocks(mode);
         if (res.success && res.data) {
           setResult({ type: "ranking", data: res.data });
         } else {
@@ -66,7 +66,7 @@ export default function Home() {
         if (!resolveRes.tickers || resolveRes.tickers.length < 2) {
           setError("Butuh minimal 2 ticker valid untuk perbandingan");
         } else {
-          const res = await compareStocks(resolveRes.tickers);
+          const res = await compareStocks(resolveRes.tickers, mode);
           if (res.success && res.data) {
             setResult({ type: "comparison", data: res.data });
           } else {

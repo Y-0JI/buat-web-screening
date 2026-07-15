@@ -1,9 +1,8 @@
 import asyncio
-import google.generativeai as genai
+from google import genai
 from app.config import settings
-from app.schemas.stock import StockReport, Verdict
+from app.schemas.stock import StockReport
 from app.data.fetcher import fetch_company_info
-import json
 
 
 def _format_news_context(news: list[dict] | None) -> str | None:
@@ -103,9 +102,11 @@ Beri narasi (max 5-7 kalimat) dalam Bahasa Indonesia:
 Jangan buat rekomendasi investasi. Akhiri dengan disclaimer bahwa ini alat riset, bukan rekomendasi."""
 
     def _call_gemini():
-        genai.configure(api_key=settings.gemini_api_key)
-        model = genai.GenerativeModel("gemini-3.5-flash")
-        response = model.generate_content(prompt)
+        client = genai.Client(api_key=settings.gemini_api_key)
+        response = client.models.generate_content(
+            model="gemini-3.5-flash",
+            contents=prompt,
+        )
         return response.text.strip()
 
     try:

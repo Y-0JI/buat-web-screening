@@ -107,16 +107,22 @@ export async function researchStock(
 }
 
 export async function compareStocks(
-  tickers: string[]
+  tickers: string[],
+  mode?: string
 ): Promise<ComparisonResponse> {
   const res = await api.post<ComparisonResponse>("/api/compare", {
     tickers,
+    mode,
   });
   return res.data;
 }
 
-export async function screenStocks(): Promise<ScreeningResponse> {
-  const res = await api.get<ScreeningResponse>("/api/screen");
+export async function screenStocks(
+  mode?: string
+): Promise<ScreeningResponse> {
+  const res = await api.get<ScreeningResponse>("/api/screen", {
+    params: mode ? { mode } : undefined,
+  });
   return res.data;
 }
 

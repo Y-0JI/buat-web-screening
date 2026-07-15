@@ -1,7 +1,7 @@
 import asyncio
-import google.generativeai as genai
+from google import genai
+from google.genai import types
 from app.config import settings
-import base64
 import re
 
 
@@ -32,8 +32,12 @@ def parse_vision_response(text: str) -> dict:
         "patterns_detected": [],
     }
 
-    for line in text.split("\n"):
-        line = line.strip()
+    _KNOWN_LABELS = ("TREND:", "SUPPORT:", "RESISTANCE:", "VOLUME:", "PATTERN:", "ANALISIS:")
+
+    lines = text.split("\n")
+    i = 0
+    while i < len(lines):
+        line = lines[i].strip()
         if line.startswith("TREND:"):
             result["trend"] = line.replace("TREND:", "").strip().lower()
         elif line.startswith("SUPPORT:"):
@@ -53,7 +57,19 @@ def parse_vision_response(text: str) -> dict:
             if val.lower() not in ("tidak terdeteksi", "tidak ada", "none", "-"):
                 result["patterns_detected"] = [p.strip() for p in val.split(",")]
         elif line.startswith("ANALISIS:"):
-            result["analysis_text"] = line.replace("ANALISIS:", "").strip()
+            first_line = line.replace("ANALISIS:", "").strip()
+            analysis_parts = [first_line] if first_line else []
+            i += 1
+            while i < len(lines):
+                next_line = lines[i].strip()
+                if any(next_line.startswith(lbl) for lbl in _KNOWN_LABELS):
+                    break
+                if next_line:
+                    analysis_parts.append(next_line)
+                i += 1
+            result["analysis_text"] = "\n".join(analysis_parts).strip()
+            continue
+        i += 1
 
     if "analysis_text" not in result:
         result["analysis_text"] = text
@@ -72,16 +88,16 @@ async def analyze_chart_image(image_bytes: bytes, filename: str) -> dict:
             "resistance_level": None,
         }
 
-    genai.configure(api_key=settings.gemini_api_key)
-    model = genai.GenerativeModel("gemini-3.5-flash")
+    client = genai.Client(api_key=settings.gemini_api_key)
 
-    image_part = {
-        "mime_type": "image/jpeg" if filename.lower().endswith((".jpg", ".jpeg")) else "image/png",
-        "data": image_bytes,
-    }
+    mime_type = "image/jpeg" if filename.lower().endswith((".jpg", ".jpeg")) else "image/png"
+    image_part = types.Part.from_bytes(data=image_bytes, mime_type=mime_type)
 
     def _call_gemini():
-        response = model.generate_content([VISION_PROMPT, image_part])
+        response = client.models.generate_content(
+            model="gemini-3.5-flash",
+            contents=[VISION_PROMPT, image_part],
+        )
         return response.text.strip()
 
     try:

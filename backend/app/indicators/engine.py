@@ -15,14 +15,19 @@ def compute_rsi(df: pd.DataFrame, period: int = 14) -> float | None:
     if len(df) < period + 1:
         return None
     delta = df["Close"].diff()
-    gain = delta.where(delta > 0, 0).rolling(period).mean()
-    loss = (-delta.where(delta < 0, 0)).rolling(period).mean()
-    # Handle case where there are no losses in the period → RSI should be 100.
-    if loss.iloc[-1] == 0:
+    gain = delta.where(delta > 0, 0.0)
+    loss = (-delta.where(delta < 0, 0.0))
+    # Wilder's smoothing (exponential weighted with alpha=1/period)
+    avg_gain = gain.ewm(alpha=1.0 / period, min_periods=period, adjust=False).mean()
+    avg_loss = loss.ewm(alpha=1.0 / period, min_periods=period, adjust=False).mean()
+    # Flat prices: both gain and loss are 0 → neutral RSI
+    if avg_gain.iloc[-1] == 0 and avg_loss.iloc[-1] == 0:
+        return 50.0
+    if avg_loss.iloc[-1] == 0:
         return 100.0
-    rs = gain / loss
+    rs = avg_gain / avg_loss
     rsi = 100 - (100 / (1 + rs))
-    return round(rsi.iloc[-1], 2)
+    return round(float(rsi.iloc[-1]), 2)
 
 
 def compute_macd(df: pd.DataFrame) -> dict:
@@ -54,13 +59,15 @@ def compute_atr(df: pd.DataFrame, period: int = 14) -> float | None:
     return round(atr.iloc[-1], 2)
 
 
-def compute_vwap(df: pd.DataFrame) -> float | None:
-    if df.empty:
+def compute_vwap(df: pd.DataFrame, window: int = 20) -> float | None:
+    if len(df) < window:
+        window = len(df)
+    if window == 0 or df["Volume"].iloc[-window:].sum() == 0:
         return None
-    vwap = (df["Volume"] * (df["High"] + df["Low"] + df["Close"]) / 3).sum() / df[
-        "Volume"
-    ].sum()
-    return round(vwap, 2)
+    segment = df.iloc[-window:]
+    typical = (segment["High"] + segment["Low"] + segment["Close"]) / 3
+    vwap = (segment["Volume"] * typical).sum() / segment["Volume"].sum()
+    return round(float(vwap), 2)
 
 
 def compute_volume_ratio(df: pd.DataFrame, window: int = 20) -> float | None:
