@@ -147,8 +147,7 @@ async def _fetch_sectors():
 
 async def _fetch_idx():
     """Fetch tickers dari idx.co.id (JSON endpoint)."""
-    async def _parse_rows(rows):
-        """Parse raw rows into standardized tickers."""
+    def _parse_rows(rows):
         out = []
         for row in rows:
             out.append({
@@ -157,8 +156,8 @@ async def _fetch_idx():
                 "sector": row.get("Sektor") or "",
             })
         return out
-    
-    async def _sync():
+
+    def _sync():
         try:
             resp = curl_requests.get(
                 IDX_JSON_URL,
@@ -169,17 +168,15 @@ async def _fetch_idx():
             )
             resp.raise_for_status()
             data = resp.json()
-            
+
             if isinstance(data, dict) and "data" in data:
                 raw_rows = data["data"]
             elif isinstance(data, list):
                 raw_rows = data
             else:
-                # fallback: asumsikan data langsung adalah list
                 raw_rows = data if isinstance(data, list) else []
-            
-            parsed = await _parse_rows(raw_rows)
-            # Filter ticker kosong
+
+            parsed = _parse_rows(raw_rows)
             return [r for r in parsed if r["ticker"]]
         except Exception as e:
             logger.warning("IDX JSON endpoint gagal: %s", e)
