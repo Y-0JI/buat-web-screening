@@ -262,3 +262,38 @@ export async function fetchStockHistory(
   );
   return res.data;
 }
+
+export interface ChatMessage {
+  role: string;
+  content: string;
+}
+
+export interface ChatRequest {
+  messages: ChatMessage[];
+  mode?: string;
+}
+
+export interface ChatResponse {
+  success: boolean;
+  reply?: string;
+  error?: string;
+}
+
+export async function sendChatMessage(
+  messages: ChatMessage[],
+  mode?: string
+): Promise<ChatResponse> {
+  const res = await api.post<ChatResponse>("/api/chat", { messages, mode });
+  return res.data;
+}
+
+export interface ResolveTickersResponse {
+  tickers: string[];
+}
+
+export async function resolveTickers(
+  text: string
+): Promise<ResolveTickersResponse> {
+  const res = await api.post<ResolveTickersResponse>("/api/resolve-tickers", { text });
+  return res.data;
+}

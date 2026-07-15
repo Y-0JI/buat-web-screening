@@ -1,12 +1,10 @@
+import asyncio
 import re
-import time
 from typing import Optional
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
-from app.schemas.stock import ResearchRequest, ResearchResponse, StockReport
-from app.data.fetcher import fetch_stock_data, fetch_company_info
-from app.data.idx_stocks import VALID_TICKERS
-from app.data.ticker_sync import get_listed_tickers
+from app.schemas.stock import ResearchRequest, ResearchResponse
+from app.data.fetcher import fetch_stock_data, fetch_company_info, verify_ticker
 from app.scoring.funnel import calculate_score
 from app.ai.orchestrator import enhance_with_ai
 from app.database import get_session
@@ -16,22 +14,14 @@ from app.routers.auth import get_current_user_optional
 router = APIRouter(prefix="/api", tags=["research"])
 
 
-_valid_tickers_cache: set[str] | None = None
-_valid_tickers_cache_ts: float = 0
-_VALID_CACHE_TTL = 300
-
-
 async def extract_ticker(text: str) -> str | None:
-    global _valid_tickers_cache, _valid_tickers_cache_ts
-    now = time.time()
-    if _valid_tickers_cache is None or (now - _valid_tickers_cache_ts > _VALID_CACHE_TTL):
-        raw = await get_listed_tickers()
-        _valid_tickers_cache = set(raw)
-        _valid_tickers_cache_ts = now
     candidates = re.findall(r"\b([A-Z]{2,5})\b", text.upper())
-    for c in candidates:
-        if c in _valid_tickers_cache:
-            return c
+    if not candidates:
+        return None
+    results = await asyncio.gather(*[verify_ticker(c) for c in candidates])
+    for candidate, is_valid in zip(candidates, results):
+        if is_valid:
+            return candidate
     return None
 
 
@@ -70,6 +60,15 @@ async def research(
         report.summary += f" | AI enhancement gagal: {str(e)}"
 
     return ResearchResponse(success=True, data=report)
+
+
+@router.post("/resolve-tickers")
+async def resolve_tickers(req: dict):
+    text_in = req.get("text", "")
+    candidates = re.findall(r"\b([A-Z]{2,5})\b", text_in.upper())
+    results = await asyncio.gather(*[verify_ticker(c) for c in candidates])
+    valid = [c for c, ok in zip(candidates, results) if ok]
+    return {"tickers": valid[:5]}
 
 
 @router.get("/health")

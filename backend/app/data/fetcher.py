@@ -209,6 +209,16 @@ async def fetch_stock_data(symbol: str, fast_fail: bool = False) -> tuple[pd.Dat
         raise
 
 
+async def verify_ticker(candidate: str) -> bool:
+    """Cek apakah candidate adalah ticker IDX yang benar-benar ada, lewat data live
+    yfinance. TIDAK menerima hasil simulasi/mock sebagai bukti valid."""
+    try:
+        df, is_simulated = await fetch_stock_data(candidate, fast_fail=True)
+        return df is not None and not df.empty and not is_simulated
+    except Exception:
+        return False
+
+
 async def fetch_history(symbol: str, period: str = "6mo") -> tuple[pd.DataFrame | None, bool]:
     ticker_str = resolve_ticker(symbol)
 
