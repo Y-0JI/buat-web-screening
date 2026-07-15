@@ -37,9 +37,10 @@ async def compare(
         if df is None or df.empty:
             return None
         info = await fetch_company_info(ticker)
-        report = calculate_score(df, ticker, is_simulated=is_simulated)
+        report = calculate_score(df, ticker, req.mode, is_simulated=is_simulated)
         report.company_name = info.get("name", ticker)
         report.render = "comparison"
+        report.mode = req.mode
         if user:
             session.add(ScanHistory(
                 user_id=user.id, ticker=ticker.upper(),
@@ -63,11 +64,12 @@ async def compare(
 
 @router.get("/screen", response_model=ScreeningResponse)
 async def screen(
+    mode: str = "BSJP",
     user: Optional[User] = Depends(get_current_user_optional),
     session: AsyncSession = Depends(get_session),
 ):
-    cached = get_cached_screening()
-    if cached:
+    cached, cached_mode = await get_cached_screening()
+    if cached and cached_mode == mode:
         items = []
         for i, r in enumerate(cached, 1):
             items.append(RankingItem(
@@ -111,8 +113,9 @@ async def screen(
         if df is None or df.empty:
             continue
         info = await fetch_company_info(ticker)
-        report = calculate_score(df, ticker, is_simulated=is_simulated)
+        report = calculate_score(df, ticker, mode, is_simulated=is_simulated)
         report.company_name = info.get("name", ticker)
+        report.mode = mode
         raw.append(report)
 
         if user:

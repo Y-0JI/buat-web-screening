@@ -11,6 +11,8 @@ logger = logging.getLogger(__name__)
 
 
 _cache: dict[str, tuple[float, pd.DataFrame, bool]] = {}
+_verify_cache: dict[str, tuple[float, bool]] = {}
+_VERIFY_CACHE_TTL = 300  # 5 minutes
 _cache_ttl = settings.cache_ttl_seconds
 _cache_lock = asyncio.Lock()
 _rate_lock = asyncio.Lock()
@@ -67,8 +69,22 @@ def _get_cached(ticker: str) -> tuple[pd.DataFrame, bool] | None:
     return None
 
 
+def _get_cached_verify(ticker: str) -> bool | None:
+    entry = _verify_cache.get(ticker)
+    if entry:
+        ts, is_simulated = entry
+        if time.time() - ts < _VERIFY_CACHE_TTL:
+            return is_simulated
+        del _verify_cache[ticker]
+    return None
+
+
 def _set_cache(ticker: str, df: pd.DataFrame, is_simulated: bool = False):
     _cache[ticker] = (time.time(), df, is_simulated)
+
+
+def _set_verify_cache(ticker: str, is_simulated: bool):
+    _verify_cache[ticker] = (time.time(), is_simulated)
 
 
 def _generate_mock_data(symbol: str, period: str = "6mo") -> pd.DataFrame:
@@ -211,12 +227,38 @@ async def fetch_stock_data(symbol: str, fast_fail: bool = False) -> tuple[pd.Dat
 
 async def verify_ticker(candidate: str) -> bool:
     """Cek apakah candidate adalah ticker IDX yang benar-benar ada, lewat data live
-    yfinance. TIDAK menerima hasil simulasi/mock sebagai bukti valid."""
+    yfinance. TIDAK menerima hasil simulasi/mock sebagai bukti valid.
+    Uses its own cache to avoid polluting the main data cache."""
+    ticker_str = resolve_ticker(candidate)
+
+    async with _cache_lock:
+        cached = _get_cached_verify(ticker_str)
+        if cached is not None:
+            return not cached  # is_simulated=False means valid
+
+    def _try_verify() -> pd.DataFrame | None:
+        try:
+            import yfinance as yf
+            tf = yf.Ticker(ticker_str)
+            df = tf.history(period="5d")
+            if df is not None and not df.empty:
+                return _flatten_columns(df)
+        except Exception:
+            pass
+        return None
+
     try:
-        df, is_simulated = await fetch_stock_data(candidate, fast_fail=True)
-        return df is not None and not df.empty and not is_simulated
+        await _rate_limit()
+        yf_result = await asyncio.wait_for(asyncio.to_thread(_try_verify), timeout=8)
     except Exception:
-        return False
+        yf_result = None
+
+    is_simulated = yf_result is None
+
+    async with _cache_lock:
+        _set_verify_cache(ticker_str, is_simulated)
+
+    return yf_result is not None and not yf_result.empty
 
 
 async def fetch_history(symbol: str, period: str = "6mo") -> tuple[pd.DataFrame | None, bool]:
@@ -437,5 +479,6 @@ async def fetch_fundamentals(symbol: str) -> dict:
 
 def clear_cache():
     _cache.clear()
+    _verify_cache.clear()
     _NEWS_CACHE.clear()
     _FUNDAMENTALS_CACHE.clear()

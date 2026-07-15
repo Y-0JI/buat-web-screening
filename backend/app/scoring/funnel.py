@@ -134,7 +134,7 @@ def evaluate_confluence(
     else:
         verdict = Verdict.HOLD
 
-    confidence = estimate_confidence(df, flags)
+    confidence = estimate_confidence(df, flags, verdict)
 
     return verdict, confidence, flags
 

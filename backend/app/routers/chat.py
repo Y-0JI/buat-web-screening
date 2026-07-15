@@ -1,6 +1,7 @@
 import asyncio
 import logging
-import google.generativeai as genai
+from google import genai
+from google.genai import types
 from fastapi import APIRouter
 from pydantic import BaseModel
 from app.config import settings
@@ -21,34 +22,79 @@ class ChatRequest(BaseModel):
     mode: str = "BSJP"
 
 
-SYSTEM_INSTRUCTION = (
-    "Kamu asisten riset saham IDX (Bursa Efek Indonesia). Jawab dalam Bahasa "
-    "Indonesia santai tapi informatif. Kalau user tanya soal saham tertentu, "
-    "panggil tool get_stock_data untuk data teknikal, lalu get_fundamentals "
-    "untuk data fundamental, dan get_company_news untuk berita terkini. "
-    "Kalau user tanya soal berita saham tertentu, panggil get_company_news. "
-    "Kalau user tanya soal fundamental, PE, dividen, atau profil perusahaan, "
-    "panggil get_fundamentals. "
-    "Kalau user minta bandingkan beberapa saham, panggil tool untuk masing-masing "
-    "lalu simpulkan. Jangan buat rekomendasi investasi langsung, selalu akhiri "
-    "analisis dengan disclaimer bahwa ini alat bantu riset. Kalau tool balikin "
-    "error (ticker tidak ditemukan), sampaikan apa adanya ke user, jangan mengarang data."
-)
+TOOL_MAP = {
+    "get_stock_data": get_stock_data,
+    "get_company_news": get_company_news,
+    "get_fundamentals": get_fundamentals,
+}
 
 
-def _run_chat(messages: list[ChatMessage]) -> str:
-    genai.configure(api_key=settings.gemini_api_key)
-    model = genai.GenerativeModel(
-        "gemini-3.5-flash",
+def _run_chat(messages: list[ChatMessage], mode: str) -> str:
+    client = genai.Client(api_key=settings.gemini_api_key)
+
+    system_instruction = (
+        "Kamu asisten riset saham IDX (Bursa Efek Indonesia). Jawab dalam Bahasa "
+        "Indonesia santai tapi informatif. Kalau user tanya soal saham tertentu, "
+        "panggil tool get_stock_data untuk data teknikal, lalu get_fundamentals "
+        "untuk data fundamental, dan get_company_news untuk berita terkini. "
+        "Kalau user tanya soal berita saham tertentu, panggil get_company_news. "
+        "Kalau user tanya soal fundamental, PE, dividen, atau profil perusahaan, "
+        "panggil get_fundamentals. "
+        "Kalau user minta bandingkan beberapa saham, panggil tool untuk masing-masing "
+        "lalu simpulkan. Jangan buat rekomendasi investasi langsung, selalu akhiri "
+        "analisis dengan disclaimer bahwa ini alat bantu riset. Kalau tool balikin "
+        "error (ticker tidak ditemukan), sampaikan apa adanya ke user, jangan mengarang data. "
+        f"Mode analisis yang aktif: {mode}. "
+        "Selalu sertakan parameter mode ini saat memanggil get_stock_data."
+    )
+
+    config = types.GenerateContentConfig(
+        system_instruction=system_instruction,
         tools=[get_stock_data, get_company_news, get_fundamentals],
-        system_instruction=SYSTEM_INSTRUCTION,
     )
-    history = [{"role": m.role, "parts": [m.content]} for m in messages[:-1]]
-    chat_session = model.start_chat(
-        history=history,
-        enable_automatic_function_calling=True,
-    )
-    response = chat_session.send_message(messages[-1].content)
+
+    chat = client.chats.create(model="gemini-3.5-flash", config=config)
+
+    for m in messages[:-1]:
+        chat.send_message(m.content)
+
+    response = chat.send_message(messages[-1].content)
+
+    turn = 0
+    while turn < 5:
+        function_calls = [
+            part.function_call
+            for part in (response.candidates[0].content.parts or [])
+            if part.function_call
+        ]
+        if not function_calls:
+            break
+
+        function_response_parts = []
+        for fc in function_calls:
+            func = TOOL_MAP.get(fc.name)
+            if func is None:
+                function_response_parts.append(
+                    types.Part.from_function_response(
+                        name=fc.name,
+                        response={"error": f"Unknown function: {fc.name}"},
+                    )
+                )
+                continue
+            try:
+                result = func(**dict(fc.args))
+            except Exception as e:
+                result = {"error": str(e)}
+            function_response_parts.append(
+                types.Part.from_function_response(
+                    name=fc.name,
+                    response=result,
+                )
+            )
+
+        response = chat.send_message(function_response_parts)
+        turn += 1
+
     return response.text
 
 
@@ -59,7 +105,7 @@ async def chat(req: ChatRequest):
     if not req.messages:
         return {"success": False, "error": "Messages kosong"}
     try:
-        reply = await asyncio.to_thread(_run_chat, req.messages)
+        reply = await asyncio.to_thread(_run_chat, req.messages, req.mode)
         return {"success": True, "reply": reply}
     except Exception as e:
         logger.error("Chat error: %s", e, exc_info=True)

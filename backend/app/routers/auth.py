@@ -4,6 +4,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from jose import jwt, JWTError
 
@@ -64,19 +65,17 @@ async def get_current_user_optional(
 
 @router.post("/register", response_model=TokenResponse)
 async def register(req: AuthRegister, session: AsyncSession = Depends(get_session)):
-    existing = await session.execute(
-        select(User).where((User.username == req.username) | (User.email == req.email))
-    )
-    if existing.scalar_one_or_none():
-        raise HTTPException(status_code=400, detail="Username atau email sudah terdaftar")
-
     user = User(
         username=req.username,
         email=req.email,
         password_hash=bcrypt.hashpw(req.password.encode(), bcrypt.gensalt()).decode(),
     )
     session.add(user)
-    await session.commit()
+    try:
+        await session.commit()
+    except IntegrityError:
+        await session.rollback()
+        raise HTTPException(status_code=400, detail="Username atau email sudah terdaftar")
     await session.refresh(user)
 
     token = create_access_token(user.id)

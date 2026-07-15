@@ -28,14 +28,17 @@ const AuthContext = createContext<AuthState>({
   isLoading: true,
 });
 
+const TOKEN_KEY = "bsjp_token";
+const USER_KEY = "bsjp_user";
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<UserProfile | null>(null);
   const [token, setTokenState] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    const stored = localStorage.getItem("bsjp_token");
-    const storedUser = localStorage.getItem("bsjp_user");
+    const stored = sessionStorage.getItem(TOKEN_KEY);
+    const storedUser = sessionStorage.getItem(USER_KEY);
     if (stored && storedUser) {
       setTokenState(stored);
       setToken(stored);
@@ -48,16 +51,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setTokenState(t);
     setUser(u);
     setToken(t);
-    localStorage.setItem("bsjp_token", t);
-    localStorage.setItem("bsjp_user", JSON.stringify(u));
+    sessionStorage.setItem(TOKEN_KEY, t);
+    sessionStorage.setItem(USER_KEY, JSON.stringify(u));
   }, []);
 
   const logout = useCallback(() => {
     setTokenState(null);
     setUser(null);
     setToken(null);
-    localStorage.removeItem("bsjp_token");
-    localStorage.removeItem("bsjp_user");
+    sessionStorage.removeItem(TOKEN_KEY);
+    sessionStorage.removeItem(USER_KEY);
   }, []);
 
   return (
