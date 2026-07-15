@@ -1,4 +1,5 @@
 import asyncio
+from datetime import datetime
 from typing import Optional
 import pandas as pd
 from fastapi import APIRouter, Depends
@@ -12,7 +13,11 @@ from app.schemas.stock import (
 )
 from app.data.fetcher import fetch_stock_data, fetch_company_info, MOCK_DATA
 from app.scoring.funnel import calculate_score
-from app.scheduler import get_cached_screening, run_batch_scan
+from app.scheduler import (
+    get_cached_screening,
+    get_screening_timestamp,
+    run_batch_scan,
+)
 from app.database import get_session
 from app.database.models import User, ScanHistory
 from app.routers.auth import get_current_user_optional
@@ -77,7 +82,13 @@ async def screen(
                 change_percent=r.get("change_percent"),
                 is_simulated=r.get("is_simulated", False),
             ))
-        return ScreeningResponse(success=True, data=items)
+        ts = get_screening_timestamp()
+        generated_at = (
+            datetime.fromtimestamp(ts).isoformat() if ts else None
+        )
+        return ScreeningResponse(
+            success=True, data=items, generated_at=generated_at
+        )
 
     tickers = list(MOCK_DATA)
 
@@ -130,4 +141,8 @@ async def screen(
             is_simulated=r.is_simulated,
         ))
 
-    return ScreeningResponse(success=True, data=items)
+    return ScreeningResponse(
+        success=True,
+        data=items,
+        generated_at=datetime.now().isoformat(),
+    )

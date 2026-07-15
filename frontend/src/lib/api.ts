@@ -67,6 +67,7 @@ export interface ScreeningResponse {
   success: boolean;
   data?: RankingItem[];
   error?: string;
+  generated_at?: string;
 }
 
 export interface VisionReport {
