@@ -153,7 +153,7 @@ function detectIntent(query: string): "compare" | "screen" | "research" {
 }
 
 function extractTickers(query: string): string[] {
-  return query.match(/\b[A-Z]{2,5}\b/g)?.map((t) => t.toUpperCase()) ?? [];
+  return query.toUpperCase().match(/\b[A-Z]{2,5}\b/g) ?? [];
 }
 
 export function WorkspaceProvider({ children }: { children: ReactNode }) {

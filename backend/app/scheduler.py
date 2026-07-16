@@ -9,8 +9,8 @@ from app.scoring.funnel import calculate_score
 
 logger = logging.getLogger(__name__)
 
-_screen_cache: dict = {}
-_cache_ts: float = 0
+_screen_cache: dict[str, dict] = {}
+_cache_ts: dict[str, float] = {}
 _CACHE_TTL = 7200
 _screen_semaphore = asyncio.Semaphore(10)
 _screen_cache_lock = asyncio.Lock()
@@ -18,19 +18,27 @@ _screen_cache_lock = asyncio.Lock()
 
 async def get_cached_screening() -> tuple[list[dict] | None, str | None]:
     async with _screen_cache_lock:
-        if not _screen_cache:
-            return None, None
-        if time.time() - _cache_ts > _CACHE_TTL:
-            return None, None
-        return _screen_cache.get("results"), _screen_cache.get("mode")
+        for mode in ["BSJP", "BPJS"]:
+            cached = _screen_cache.get(mode)
+            ts = _cache_ts.get(mode, 0)
+            if cached and time.time() - ts < _CACHE_TTL:
+                return cached.get("results"), mode
+        return None, None
 
 
 def get_screening_timestamp() -> float | None:
-    if not _screen_cache:
+    async def _get():
+        async with _screen_cache_lock:
+            for mode in ["BSJP", "BPJS"]:
+                ts = _cache_ts.get(mode, 0)
+                if ts > 0 and time.time() - ts < _CACHE_TTL:
+                    return ts
+            return None
+    import asyncio as _aio
+    loop = _aio.get_event_loop()
+    if loop.is_running():
         return None
-    if time.time() - _cache_ts > _CACHE_TTL:
-        return None
-    return _cache_ts if _cache_ts > 0 else None
+    return loop.run_until_complete(_get())
 
 
 async def run_batch_scan(mode: str = "BSJP"):
@@ -68,6 +76,16 @@ async def run_batch_scan(mode: str = "BSJP"):
     results.sort(key=lambda x: x["score"], reverse=True)
     global _screen_cache, _cache_ts
     async with _screen_cache_lock:
-        _screen_cache = {"results": results, "mode": mode}
-        _cache_ts = time.time()
-    logger.info("Batch scan selesai: %d saham", len(results))
+        _screen_cache[mode] = {"results": results, "mode": mode}
+        _cache_ts[mode] = time.time()
+    logger.info("Batch scan selesai: %d saham (mode=%s)", len(results), mode)
+
+
+async def run_daily_scan():
+    """Jalankan scan untuk kedua mode (BSJP dan BPJS) secara paralel."""
+    logger.info("Memulai daily scan untuk BSJP dan BPJS...")
+    await asyncio.gather(
+        run_batch_scan("BSJP"),
+        run_batch_scan("BPJS"),
+    )
+    logger.info("Daily scan selesai untuk kedua mode")

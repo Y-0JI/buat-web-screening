@@ -102,11 +102,16 @@ RINGKASAN: <ringkasan>"""
         raw = await asyncio.wait_for(asyncio.to_thread(_call), timeout=15)
         sentiment = "neutral"
         summary_parts = []
+        in_summary = False
         for line in raw.split("\n"):
             if line.startswith("SENTIMEN:"):
                 sentiment = line.replace("SENTIMEN:", "").strip().lower()
+                in_summary = False
             elif line.startswith("RINGKASAN:"):
                 summary_parts.append(line.replace("RINGKASAN:", "").strip())
+                in_summary = True
+            elif in_summary and line.strip():
+                summary_parts.append(line.strip())
         summary = " ".join(summary_parts) if summary_parts else raw
     except Exception:
         sentiment = "neutral"

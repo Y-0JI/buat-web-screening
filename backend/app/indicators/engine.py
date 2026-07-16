@@ -7,7 +7,7 @@ def compute_ema(df: pd.DataFrame, periods: list[int] = [9, 20, 50]) -> dict:
     result = {}
     for p in periods:
         col = f"EMA_{p}"
-        result[col] = round(df["Close"].ewm(span=p).mean().iloc[-1], 2)
+        result[col] = round(df["Close"].ewm(span=p, adjust=False).mean().iloc[-1], 2)
     return result
 
 
