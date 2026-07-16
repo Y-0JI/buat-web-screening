@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { authLogin } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
+import { PasswordInput } from "@/components/password-input";
 
 export default function LoginPage() {
   const [username, setUsername] = useState("");
@@ -55,20 +56,27 @@ export default function LoginPage() {
             required
             className="w-full px-4 py-3 bg-zinc-800 border border-zinc-700 rounded-xl text-zinc-100 placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
-          <input
-            type="password"
+          <PasswordInput
             placeholder="Password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             required
-            className="w-full px-4 py-3 bg-zinc-800 border border-zinc-700 rounded-xl text-zinc-100 placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
+        </div>
+
+        <div className="mt-2 text-right">
+          <Link
+            href="/forgot-password"
+            className="text-sm text-blue-400 hover:text-blue-300"
+          >
+            Lupa Password?
+          </Link>
         </div>
 
         <button
           type="submit"
           disabled={loading}
-          className="w-full mt-6 py-3 bg-blue-600 hover:bg-blue-500 disabled:bg-zinc-700 disabled:text-zinc-500 text-white rounded-xl font-medium transition-colors"
+          className="w-full mt-4 py-3 bg-blue-600 hover:bg-blue-500 disabled:bg-zinc-700 disabled:text-zinc-500 text-white rounded-xl font-medium transition-colors"
         >
           {loading ? "Memproses..." : "Login"}
         </button>

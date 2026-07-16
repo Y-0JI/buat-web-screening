@@ -209,6 +209,32 @@ export async function authLogin(
   return res.data;
 }
 
+export interface ForgotPasswordResponse {
+  detail: string;
+}
+
+// Endpoint backend /api/auth/forgot-password belum tersedia.
+// Fungsi ini disiapkan sebagai titik integrasi: cukup pastikan backend
+// mengembalikan { detail: string } agar alur reset password tersambung.
+export async function authForgotPassword(
+  email: string
+): Promise<ForgotPasswordResponse> {
+  try {
+    const res = await api.post<ForgotPasswordResponse>(
+      "/api/auth/forgot-password",
+      { email }
+    );
+    return res.data;
+  } catch (err) {
+    if (err && typeof err === "object" && "response" in err) {
+      const detail = (err as { response?: { data?: { detail?: string } } })
+        .response?.data?.detail;
+      if (detail) throw new Error(detail);
+    }
+    throw new Error("Gagal mengirim permintaan. Coba lagi nanti.");
+  }
+}
+
 export async function fetchWatchlist(): Promise<WatchlistResult> {
   const res = await api.get<WatchlistResult>("/api/watchlist");
   return res.data;
