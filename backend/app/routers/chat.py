@@ -133,7 +133,7 @@ async def chat(req: ChatRequest):
     if not req.messages:
         return {"success": False, "error": "Messages kosong"}
     try:
-        reply = await _run_chat(req.messages, req.mode, req.context)
+        reply = await asyncio.to_thread(_run_chat, req.messages, req.mode, req.context)
         return {"success": True, "reply": reply}
     except Exception as e:
         logger.error("Chat error: %s", e, exc_info=True)

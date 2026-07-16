@@ -16,29 +16,20 @@ _screen_semaphore = asyncio.Semaphore(10)
 _screen_cache_lock = asyncio.Lock()
 
 
-async def get_cached_screening() -> tuple[list[dict] | None, str | None]:
+async def get_cached_screening(mode: str = "BSJP") -> tuple[list[dict] | None, str | None]:
     async with _screen_cache_lock:
-        for mode in ["BSJP", "BPJS"]:
-            cached = _screen_cache.get(mode)
-            ts = _cache_ts.get(mode, 0)
-            if cached and time.time() - ts < _CACHE_TTL:
-                return cached.get("results"), mode
+        cached = _screen_cache.get(mode)
+        ts = _cache_ts.get(mode, 0)
+        if cached and time.time() - ts < _CACHE_TTL:
+            return cached.get("results"), mode
         return None, None
 
 
-def get_screening_timestamp() -> float | None:
-    async def _get():
-        async with _screen_cache_lock:
-            for mode in ["BSJP", "BPJS"]:
-                ts = _cache_ts.get(mode, 0)
-                if ts > 0 and time.time() - ts < _CACHE_TTL:
-                    return ts
-            return None
-    import asyncio as _aio
-    loop = _aio.get_event_loop()
-    if loop.is_running():
-        return None
-    return loop.run_until_complete(_get())
+def get_screening_timestamp(mode: str = "BSJP") -> float | None:
+    ts = _cache_ts.get(mode, 0)
+    if ts > 0 and time.time() - ts < _CACHE_TTL:
+        return ts
+    return None
 
 
 async def run_batch_scan(mode: str = "BSJP"):
