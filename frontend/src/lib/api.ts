@@ -312,11 +312,19 @@ export interface ChatResponse {
   error?: string;
 }
 
+export interface ChatContext {
+  view: string;
+  ticker?: string;
+  tickers?: string[];
+  mode: string;
+}
+
 export async function sendChatMessage(
   messages: ChatMessage[],
-  mode?: string
+  mode?: string,
+  context?: ChatContext
 ): Promise<ChatResponse> {
-  const res = await api.post<ChatResponse>("/api/chat", { messages, mode });
+  const res = await api.post<ChatResponse>("/api/chat", { messages, mode, context });
   return res.data;
 }
 

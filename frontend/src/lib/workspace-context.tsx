@@ -174,6 +174,27 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     error: null,
   });
 
+  useEffect(() => {
+    const params = new URLSearchParams();
+    params.set("view", state.view);
+    params.set("mode", state.activeMode);
+    if (state.activeTicker) params.set("ticker", state.activeTicker);
+    if (state.compareTickers.length > 0) params.set("tickers", state.compareTickers.join(","));
+    window.history.replaceState({}, "", `?${params.toString()}`);
+  }, [state.view, state.activeMode, state.activeTicker, state.compareTickers]);
+
+  useEffect(() => {
+    function handlePopState() {
+      const params = new URLSearchParams(window.location.search);
+      const v = params.get("view") as WorkspaceView | null;
+      if (v && v !== state.view) {
+        dispatch({ type: "SET_VIEW", view: v, ticker: params.get("ticker") ?? undefined, tickers: params.get("tickers")?.split(",") ?? undefined });
+      }
+    }
+    window.addEventListener("popstate", handlePopState);
+    return () => window.removeEventListener("popstate", handlePopState);
+  }, [state.view]);
+
   const openResearch = useCallback(
     (ticker: string, mode?: string) => {
       dispatch({ type: "SET_VIEW", view: "research", ticker, mode: mode ?? state.activeMode });
