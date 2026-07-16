@@ -29,8 +29,10 @@ TOOL_MAP = {
     "get_fundamentals": get_fundamentals,
 }
 
+ASYNC_TOOL_MAP = {}
 
-def _run_chat(messages: list[ChatMessage], mode: str, context: dict | None = None) -> str:
+
+async def _run_chat(messages: list[ChatMessage], mode: str, context: dict | None = None) -> str:
     client = genai.Client(api_key=settings.gemini_api_key)
 
     context_str = ""
@@ -70,10 +72,19 @@ def _run_chat(messages: list[ChatMessage], mode: str, context: dict | None = Non
         tools=[get_stock_data, get_company_news, get_fundamentals],
     )
 
-    chat = client.chats.create(model="gemini-3.5-flash", config=config)
-
+    history = []
     for m in messages[:-1]:
-        chat.send_message(m.content)
+        role = "user" if m.role == "user" else "model"
+        history.append(types.Content(
+            role=role,
+            parts=[types.Part.from_text(text=m.content)]
+        ))
+
+    chat = client.chats.create(
+        model="gemini-3.5-flash",
+        config=config,
+        history=history if history else None,
+    )
 
     response = chat.send_message(messages[-1].content)
 

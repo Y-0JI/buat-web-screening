@@ -7,8 +7,17 @@ import { useWorkspace } from "@/lib/workspace-context";
 const TICKER_REGEX = /\b[A-Z]{2,5}\b/g;
 
 function extractTickers(text: string): string[] {
-  const matches = text.match(TICKER_REGEX);
+  const matches = text.toUpperCase().match(TICKER_REGEX);
   return matches ? [...new Set(matches)] : [];
+}
+
+function escapeHtml(text: string): string {
+  return text
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
 }
 
 function renderMarkdown(text: string) {
@@ -30,7 +39,7 @@ function renderMarkdown(text: string) {
   }
 
   for (let i = 0; i < lines.length; i++) {
-    let line = lines[i];
+    let line = escapeHtml(lines[i]);
 
     line = line.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
     line = line.replace(/(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)/g, "<em>$1</em>");

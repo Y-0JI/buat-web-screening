@@ -68,7 +68,7 @@ async def screen(
     user: Optional[User] = Depends(get_current_user_optional),
     session: AsyncSession = Depends(get_session),
 ):
-    cached, cached_mode = await get_cached_screening()
+    cached, cached_mode = await get_cached_screening(mode)
     if cached and cached_mode == mode:
         items = []
         for i, r in enumerate(cached, 1):
@@ -84,7 +84,7 @@ async def screen(
                 change_percent=r.get("change_percent"),
                 is_simulated=r.get("is_simulated", False),
             ))
-        ts = get_screening_timestamp()
+        ts = get_screening_timestamp(mode)
         generated_at = (
             datetime.fromtimestamp(ts).isoformat() if ts else None
         )

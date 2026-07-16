@@ -7,7 +7,7 @@ def compute_ema(df: pd.DataFrame, periods: list[int] = [9, 20, 50]) -> dict:
     result = {}
     for p in periods:
         col = f"EMA_{p}"
-        result[col] = round(df["Close"].ewm(span=p).mean().iloc[-1], 2)
+        result[col] = round(df["Close"].ewm(span=p, adjust=False).mean().iloc[-1], 2)
     return result
 
 
@@ -31,10 +31,10 @@ def compute_rsi(df: pd.DataFrame, period: int = 14) -> float | None:
 
 
 def compute_macd(df: pd.DataFrame) -> dict:
-    ema12 = df["Close"].ewm(span=12).mean()
-    ema26 = df["Close"].ewm(span=26).mean()
+    ema12 = df["Close"].ewm(span=12, adjust=False).mean()
+    ema26 = df["Close"].ewm(span=26, adjust=False).mean()
     macd_line = ema12 - ema26
-    signal = macd_line.ewm(span=9).mean()
+    signal = macd_line.ewm(span=9, adjust=False).mean()
     histogram = macd_line - signal
     return {
         "macd": round(float(macd_line.iloc[-1]), 2),

@@ -66,14 +66,14 @@ async def lifespan(app: FastAPI):
         try:
             from apscheduler.schedulers.asyncio import AsyncIOScheduler
             from apscheduler.triggers.cron import CronTrigger
-            from app.scheduler import run_batch_scan
+            from app.scheduler import run_daily_scan
 
             global _scheduler
             _scheduler = AsyncIOScheduler()
             _scheduler.add_job(
-                run_batch_scan,
+                run_daily_scan,
                 CronTrigger(day_of_week="mon-fri", hour=16, minute=30, timezone="Asia/Jakarta"),
-                id="batch_scan",
+                id="daily_scan",
                 replace_existing=True,
             )
             _scheduler.add_job(
