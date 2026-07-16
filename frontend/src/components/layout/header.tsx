@@ -3,6 +3,7 @@
 import { useState, type FormEvent } from "react";
 import { Avatar } from "@/components/ui/avatar";
 import { useAuth } from "@/lib/auth-context";
+import { useWorkspace } from "@/lib/workspace-context";
 
 interface HeaderProps {
   onMenuToggle: () => void;
@@ -20,11 +21,12 @@ export function Header({
   onModeChange,
 }: HeaderProps) {
   const { isAuthenticated, user } = useAuth();
+  const { handleSearch } = useWorkspace();
   const [query, setQuery] = useState("");
 
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
-    // Search is handled by parent page; this is the global search trigger
+    if (query.trim()) handleSearch(query.trim());
   };
 
   return (

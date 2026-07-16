@@ -20,6 +20,7 @@ class ChatMessage(BaseModel):
 class ChatRequest(BaseModel):
     messages: list[ChatMessage]
     mode: str = "BSJP"
+    context: dict | None = None
 
 
 TOOL_MAP = {
@@ -29,8 +30,20 @@ TOOL_MAP = {
 }
 
 
-def _run_chat(messages: list[ChatMessage], mode: str) -> str:
+def _run_chat(messages: list[ChatMessage], mode: str, context: dict | None = None) -> str:
     client = genai.Client(api_key=settings.gemini_api_key)
+
+    context_str = ""
+    if context:
+        view = context.get("view")
+        ticker = context.get("ticker")
+        tickers = context.get("tickers", [])
+        if view:
+            context_str += f"\n- View aktif user saat ini: {view.upper()}"
+        if ticker:
+            context_str += f"\n- Ticker yang sedang dilihat user: {ticker}"
+        if tickers:
+            context_str += f"\n- Ticker yang sedang dibandingkan: {', '.join(tickers)}"
 
     system_instruction = (
         "Kamu asisten riset saham IDX (Bursa Efek Indonesia). Jawab dalam Bahasa "
@@ -46,6 +59,10 @@ def _run_chat(messages: list[ChatMessage], mode: str) -> str:
         "error (ticker tidak ditemukan), sampaikan apa adanya ke user, jangan mengarang data. "
         f"Mode analisis yang aktif: {mode}. "
         "Selalu sertakan parameter mode ini saat memanggil get_stock_data."
+        f"{context_str}"
+        "\n\nBerikan rekomendasi dalam bentuk yang bisa ditindaklanjuti. Kalau relevan, "
+        "sebutkan ticker spesifik (format: singkatan huruf kapital 1-5 karakter, misal BBCA) "
+        "supaya user bisa langsung membukanya. Jangan gunakan markdown link, cukup sebut ticker."
     )
 
     config = types.GenerateContentConfig(
@@ -105,7 +122,7 @@ async def chat(req: ChatRequest):
     if not req.messages:
         return {"success": False, "error": "Messages kosong"}
     try:
-        reply = await asyncio.to_thread(_run_chat, req.messages, req.mode)
+        reply = await asyncio.to_thread(_run_chat, req.messages, req.mode, req.context)
         return {"success": True, "reply": reply}
     except Exception as e:
         logger.error("Chat error: %s", e, exc_info=True)

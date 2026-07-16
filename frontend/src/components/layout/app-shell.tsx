@@ -4,17 +4,15 @@ import { useState, useEffect } from "react";
 import { Sidebar } from "./sidebar";
 import { Header } from "./header";
 import { ChatPanel } from "./chat-panel";
+import { WorkspaceView } from "@/components/workspace/workspace-view";
+import { WorkspaceProvider, useWorkspace } from "@/lib/workspace-context";
 
-interface AppShellProps {
-  children: React.ReactNode;
-}
-
-export function AppShell({ children }: AppShellProps) {
+function AppShellInner() {
+  const { state, dispatch, setMode } = useWorkspace();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [chatOpen, setChatOpen] = useState(true);
-  const [mode, setMode] = useState("BSJP");
   const [isMobile, setIsMobile] = useState(false);
+  const [isViewChanging, setIsViewChanging] = useState(false);
 
   useEffect(() => {
     const check = () => setIsMobile(window.innerWidth < 768);
@@ -29,6 +27,12 @@ export function AppShell({ children }: AppShellProps) {
     ? "var(--sidebar-w-collapsed)"
     : "var(--sidebar-w)";
 
+  function handleViewChange() {
+    setIsViewChanging(true);
+    const t = setTimeout(() => setIsViewChanging(false), 200);
+    return () => clearTimeout(t);
+  }
+
   return (
     <div className="flex h-screen overflow-hidden bg-zinc-950">
       <Sidebar
@@ -40,24 +44,28 @@ export function AppShell({ children }: AppShellProps) {
 
       <div
         className="flex-1 flex flex-col overflow-hidden transition-all duration-300"
-        style={{
-          marginLeft: isMobile ? 0 : sidebarWidth,
-        }}
+        style={{ marginLeft: isMobile ? 0 : sidebarWidth }}
       >
         <Header
           onMenuToggle={() => setSidebarOpen(!sidebarOpen)}
-          onChatToggle={() => setChatOpen(!chatOpen)}
-          chatOpen={chatOpen}
-          mode={mode}
+          onChatToggle={() => dispatch({ type: "TOGGLE_CHAT" })}
+          chatOpen={state.isChatOpen}
+          mode={state.activeMode}
           onModeChange={setMode}
         />
 
-        <main className="flex-1 overflow-y-auto">
-          {children}
+        <main className="flex-1 overflow-hidden relative">
+          <div
+            className={`h-full transition-opacity duration-200 ${
+              isViewChanging ? "opacity-60" : "opacity-100"
+            }`}
+            onAnimationStart={handleViewChange}
+          >
+            <WorkspaceView />
+          </div>
         </main>
       </div>
 
-      {/* Mobile sidebar drawer */}
       {isMobile && sidebarOpen && (
         <Sidebar
           collapsed={false}
@@ -67,14 +75,21 @@ export function AppShell({ children }: AppShellProps) {
         />
       )}
 
-      {/* Chat panel */}
-      {!isMobile && chatOpen && (
+      {!isMobile && state.isChatOpen && (
         <ChatPanel
-          open={chatOpen}
-          onClose={() => setChatOpen(false)}
-          mode={mode}
+          open={state.isChatOpen}
+          onClose={() => dispatch({ type: "TOGGLE_CHAT", open: false })}
+          mode={state.activeMode}
         />
       )}
     </div>
+  );
+}
+
+export function AppShell() {
+  return (
+    <WorkspaceProvider>
+      <AppShellInner />
+    </WorkspaceProvider>
   );
 }
