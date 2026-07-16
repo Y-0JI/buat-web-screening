@@ -29,10 +29,8 @@ TOOL_MAP = {
     "get_fundamentals": get_fundamentals,
 }
 
-ASYNC_TOOL_MAP = {}
 
-
-async def _run_chat(messages: list[ChatMessage], mode: str, context: dict | None = None) -> str:
+def _run_chat(messages: list[ChatMessage], mode: str, context: dict | None = None) -> str:
     client = genai.Client(api_key=settings.gemini_api_key)
 
     context_str = ""
@@ -72,21 +70,20 @@ async def _run_chat(messages: list[ChatMessage], mode: str, context: dict | None
         tools=[get_stock_data, get_company_news, get_fundamentals],
     )
 
-    history = []
-    for m in messages[:-1]:
+    # Build full conversation as contents list — single API call
+    contents = []
+    for m in messages:
         role = "user" if m.role == "user" else "model"
-        history.append(types.Content(
+        contents.append(types.Content(
             role=role,
             parts=[types.Part.from_text(text=m.content)]
         ))
 
-    chat = client.chats.create(
+    response = client.models.generate_content(
         model="gemini-3.5-flash",
+        contents=contents,
         config=config,
-        history=history if history else None,
     )
-
-    response = chat.send_message(messages[-1].content)
 
     turn = 0
     while turn < 5:
@@ -98,6 +95,10 @@ async def _run_chat(messages: list[ChatMessage], mode: str, context: dict | None
         if not function_calls:
             break
 
+        # Append model's function call parts to conversation history
+        contents.append(response.candidates[0].content)
+
+        # Process each function call and build response parts
         function_response_parts = []
         for fc in function_calls:
             func = TOOL_MAP.get(fc.name)
@@ -120,7 +121,17 @@ async def _run_chat(messages: list[ChatMessage], mode: str, context: dict | None
                 )
             )
 
-        response = chat.send_message(function_response_parts)
+        # Append function responses as user role (standard for Gemini function calling)
+        contents.append(types.Content(
+            role="user",
+            parts=function_response_parts,
+        ))
+
+        response = client.models.generate_content(
+            model="gemini-3.5-flash",
+            contents=contents,
+            config=config,
+        )
         turn += 1
 
     return response.text

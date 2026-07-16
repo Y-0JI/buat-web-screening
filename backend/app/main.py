@@ -1,4 +1,5 @@
 import logging
+import asyncio
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -14,6 +15,7 @@ from app.routers.chart import router as chart_router
 from app.routers.chat import router as chat_router
 from app.routers.insight import router as insight_router
 from app.routers.news import router as news_router
+from app.ai.tools import set_main_loop
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -23,6 +25,8 @@ _scheduler = None
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # Set main event loop for tool functions
+    set_main_loop(asyncio.get_running_loop())
     try:
         from app.database import engine
         from app.database.models import Base
