@@ -1,4 +1,5 @@
 import asyncio
+from concurrent.futures import Future
 from app.data.fetcher import (
     fetch_stock_data,
     fetch_company_info,
@@ -6,6 +7,22 @@ from app.data.fetcher import (
     fetch_fundamentals,
 )
 from app.scoring.funnel import calculate_score
+
+# Shared event loop running in main thread — all async work goes here
+_main_loop: asyncio.AbstractEventLoop | None = None
+
+
+def set_main_loop(loop: asyncio.AbstractEventLoop):
+    global _main_loop
+    _main_loop = loop
+
+
+def _submit_async(coro) -> dict | None:
+    """Submit an async coroutine to the main event loop and wait for result."""
+    if _main_loop is None or _main_loop.is_closed():
+        return None
+    future = asyncio.run_coroutine_threadsafe(coro, _main_loop)
+    return future.result(timeout=30)
 
 
 async def _get_stock_data_async(ticker: str, mode: str) -> dict:
@@ -37,12 +54,7 @@ def get_stock_data(ticker: str, mode: str = "BSJP") -> dict:
         Dict berisi harga, skor, verdict, breakdown indikator — atau {"error": "..."}
         kalau ticker tidak ditemukan/tidak valid.
     """
-    return asyncio.run(_get_stock_data_async(ticker, mode))
-
-
-async def _get_company_news_async(ticker: str, limit: int) -> dict:
-    result = await fetch_news(ticker, limit=limit)
-    return result
+    return _submit_async(_get_stock_data_async(ticker, mode)) or {"error": "Event loop not available"}
 
 
 def get_company_news(ticker: str, limit: int = 5) -> dict:
@@ -56,12 +68,7 @@ def get_company_news(ticker: str, limit: int = 5) -> dict:
         Dict berisi items [{title, publisher, link, published, summary}]
         atau {"error": "..."} jika gagal.
     """
-    return asyncio.run(_get_company_news_async(ticker, limit))
-
-
-async def _get_fundamentals_async(ticker: str) -> dict:
-    result = await fetch_fundamentals(ticker)
-    return result
+    return _submit_async(fetch_news(ticker, limit=limit)) or {"error": "Event loop not available"}
 
 
 def get_fundamentals(ticker: str) -> dict:
@@ -74,4 +81,4 @@ def get_fundamentals(ticker: str) -> dict:
         Dict berisi market_cap, pe, pb, dividend_yield, beta, sector, industry,
         description, website, dll — atau {"error": "..."} jika gagal.
     """
-    return asyncio.run(_get_fundamentals_async(ticker))
+    return _submit_async(fetch_fundamentals(ticker)) or {"error": "Event loop not available"}
