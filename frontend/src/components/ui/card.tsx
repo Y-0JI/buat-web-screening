@@ -33,16 +33,23 @@ export function Card({
   onClick,
 }: CardProps) {
   const base = "rounded-xl";
-  const tag = onClick ? "button" : "div";
+  const classes = `${base} ${variantStyles[variant]} ${paddingStyles[padding]} ${className}`;
+
+  if (onClick) {
+    return (
+      <button
+        type="button"
+        className={classes}
+        onClick={onClick}
+      >
+        {children}
+      </button>
+    );
+  }
 
   return (
-    // @ts-expect-error polymorphic tag
-    <tag
-      className={`${base} ${variantStyles[variant]} ${paddingStyles[padding]} ${className}`}
-      onClick={onClick}
-      {...(onClick ? { type: "button" } : {})}
-    >
+    <div className={classes}>
       {children}
-    </tag>
+    </div>
   );
 }
