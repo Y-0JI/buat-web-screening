@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Sidebar } from "./sidebar";
 import { Header } from "./header";
 import { ChatPanel } from "./chat-panel";
@@ -13,12 +13,16 @@ function AppShellInner() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
   const [isViewChanging, setIsViewChanging] = useState(false);
+  const viewChangeTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     const check = () => setIsMobile(window.innerWidth < 768);
     check();
     window.addEventListener("resize", check);
-    return () => window.removeEventListener("resize", check);
+    return () => {
+      window.removeEventListener("resize", check);
+      if (viewChangeTimeoutRef.current) clearTimeout(viewChangeTimeoutRef.current);
+    };
   }, []);
 
   const sidebarWidth = isMobile
@@ -28,9 +32,9 @@ function AppShellInner() {
     : "var(--sidebar-w)";
 
   function handleViewChange() {
+    if (viewChangeTimeoutRef.current) clearTimeout(viewChangeTimeoutRef.current);
     setIsViewChanging(true);
-    const t = setTimeout(() => setIsViewChanging(false), 200);
-    return () => clearTimeout(t);
+    viewChangeTimeoutRef.current = setTimeout(() => setIsViewChanging(false), 200);
   }
 
   return (

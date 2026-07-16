@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useWorkspace } from "@/lib/workspace-context";
-import { Card, Section, Skeleton, Badge, VerdictBadge } from "@/components/ui";
+import { Card, Skeleton, Badge, VerdictBadge } from "@/components/ui";
 import { screenStocks, type RankingItem } from "@/lib/api";
 
 export function ScreeningView() {

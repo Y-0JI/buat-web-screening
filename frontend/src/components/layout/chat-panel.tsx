@@ -99,7 +99,7 @@ const viewLabels: Record<string, string> = {
 export function ChatPanel({ open, onClose, mode }: ChatPanelProps) {
   const { state, dispatch, openResearch, openCompare, openWatchlist, openScreening } = useWorkspace();
   const { view, activeTicker, compareTickers, activeMode, chatInputDraft } = state;
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [messages, setMessages] = useState<(ChatMessage & { id: string })[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -135,24 +135,28 @@ export function ChatPanel({ open, onClose, mode }: ChatPanelProps) {
   const handleSend = useCallback(async () => {
     if (!input.trim() || loading) return;
 
-    const userMsg: ChatMessage = { role: "user", content: input.trim() };
+    const userMsg: ChatMessage & { id: string } = { id: crypto.randomUUID(), role: "user", content: input.trim() };
     const newMessages = [...messages, userMsg];
     setMessages(newMessages);
     setInput("");
     setLoading(true);
 
     try {
-      const res = await sendChatMessage(newMessages, activeMode, contextPayload);
+      const res = await sendChatMessage(
+        newMessages.map(({ role, content }) => ({ role, content })),
+        activeMode,
+        contextPayload,
+      );
       if (res.success && res.reply) {
         setMessages((prev) => [
           ...prev,
-          { role: "model", content: res.reply! },
+          { id: crypto.randomUUID(), role: "model", content: res.reply! },
         ]);
       }
     } catch {
       setMessages((prev) => [
         ...prev,
-        { role: "model", content: "Gagal menghubungi AI. Coba lagi." },
+        { id: crypto.randomUUID(), role: "model", content: "Gagal menghubungi AI. Coba lagi." },
       ]);
     } finally {
       setLoading(false);
@@ -223,8 +227,8 @@ export function ChatPanel({ open, onClose, mode }: ChatPanelProps) {
           </div>
         )}
 
-        {messages.map((msg, i) => (
-          <div key={i} className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
+        {messages.map((msg) => (
+          <div key={msg.id} className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
             <div
               className={`max-w-[85%] px-3 py-2 rounded-2xl text-sm leading-relaxed ${
                 msg.role === "user"

@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useWorkspace } from "@/lib/workspace-context";
-import { Card, Section, Skeleton, Badge, VerdictBadge, Bar } from "@/components/ui";
+import { Card, Skeleton, VerdictBadge, Bar } from "@/components/ui";
 import { compareStocks, type StockReport } from "@/lib/api";
 
 export function CompareView() {

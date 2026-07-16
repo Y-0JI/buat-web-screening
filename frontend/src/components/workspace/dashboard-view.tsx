@@ -57,7 +57,18 @@ function PickCard({ item, onResearch }: { item: RankingItem; onResearch: (t: str
 
 function WatchlistCard({ item, onRemove, onResearch }: { item: WatchlistItem; onRemove: (t: string) => void; onResearch: (t: string) => void }) {
   return (
-    <Card variant="interactive" padding="sm" onClick={() => onResearch(item.ticker)} className="flex items-center justify-between">
+    <div
+      role="button"
+      tabIndex={0}
+      onClick={() => onResearch(item.ticker)}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onResearch(item.ticker);
+        }
+      }}
+      className="flex items-center justify-between bg-zinc-900 border border-zinc-800 rounded-xl p-3 hover:bg-zinc-800/60 transition-colors cursor-pointer"
+    >
       <div className="min-w-0">
         <span className="text-zinc-100 font-semibold text-sm">{item.ticker}</span>
         {item.note && <span className="text-zinc-500 text-xs ml-2 truncate">{item.note}</span>}
@@ -68,7 +79,7 @@ function WatchlistCard({ item, onRemove, onResearch }: { item: WatchlistItem; on
       >
         Hapus
       </button>
-    </Card>
+    </div>
   );
 }
 

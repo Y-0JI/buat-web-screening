@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useWorkspace } from "@/lib/workspace-context";
-import { Card, Section, Skeleton, Badge, VerdictBadge } from "@/components/ui";
+import { Card, Skeleton } from "@/components/ui";
 import { StockReportCard } from "@/components/renderers/stock-report";
 import { researchStock } from "@/lib/api";
 

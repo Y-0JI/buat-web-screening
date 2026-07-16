@@ -1,7 +1,6 @@
 "use client";
 
 import { useWorkspace, type RecentResult, type WorkspaceView } from "@/lib/workspace-context";
-import { Card, Badge, type TooltipProps } from "@/components/ui";
 import { Tooltip } from "@/components/ui/tooltip";
 
 interface ResultHistoryProps {
@@ -73,33 +72,30 @@ export function ResultHistory({ maxItems = 10 }: ResultHistoryProps) {
           content={`Hapus ${result.label}`}
           side="right"
         >
-          {({ triggerRef }) => (
-            <div
-              ref={triggerRef}
-              onClick={() => handleResultClick(result)}
-              className="flex items-center gap-2 px-3 py-2 bg-zinc-900 border border-zinc-800 rounded-lg hover:bg-zinc-800/60 transition-colors cursor-pointer group"
-            >
-              <span className="text-zinc-500 shrink-0">{viewIcons[result.view]}</span>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-1.5">
-                  <span className="text-zinc-200 text-sm truncate font-medium">{result.label}</span>
-                  <span className="text-[10px] text-zinc-500 flex-shrink-0">{viewLabels[result.view]}</span>
-                </div>
-                <div className="text-[10px] text-zinc-500 truncate">
-                  {result.ticker ? `Ticker: ${result.ticker}` : result.tickers?.join(", ")}
-                </div>
+          <div
+            onClick={() => handleResultClick(result)}
+            className="flex items-center gap-2 px-3 py-2 bg-zinc-900 border border-zinc-800 rounded-lg hover:bg-zinc-800/60 transition-colors cursor-pointer group"
+          >
+            <span className="text-zinc-500 shrink-0">{viewIcons[result.view]}</span>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-1.5">
+                <span className="text-zinc-200 text-sm truncate font-medium">{result.label}</span>
+                <span className="text-[10px] text-zinc-500 flex-shrink-0">{viewLabels[result.view]}</span>
               </div>
-              <button
-                onClick={(e) => handleRemove(e, result.id)}
-                className="opacity-0 group-hover:opacity-100 text-zinc-500 hover:text-red-400 p-0.5 transition-opacity shrink-0"
-                aria-label="Hapus dari riwayat"
-              >
-                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
+              <div className="text-[10px] text-zinc-500 truncate">
+                {result.ticker ? `Ticker: ${result.ticker}` : result.tickers?.join(", ")}
+              </div>
             </div>
-          )}
+            <button
+              onClick={(e) => handleRemove(e, result.id)}
+              className="opacity-0 group-hover:opacity-100 text-zinc-500 hover:text-red-400 p-0.5 transition-opacity shrink-0"
+              aria-label="Hapus dari riwayat"
+            >
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
         </Tooltip>
       ))}
     </div>
