@@ -3,7 +3,13 @@
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 
-export function AuthGuard({ children }: { children: React.ReactNode }) {
+export function AuthGuard({
+  children,
+  requireAuth = true,
+}: {
+  children: React.ReactNode;
+  requireAuth?: boolean;
+}) {
   const { isAuthenticated, isLoading } = useAuth();
   const router = useRouter();
 
@@ -15,7 +21,7 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
     );
   }
 
-  if (!isAuthenticated) {
+  if (requireAuth && !isAuthenticated) {
     router.replace("/login");
     return null;
   }
