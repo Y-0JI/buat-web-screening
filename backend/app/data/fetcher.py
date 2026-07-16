@@ -2,7 +2,6 @@ import asyncio
 import logging
 import time
 import random
-import threading
 import pandas as pd
 from datetime import datetime, timedelta
 from app.config import settings
@@ -15,12 +14,12 @@ _cache: dict[str, tuple[float, pd.DataFrame, bool]] = {}
 _verify_cache: dict[str, tuple[float, bool]] = {}
 _VERIFY_CACHE_TTL = 300  # 5 minutes
 _cache_ttl = settings.cache_ttl_seconds
-_cache_lock = threading.Lock()
-_rate_lock = threading.Lock()
+_cache_lock = asyncio.Lock()
+_rate_lock = asyncio.Lock()
 _last_request_time: float = 0
 _MIN_REQUEST_INTERVAL = 1.0
 _in_flight: dict[str, asyncio.Future] = {}
-_in_flight_lock = threading.Lock()
+_in_flight_lock = asyncio.Lock()
 
 
 MOCK_DATA = {
@@ -135,7 +134,7 @@ def _try_yfinance(symbol: str) -> pd.DataFrame | None:
 
 async def _rate_limit():
     global _last_request_time
-    with _rate_lock:
+    async with _rate_lock:
         elapsed = time.time() - _last_request_time
         if elapsed < _MIN_REQUEST_INTERVAL:
             await asyncio.sleep(_MIN_REQUEST_INTERVAL - elapsed)
@@ -145,13 +144,13 @@ async def _rate_limit():
 async def fetch_stock_data(symbol: str, fast_fail: bool = False) -> tuple[pd.DataFrame | None, bool]:
     ticker_str = resolve_ticker(symbol)
 
-    with _cache_lock:
+    async with _cache_lock:
         cached = _get_cached(ticker_str)
         if cached is not None:
             return cached
 
     existing: asyncio.Future | None = None
-    with _in_flight_lock:
+    async with _in_flight_lock:
         if ticker_str in _in_flight:
             existing = _in_flight[ticker_str]
         else:
@@ -203,23 +202,23 @@ async def fetch_stock_data(symbol: str, fast_fail: bool = False) -> tuple[pd.Dat
                 continue
 
         if yf_result is not None:
-            with _cache_lock:
+            async with _cache_lock:
                 _set_cache(ticker_str, yf_result, is_simulated=False)
             result = (yf_result, False)
         else:
             mock = _generate_mock_data(ticker_str, settings.yfinance_period)
-            with _cache_lock:
+            async with _cache_lock:
                 _set_cache(ticker_str, mock, is_simulated=True)
             result = (mock, True)
 
-        with _in_flight_lock:
+        async with _in_flight_lock:
             fut = _in_flight.pop(ticker_str, None)
         if fut is not None and not fut.done():
             fut.set_result(result)
 
         return result
     except Exception as exc:
-        with _in_flight_lock:
+        async with _in_flight_lock:
             fut = _in_flight.pop(ticker_str, None)
         if fut is not None and not fut.done():
             fut.set_exception(exc)
@@ -232,7 +231,7 @@ async def verify_ticker(candidate: str) -> bool:
     Uses its own cache to avoid polluting the main data cache."""
     ticker_str = resolve_ticker(candidate)
 
-    with _cache_lock:
+    async with _cache_lock:
         cached = _get_cached_verify(ticker_str)
         if cached is not None:
             return not cached  # is_simulated=False means valid
@@ -256,7 +255,7 @@ async def verify_ticker(candidate: str) -> bool:
 
     is_simulated = yf_result is None
 
-    with _cache_lock:
+    async with _cache_lock:
         _set_verify_cache(ticker_str, is_simulated)
 
     return yf_result is not None and not yf_result.empty
@@ -346,7 +345,7 @@ async def fetch_news(symbol: str, limit: int = 10) -> dict:
     clean = symbol.upper().replace(".JK", "")
     cache_key = f"{clean}:{limit}"
 
-    with _cache_lock:
+    async with _cache_lock:
         cached = _modular_cache_get(_NEWS_CACHE, cache_key, _NEWS_TTL)
         if cached is not None:
             return cached
@@ -392,7 +391,7 @@ async def fetch_news(symbol: str, limit: int = 10) -> dict:
         logger.warning("%s | fetch_news error: %s", clean, e)
         result = {"error": f"Gagal mengambil berita: {e}", "fetched_at": None}
 
-    with _cache_lock:
+    async with _cache_lock:
         if not result.get("error"):
             _modular_cache_set(_NEWS_CACHE, cache_key, result)
     return result
@@ -407,7 +406,7 @@ async def fetch_fundamentals(symbol: str) -> dict:
     """
     clean = symbol.upper().replace(".JK", "")
 
-    with _cache_lock:
+    async with _cache_lock:
         cached = _modular_cache_get(_FUNDAMENTALS_CACHE, clean, _FUNDAMENTALS_TTL)
         if cached is not None:
             return cached
@@ -472,7 +471,7 @@ async def fetch_fundamentals(symbol: str) -> dict:
         logger.warning("%s | fetch_fundamentals error: %s", clean, e)
         result = {"error": f"Gagal mengambil data fundamental: {e}", "fetched_at": None}
 
-    with _cache_lock:
+    async with _cache_lock:
         if not result.get("error"):
             _modular_cache_set(_FUNDAMENTALS_CACHE, clean, result)
     return result
