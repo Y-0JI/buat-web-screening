@@ -36,6 +36,7 @@ interface WorkspaceState {
   activeMode: "BSJP" | "BPJS";
   compareTickers: string[];
   isChatOpen: boolean;
+  chatInputDraft: string;
   recentResults: RecentResult[];
   loading: boolean;
   error: string | null;
@@ -44,6 +45,7 @@ interface WorkspaceState {
 type WorkspaceAction =
   | { type: "SET_VIEW"; view: WorkspaceView; ticker?: string; tickers?: string[]; mode?: string }
   | { type: "TOGGLE_CHAT"; open?: boolean }
+  | { type: "SET_CHAT_INPUT"; input: string }
   | { type: "ADD_RESULT"; result: RecentResult }
   | { type: "REMOVE_RESULT"; id: string }
   | { type: "CLEAR_HISTORY" }
@@ -87,6 +89,12 @@ function reducer(state: WorkspaceState, action: WorkspaceAction): WorkspaceState
       return {
         ...state,
         isChatOpen: action.open ?? !state.isChatOpen,
+      };
+    case "SET_CHAT_INPUT":
+      return {
+        ...state,
+        chatInputDraft: action.input,
+        isChatOpen: true,
       };
     case "ADD_RESULT": {
       const filtered = state.recentResults.filter((r) => r.id !== action.result.id);
@@ -169,6 +177,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     activeMode: initMode,
     compareTickers: initTickers,
     isChatOpen: false,
+    chatInputDraft: "",
     recentResults: loadHistory(),
     loading: false,
     error: null,
@@ -221,7 +230,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const setDashboard = useCallback(() => {
-    dispatch({ type: "SET_VIEW", view: "dashboard" });
+    dispatch({ type: "SET_VIEW", view: "dashboard", ticker: null, tickers: [] });
   }, []);
 
   const setMode = useCallback((mode: "BSJP" | "BPJS") => {
@@ -245,7 +254,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
         if (tickers.length > 0) {
           openResearch(tickers[0]);
         } else {
-          openResearch(query);
+          dispatch({ type: "SET_CHAT_INPUT", input: query });
         }
       }
     },

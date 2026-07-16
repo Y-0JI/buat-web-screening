@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect, useCallback, type KeyboardEvent } from "react";
+import { useState, useRef, useEffect, useCallback, useMemo, type KeyboardEvent } from "react";
 import { sendChatMessage, type ChatMessage } from "@/lib/api";
 import { useWorkspace } from "@/lib/workspace-context";
 
@@ -88,8 +88,8 @@ const viewLabels: Record<string, string> = {
 };
 
 export function ChatPanel({ open, onClose, mode }: ChatPanelProps) {
-  const { state, openResearch, openCompare, openWatchlist, openScreening } = useWorkspace();
-  const { view, activeTicker, compareTickers, activeMode } = state;
+  const { state, dispatch, openResearch, openCompare, openWatchlist, openScreening } = useWorkspace();
+  const { view, activeTicker, compareTickers, activeMode, chatInputDraft } = state;
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
@@ -109,12 +109,19 @@ export function ChatPanel({ open, onClose, mode }: ChatPanelProps) {
     }
   }, [view]);
 
-  const contextPayload = {
+  useEffect(() => {
+    if (chatInputDraft) {
+      setInput(chatInputDraft);
+      dispatch({ type: "SET_CHAT_INPUT", input: "" });
+    }
+  }, [chatInputDraft, dispatch]);
+
+  const contextPayload = useMemo(() => ({
     view,
     ticker: activeTicker ?? undefined,
     tickers: compareTickers.length > 0 ? compareTickers : undefined,
     mode: activeMode,
-  };
+  }), [view, activeTicker, compareTickers, activeMode]);
 
   const handleSend = useCallback(async () => {
     if (!input.trim() || loading) return;
@@ -126,7 +133,7 @@ export function ChatPanel({ open, onClose, mode }: ChatPanelProps) {
     setLoading(true);
 
     try {
-      const res = await sendChatMessage(newMessages, mode, contextPayload);
+      const res = await sendChatMessage(newMessages, activeMode, contextPayload);
       if (res.success && res.reply) {
         setMessages((prev) => [
           ...prev,
@@ -141,7 +148,7 @@ export function ChatPanel({ open, onClose, mode }: ChatPanelProps) {
     } finally {
       setLoading(false);
     }
-  }, [input, loading, messages, mode, contextPayload]);
+  }, [input, loading, messages, activeMode, contextPayload]);
 
   const handleKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Enter" && !e.shiftKey) {
@@ -154,7 +161,7 @@ export function ChatPanel({ open, onClose, mode }: ChatPanelProps) {
 
   const lastAIReply = [...messages].reverse().find((m) => m.role === "model");
   const replyTickers = lastAIReply ? extractTickers(lastAIReply.content) : [];
-  const suggestedTickers = replyTickers.filter((t) => t !== mode && t !== "IDX" && t !== "BSJP" && t !== "BPJS");
+  const suggestedTickers = replyTickers.filter((t) => t !== activeMode && t !== "IDX" && t !== "BSJP" && t !== "BPJS");
 
   return (
     <aside className="w-[380px] h-full bg-zinc-950 border-l border-zinc-800 flex flex-col shrink-0">

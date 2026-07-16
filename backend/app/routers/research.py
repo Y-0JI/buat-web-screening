@@ -18,10 +18,17 @@ async def extract_ticker(text: str) -> str | None:
     candidates = re.findall(r"\b([A-Z]{2,5})\b", text.upper())
     if not candidates:
         return None
-    results = await asyncio.gather(*[verify_ticker(c) for c in candidates])
-    for candidate, is_valid in zip(candidates, results):
-        if is_valid:
+    results = await asyncio.gather(*[verify_ticker(c) for c in candidates], return_exceptions=True)
+    for candidate, result in zip(candidates, results):
+        if result is True:
             return candidate
+    try:
+        from app.data.idx_stocks import VALID_TICKERS
+        for c in candidates:
+            if c in VALID_TICKERS:
+                return c
+    except ImportError:
+        pass
     return None
 
 
@@ -74,8 +81,15 @@ async def research(
 async def resolve_tickers(req: dict):
     text_in = req.get("text", "")
     candidates = re.findall(r"\b([A-Z]{2,5})\b", text_in.upper())
-    results = await asyncio.gather(*[verify_ticker(c) for c in candidates])
-    valid = [c for c, ok in zip(candidates, results) if ok]
+    results = await asyncio.gather(*[verify_ticker(c) for c in candidates], return_exceptions=True)
+    valid = [c for c, ok in zip(candidates, results) if ok is True]
+    try:
+        from app.data.idx_stocks import VALID_TICKERS
+        for c in candidates:
+            if c in VALID_TICKERS and c not in valid:
+                valid.append(c)
+    except ImportError:
+        pass
     return {"tickers": valid[:5]}
 
 

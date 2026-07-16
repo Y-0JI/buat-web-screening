@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useWorkspace } from "@/lib/workspace-context";
 import { Card, Section, Skeleton, Badge, VerdictBadge } from "@/components/ui";
 import { StockReportCard } from "@/components/renderers/stock-report";
+import { researchStock } from "@/lib/api";
 
 export function ResearchView() {
   const { state, openResearch } = useWorkspace();
@@ -27,16 +28,8 @@ export function ResearchView() {
   async function loadReport(t: string) {
     setLoading(true);
     try {
-      const res = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/api/research`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ ticker: t, mode }),
-        }
-      );
-      const json = await res.json();
-      if (json.success && json.data) setReport(json.data);
+      const res = await researchStock(t, undefined, mode);
+      if (res.success && res.data) setReport(res.data);
     } catch {
       setReport(null);
     } finally {
