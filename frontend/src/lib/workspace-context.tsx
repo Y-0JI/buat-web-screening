@@ -81,8 +81,8 @@ function reducer(state: WorkspaceState, action: WorkspaceAction): WorkspaceState
       return {
         ...state,
         view: action.view,
-        activeTicker: action.ticker ?? state.activeTicker,
-        compareTickers: action.tickers ?? state.compareTickers,
+        activeTicker: action.ticker === undefined ? state.activeTicker : action.ticker,
+        compareTickers: action.tickers === undefined ? state.compareTickers : action.tickers,
         activeMode: (action.mode as "BSJP" | "BPJS") ?? state.activeMode,
       };
     case "TOGGLE_CHAT":
@@ -197,7 +197,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       const params = new URLSearchParams(window.location.search);
       const v = params.get("view") as WorkspaceView | null;
       if (v && v !== state.view) {
-        dispatch({ type: "SET_VIEW", view: v, ticker: params.get("ticker") ?? undefined, tickers: params.get("tickers")?.split(",") ?? undefined });
+        dispatch({ type: "SET_VIEW", view: v, ticker: params.get("ticker"), tickers: params.get("tickers")?.split(",").filter(Boolean) });
       }
     }
     window.addEventListener("popstate", handlePopState);
