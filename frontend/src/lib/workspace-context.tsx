@@ -126,6 +126,7 @@ interface WorkspaceContextValue {
   openWatchlist: () => void;
   setDashboard: () => void;
   setMode: (mode: "BSJP" | "BPJS") => void;
+  handleSearch: (query: string) => void;
 }
 
 const WorkspaceContext = createContext<WorkspaceContextValue | null>(null);

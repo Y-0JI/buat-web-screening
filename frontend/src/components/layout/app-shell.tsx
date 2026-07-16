@@ -4,17 +4,15 @@ import { useState, useEffect } from "react";
 import { Sidebar } from "./sidebar";
 import { Header } from "./header";
 import { ChatPanel } from "./chat-panel";
+import { WorkspaceView } from "@/components/workspace/workspace-view";
 import { WorkspaceProvider, useWorkspace } from "@/lib/workspace-context";
 
-interface AppShellProps {
-  children: React.ReactNode;
-}
-
-function AppShellInner({ children }: AppShellProps) {
+function AppShellInner() {
   const { state, dispatch, setMode } = useWorkspace();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
+  const [isViewChanging, setIsViewChanging] = useState(false);
 
   useEffect(() => {
     const check = () => setIsMobile(window.innerWidth < 768);
@@ -28,6 +26,12 @@ function AppShellInner({ children }: AppShellProps) {
     : sidebarCollapsed
     ? "var(--sidebar-w-collapsed)"
     : "var(--sidebar-w)";
+
+  function handleViewChange() {
+    setIsViewChanging(true);
+    const t = setTimeout(() => setIsViewChanging(false), 200);
+    return () => clearTimeout(t);
+  }
 
   return (
     <div className="flex h-screen overflow-hidden bg-zinc-950">
@@ -50,8 +54,15 @@ function AppShellInner({ children }: AppShellProps) {
           onModeChange={setMode}
         />
 
-        <main className="flex-1 overflow-y-auto">
-          {children}
+        <main className="flex-1 overflow-hidden relative">
+          <div
+            className={`h-full transition-opacity duration-200 ${
+              isViewChanging ? "opacity-60" : "opacity-100"
+            }`}
+            onAnimationStart={handleViewChange}
+          >
+            <WorkspaceView />
+          </div>
         </main>
       </div>
 
@@ -75,10 +86,10 @@ function AppShellInner({ children }: AppShellProps) {
   );
 }
 
-export function AppShell({ children }: AppShellProps) {
+export function AppShell() {
   return (
     <WorkspaceProvider>
-      <AppShellInner>{children}</AppShellInner>
+      <AppShellInner />
     </WorkspaceProvider>
   );
 }
