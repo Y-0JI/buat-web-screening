@@ -6,6 +6,7 @@ import {
   useReducer,
   useCallback,
   useEffect,
+  Suspense,
   type ReactNode,
 } from "react";
 import { useSearchParams } from "next/navigation";
@@ -156,7 +157,7 @@ function extractTickers(query: string): string[] {
   return query.toUpperCase().match(/\b[A-Z]{2,5}\b/g) ?? [];
 }
 
-export function WorkspaceProvider({ children }: { children: ReactNode }) {
+function WorkspaceProviderInner({ children }: { children: ReactNode }) {
   const searchParams = useSearchParams();
 
   const initView = ((): WorkspaceView => {
@@ -277,6 +278,20 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     <WorkspaceContext.Provider value={value}>
       {children}
     </WorkspaceContext.Provider>
+  );
+}
+
+export function WorkspaceProvider({ children }: { children: ReactNode }) {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex items-center justify-center min-h-screen bg-zinc-950">
+          <div className="text-zinc-500 text-sm animate-pulse">Memuat...</div>
+        </div>
+      }
+    >
+      <WorkspaceProviderInner>{children}</WorkspaceProviderInner>
+    </Suspense>
   );
 }
 
