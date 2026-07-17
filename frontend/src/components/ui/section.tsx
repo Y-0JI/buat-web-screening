@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
+import { useState, useId, type ReactNode } from "react";
 
 interface SectionProps {
   title: string;
@@ -20,22 +20,24 @@ export function Section({
   children,
 }: SectionProps) {
   const [isOpen, setIsOpen] = useState(defaultOpen);
+  const contentId = useId();
 
   return (
     <div className={`border border-zinc-800 rounded-xl overflow-hidden ${className}`}>
-      <button
-        type="button"
-        onClick={() => setIsOpen(!isOpen)}
-        className="w-full flex items-center justify-between px-4 py-3 bg-zinc-900 hover:bg-zinc-800/60 transition-colors"
-      >
-        <div className="flex items-center gap-2 min-w-0">
-          <h3 className="text-sm font-semibold text-zinc-200 truncate">
-            {title}
-          </h3>
-          {badge}
-        </div>
-        <div className="flex items-center gap-2 shrink-0">
-          {action && <span onClick={(e) => e.stopPropagation()}>{action}</span>}
+      <div className="flex items-stretch w-full">
+        <button
+          type="button"
+          onClick={() => setIsOpen(!isOpen)}
+          aria-expanded={isOpen}
+          aria-controls={contentId}
+          className="flex-1 min-w-0 flex items-center justify-between px-4 py-3 bg-zinc-900 hover:bg-zinc-800/60 transition-colors"
+        >
+          <div className="flex items-center gap-2 min-w-0">
+            <h3 className="text-sm font-semibold text-zinc-200 truncate">
+              {title}
+            </h3>
+            {badge}
+          </div>
           <svg
             className={`w-4 h-4 text-zinc-500 transition-transform duration-200 ${
               isOpen ? "rotate-180" : ""
@@ -51,9 +53,18 @@ export function Section({
               d="M19 9l-7 7-7-7"
             />
           </svg>
+        </button>
+        {action && (
+          <div className="flex items-center shrink-0 bg-zinc-900 border-l border-zinc-800 px-3">
+            {action}
+          </div>
+        )}
+      </div>
+      {isOpen && (
+        <div id={contentId} className="px-4 py-3">
+          {children}
         </div>
-      </button>
-      {isOpen && <div className="px-4 py-3">{children}</div>}
+      )}
     </div>
   );
 }

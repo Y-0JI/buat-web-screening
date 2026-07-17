@@ -122,18 +122,18 @@ export function WatchlistView() {
 
 function WatchlistRow({ item, onRemove, onResearch }: { item: WatchlistItem; onRemove: (t: string) => void; onResearch: (t: string) => void }) {
   return (
-    <div
-      className="flex items-center gap-3 px-4 py-3 bg-zinc-900 border border-zinc-800 rounded-xl hover:bg-zinc-800/60 transition-colors cursor-pointer"
-      onClick={() => onResearch(item.ticker)}
-    >
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2">
-          <span className="font-semibold text-zinc-100 text-sm">{item.ticker}</span>
-          {item.note && <span className="text-zinc-500 text-xs truncate">{item.note}</span>}
-        </div>
-      </div>
+    <div className="flex items-center gap-3 px-4 py-3 bg-zinc-900 border border-zinc-800 rounded-xl hover:bg-zinc-800/60 transition-colors">
       <button
-        onClick={(e) => { e.stopPropagation(); onRemove(item.ticker); }}
+        type="button"
+        onClick={() => onResearch(item.ticker)}
+        className="flex-1 min-w-0 text-left flex items-center gap-2"
+      >
+        <span className="font-semibold text-zinc-100 text-sm">{item.ticker}</span>
+        {item.note && <span className="text-zinc-500 text-xs truncate">{item.note}</span>}
+      </button>
+      <button
+        type="button"
+        onClick={() => onRemove(item.ticker)}
         className="text-zinc-500 hover:text-red-400 text-xs transition-colors shrink-0"
       >
         Hapus
