@@ -6,6 +6,8 @@ from pathlib import Path
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.config import settings
+from app.utils.logging import configure_logging, LoggingMiddleware
+from app.utils.error_handler import register_exception_handlers
 from app.routers.research import router as research_router
 from app.routers.screening import router as screening_router
 from app.routers.vision import router as vision_router
@@ -19,7 +21,7 @@ from app.routers.insight import router as insight_router
 from app.routers.news import router as news_router
 from app.ai.tools import set_main_loop
 
-logging.basicConfig(level=logging.INFO)
+configure_logging()
 logger = logging.getLogger(__name__)
 
 _scheduler = None
@@ -125,6 +127,8 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+app.add_middleware(LoggingMiddleware)
+register_exception_handlers(app)
 
 app.include_router(research_router)
 app.include_router(screening_router)

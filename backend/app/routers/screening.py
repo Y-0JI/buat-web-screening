@@ -11,7 +11,8 @@ from app.schemas.stock import (
     RankingItem,
     Verdict,
 )
-from app.data.fetcher import fetch_stock_data, fetch_company_info, MOCK_DATA
+from app.providers import MOCK_DATA
+from app.services import stock_service, company_profile_service
 from app.scoring.funnel import calculate_score
 from app.scheduler import (
     get_cached_screening,
@@ -33,10 +34,10 @@ async def compare(
     session: AsyncSession = Depends(get_session),
 ):
     async def process_ticker(ticker: str):
-        df, is_simulated = await fetch_stock_data(ticker)
+        df, is_simulated = await stock_service.get_price(ticker)
         if df is None or df.empty:
             return None
-        info = await fetch_company_info(ticker)
+        info = await company_profile_service.get_profile(ticker)
         report = calculate_score(df, ticker, req.mode, is_simulated=is_simulated)
         report.company_name = info.get("name", ticker)
         report.render = "comparison"
@@ -96,7 +97,7 @@ async def screen(
 
     async def fetch_one(ticker: str):
         async with _screen_semaphore:
-            return ticker, await fetch_stock_data(ticker)
+            return ticker, await stock_service.get_price(ticker)
 
     tasks = [fetch_one(t) for t in tickers]
     results_list = await asyncio.gather(*tasks)
@@ -112,7 +113,7 @@ async def screen(
         df, is_simulated = item
         if df is None or df.empty:
             continue
-        info = await fetch_company_info(ticker)
+        info = await company_profile_service.get_profile(ticker)
         report = calculate_score(df, ticker, mode, is_simulated=is_simulated)
         report.company_name = info.get("name", ticker)
         report.mode = mode

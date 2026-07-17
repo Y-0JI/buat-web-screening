@@ -1,11 +1,12 @@
 import asyncio
 from concurrent.futures import Future
-from app.data.fetcher import (
-    fetch_stock_data,
-    fetch_company_info,
-    fetch_news,
-    fetch_fundamentals,
+from app.services import (
+    stock_service,
+    company_profile_service,
+    news_service,
+    fundamentals_service,
 )
+from app.utils.errors import AppError
 from app.scoring.funnel import calculate_score
 
 # Shared event loop running in main thread — all async work goes here
@@ -26,10 +27,10 @@ def _submit_async(coro) -> dict | None:
 
 
 async def _get_stock_data_async(ticker: str, mode: str) -> dict:
-    df, is_simulated = await fetch_stock_data(ticker, fast_fail=True)
+    df, is_simulated = await stock_service.get_price(ticker, fast_fail=True)
     if df is None or df.empty or is_simulated:
         return {"error": f"Ticker {ticker} tidak ditemukan atau data tidak tersedia."}
-    info = await fetch_company_info(ticker)
+    info = await company_profile_service.get_profile(ticker)
     report = calculate_score(df, ticker, mode, is_simulated=is_simulated)
     return {
         "ticker": ticker,
@@ -68,7 +69,15 @@ def get_company_news(ticker: str, limit: int = 5) -> dict:
         Dict berisi items [{title, publisher, link, published, summary}]
         atau {"error": "..."} jika gagal.
     """
-    return _submit_async(fetch_news(ticker, limit=limit)) or {"error": "Event loop not available"}
+
+    async def _run() -> dict:
+        try:
+            data = await news_service.get_news(ticker, limit=limit)
+            return {"items": [item.model_dump() for item in data.items]}
+        except AppError as e:
+            return {"error": e.message}
+
+    return _submit_async(_run()) or {"error": "Event loop not available"}
 
 
 def get_fundamentals(ticker: str) -> dict:
@@ -81,4 +90,11 @@ def get_fundamentals(ticker: str) -> dict:
         Dict berisi market_cap, pe, pb, dividend_yield, beta, sector, industry,
         description, website, dll — atau {"error": "..."} jika gagal.
     """
-    return _submit_async(fetch_fundamentals(ticker)) or {"error": "Event loop not available"}
+
+    async def _run() -> dict:
+        try:
+            return await fundamentals_service.get_fundamentals(ticker)
+        except AppError as e:
+            return {"error": e.message}
+
+    return _submit_async(_run()) or {"error": "Event loop not available"}

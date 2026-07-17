@@ -2,7 +2,7 @@ import asyncio
 import time
 import logging
 from app.config import settings
-from app.data.fetcher import fetch_stock_data, fetch_company_info
+from app.services import stock_service, company_profile_service
 # from app.data.idx_stocks import VALID_TICKERS
 from app.data.ticker_sync import get_listed_tickers
 from app.scoring.funnel import calculate_score
@@ -38,10 +38,10 @@ async def run_batch_scan(mode: str = "BSJP"):
     async def scan_one(ticker: str) -> dict | None:
         async with _screen_semaphore:
             try:
-                df, is_simulated = await fetch_stock_data(ticker)
+                df, is_simulated = await stock_service.get_price(ticker)
                 if df is None or df.empty:
                     return None
-                info = await fetch_company_info(ticker)
+                info = await company_profile_service.get_profile(ticker)
                 report = calculate_score(df, ticker, mode, is_simulated=is_simulated)
                 report.company_name = info.get("name", ticker)
                 return {
