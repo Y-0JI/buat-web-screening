@@ -1,4 +1,5 @@
 import bcrypt
+import secrets
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -11,7 +12,17 @@ from jose import jwt, JWTError
 from app.config import settings
 from app.database import get_session
 from app.database.models import User
-from app.schemas.auth import AuthRegister, AuthLogin, TokenResponse, UserProfile
+from app.email import send_reset_email
+from app.schemas.auth import (
+    AuthRegister,
+    AuthLogin,
+    TokenResponse,
+    UserProfile,
+    ForgotPasswordRequest,
+    ResetPasswordRequest,
+)
+
+RESET_TOKEN_TTL = timedelta(hours=1)
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 security = HTTPBearer(auto_error=False)
@@ -28,6 +39,10 @@ async def get_current_user(
     session: AsyncSession = Depends(get_session),
 ) -> User:
     try:
+        if not credentials:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED, detail="Token tidak valid"
+            )
         payload = jwt.decode(
             credentials.credentials,
             settings.jwt_secret,
@@ -103,3 +118,52 @@ async def login(req: AuthLogin, session: AsyncSession = Depends(get_session)):
 @router.get("/me", response_model=UserProfile)
 async def me(user: User = Depends(get_current_user)):
     return UserProfile(id=user.id, username=user.username, email=user.email)
+
+
+@router.post("/forgot-password")
+async def forgot_password(
+    req: ForgotPasswordRequest, session: AsyncSession = Depends(get_session)
+):
+    # Gunakan sumber data & session YANG SAMA dengan Login (tabel users).
+    result = await session.execute(select(User).where(User.email == req.email))
+    user = result.scalar_one_or_none()
+
+    # Keamanan: jangan ungkap apakah email terdaftar.
+    if user:
+        token = secrets.token_urlsafe(32)
+        user.reset_token = token
+        user.reset_token_expiry = datetime.now(timezone.utc) + RESET_TOKEN_TTL
+        await session.commit()
+        send_reset_email(user.email, token)
+
+    return {
+        "detail": "Jika email terdaftar, tautan reset password akan dikirim ke alamat tersebut."
+    }
+
+
+@router.post("/reset-password")
+async def reset_password(
+    req: ResetPasswordRequest, session: AsyncSession = Depends(get_session)
+):
+    result = await session.execute(
+        select(User).where(User.reset_token == req.token)
+    )
+    user = result.scalar_one_or_none()
+
+    if not user or not user.reset_token_expiry:
+        raise HTTPException(status_code=400, detail="Token reset tidak valid.")
+
+    expiry = user.reset_token_expiry
+    if expiry.tzinfo is None:
+        expiry = expiry.replace(tzinfo=timezone.utc)
+    if expiry < datetime.now(timezone.utc):
+        raise HTTPException(status_code=400, detail="Token reset sudah kedaluwarsa.")
+
+    user.password_hash = bcrypt.hashpw(
+        req.password.encode(), bcrypt.gensalt()
+    ).decode()
+    user.reset_token = None
+    user.reset_token_expiry = None
+    await session.commit()
+
+    return {"detail": "Password berhasil direset. Silakan login kembali."}

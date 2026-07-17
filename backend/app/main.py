@@ -36,6 +36,32 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning("Database tidak tersedia: %s", e)
 
+    # Migrasi ringan untuk kolom reset password pada database yang sudah ada.
+    # create_all di atas tidak menambahkan kolom baru ke tabel yang sudah terbentuk,
+    # sehingga kolom reset_token / reset_token_expiry ditambahkan secara eksplisit
+    # bila belum ada. Ini menjaga konsistensi antar alur autentikasi yang semua
+    # berbagi tabel users yang sama.
+    try:
+        from sqlalchemy import text
+
+        if settings.database_url.startswith("sqlite"):
+            async with engine.begin() as conn:
+                cols = (await conn.execute(text("PRAGMA table_info(users)"))).fetchall()
+                existing = {row[1] for row in cols}
+                if "reset_token" not in existing:
+                    await conn.execute(
+                        text("ALTER TABLE users ADD COLUMN reset_token VARCHAR(255)")
+                    )
+                if "reset_token_expiry" not in existing:
+                    await conn.execute(
+                        text(
+                            "ALTER TABLE users ADD COLUMN reset_token_expiry TIMESTAMP"
+                        )
+                    )
+            logger.info("Migrasi kolom reset password siap")
+    except Exception as e:
+        logger.warning("Migrasi kolom reset password gagal: %s", e)
+
     # Bootstrap: kalau tabel listed_tickers kosong, seed dari VALID_TICKERS
     # supaya screening & /api/research tetap pakai daftar lengkap walaupun
     # sync eksternal (idx.co.id/sectors.app) gagal.

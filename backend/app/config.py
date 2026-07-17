@@ -1,7 +1,9 @@
 import os
-import warnings
+from pathlib import Path
 from pydantic import field_validator
 from pydantic_settings import BaseSettings
+
+BASE_DIR = Path(__file__).resolve().parent.parent
 
 
 class Settings(BaseSettings):
@@ -17,6 +19,12 @@ class Settings(BaseSettings):
     jwt_expire_minutes: int = 1440
     cors_origins: str = "http://localhost:3000"
     sectors_api_key: str = ""
+    frontend_url: str = "http://localhost:3000"
+    smtp_host: str = ""
+    smtp_port: int = 587
+    smtp_user: str = ""
+    smtp_password: str = ""
+    smtp_from_email: str = "no-reply@bsjp.local"
 
     model_config = {"env_file": ".env", "extra": "ignore"}
 
@@ -30,6 +38,23 @@ class Settings(BaseSettings):
                 "The default value is not allowed."
             )
         return v
+
+    @field_validator("database_url")
+    @classmethod
+    def resolve_sqlite_path(cls, v: str) -> str:
+        # Resolve relative SQLite paths to an absolute path anchored at the
+        # backend directory so every process (regardless of CWD) reads/writes
+        # the SAME physical database. This prevents "Login can't recognize
+        # existing accounts" caused by the engine silently creating/using a
+        # different file when the server is launched from another directory.
+        if not v.startswith("sqlite"):
+            return v
+        # Format: sqlite+driver:///path
+        prefix, _, dbpath = v.partition(":///")
+        p = Path(dbpath)
+        if not p.is_absolute():
+            p = (BASE_DIR / p).resolve()
+        return f"{prefix}:///{p}"
 
 
 settings = Settings()
