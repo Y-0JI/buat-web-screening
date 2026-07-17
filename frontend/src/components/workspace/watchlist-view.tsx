@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { useWorkspace } from "@/lib/workspace-context";
 import { useAuth } from "@/lib/auth-context";
 import { AuthGuard } from "@/components/auth-guard";
-import { Card, Section, Skeleton, Badge } from "@/components/ui";
+import { Card, Skeleton } from "@/components/ui";
 import { fetchWatchlist, addWatchlist, removeWatchlist, type WatchlistItem } from "@/lib/api";
 
 export function WatchlistView() {

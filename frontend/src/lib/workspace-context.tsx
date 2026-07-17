@@ -197,7 +197,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       const params = new URLSearchParams(window.location.search);
       const v = params.get("view") as WorkspaceView | null;
       if (v && v !== state.view) {
-        dispatch({ type: "SET_VIEW", view: v, ticker: params.get("ticker"), tickers: params.get("tickers")?.split(",").filter(Boolean) });
+        dispatch({ type: "SET_VIEW", view: v, ticker: params.get("ticker") ?? undefined, tickers: params.get("tickers")?.split(",").filter(Boolean) });
       }
     }
     window.addEventListener("popstate", handlePopState);
@@ -230,7 +230,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const setDashboard = useCallback(() => {
-    dispatch({ type: "SET_VIEW", view: "dashboard", ticker: null, tickers: [] });
+    dispatch({ type: "SET_VIEW", view: "dashboard", ticker: undefined, tickers: [] });
   }, []);
 
   const setMode = useCallback((mode: "BSJP" | "BPJS") => {

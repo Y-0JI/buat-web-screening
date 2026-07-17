@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import type { RankingItem } from "@/lib/api";
-import { Card, VerdictBadge, Bar, Badge, Skeleton } from "@/components/ui";
+import { Card, VerdictBadge, Bar, Badge } from "@/components/ui";
 
 function RankingRow({ item, onExpand, expanded }: { item: RankingItem; onExpand: () => void; expanded: boolean }) {
   const priceColor =

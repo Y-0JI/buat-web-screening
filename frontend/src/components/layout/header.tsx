@@ -9,8 +9,8 @@ interface HeaderProps {
   onMenuToggle: () => void;
   onChatToggle: () => void;
   chatOpen: boolean;
-  mode: string;
-  onModeChange: (mode: string) => void;
+  mode: "BSJP" | "BPJS";
+  onModeChange: (mode: "BSJP" | "BPJS") => void;
 }
 
 export function Header({
