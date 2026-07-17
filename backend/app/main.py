@@ -1,6 +1,8 @@
 import logging
 import asyncio
+import subprocess
 from contextlib import asynccontextmanager
+from pathlib import Path
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.config import settings
@@ -35,6 +37,26 @@ async def lifespan(app: FastAPI):
         logger.info("Database tables ready")
     except Exception as e:
         logger.warning("Database tidak tersedia: %s", e)
+
+    # Jalankan migrasi Alembic agar struktur DB konsisten di semua environment
+    # (SQLite maupun database production). create_all di atas hanya membuat tabel
+    # yang belum ada; kolom tambahan pada tabel yang sudah terbentuk ditangani
+    # oleh migrasi resmi di folder alembic (berlaku untuk jenis DB manapun).
+    try:
+        backend_dir = Path(__file__).resolve().parent.parent
+        result = subprocess.run(
+            ["alembic", "upgrade", "head"],
+            cwd=str(backend_dir),
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if result.returncode == 0:
+            logger.info("Alembic migration: head terpasang")
+        else:
+            logger.warning("Alembic migration gagal: %s", result.stderr.strip())
+    except Exception as e:
+        logger.warning("Alembic migration tidak bisa dijalankan: %s", e)
 
     # Bootstrap: kalau tabel listed_tickers kosong, seed dari VALID_TICKERS
     # supaya screening & /api/research tetap pakai daftar lengkap walaupun

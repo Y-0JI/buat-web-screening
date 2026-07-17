@@ -57,24 +57,18 @@ function PickCard({ item, onResearch }: { item: RankingItem; onResearch: (t: str
 
 function WatchlistCard({ item, onRemove, onResearch }: { item: WatchlistItem; onRemove: (t: string) => void; onResearch: (t: string) => void }) {
   return (
-    <div
-      role="button"
-      tabIndex={0}
-      onClick={() => onResearch(item.ticker)}
-      onKeyDown={(e) => {
-        if (e.key === "Enter" || e.key === " ") {
-          e.preventDefault();
-          onResearch(item.ticker);
-        }
-      }}
-      className="flex items-center justify-between bg-zinc-900 border border-zinc-800 rounded-xl p-3 hover:bg-zinc-800/60 transition-colors cursor-pointer"
-    >
-      <div className="min-w-0">
+    <div className="flex items-center justify-between bg-zinc-900 border border-zinc-800 rounded-xl p-3 hover:bg-zinc-800/60 transition-colors">
+      <button
+        type="button"
+        onClick={() => onResearch(item.ticker)}
+        className="flex items-center min-w-0 text-left"
+      >
         <span className="text-zinc-100 font-semibold text-sm">{item.ticker}</span>
         {item.note && <span className="text-zinc-500 text-xs ml-2 truncate">{item.note}</span>}
-      </div>
+      </button>
       <button
-        onClick={(e) => { e.stopPropagation(); onRemove(item.ticker); }}
+        type="button"
+        onClick={() => onRemove(item.ticker)}
         className="text-zinc-500 hover:text-red-400 text-xs transition-colors ml-2 shrink-0"
       >
         Hapus

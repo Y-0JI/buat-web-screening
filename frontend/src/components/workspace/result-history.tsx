@@ -72,21 +72,25 @@ export function ResultHistory({ maxItems = 10 }: ResultHistoryProps) {
           content={`Hapus ${result.label}`}
           side="right"
         >
-          <div
-            onClick={() => handleResultClick(result)}
-            className="flex items-center gap-2 px-3 py-2 bg-zinc-900 border border-zinc-800 rounded-lg hover:bg-zinc-800/60 transition-colors cursor-pointer group"
-          >
-            <span className="text-zinc-500 shrink-0">{viewIcons[result.view]}</span>
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-1.5">
-                <span className="text-zinc-200 text-sm truncate font-medium">{result.label}</span>
-                <span className="text-[10px] text-zinc-500 flex-shrink-0">{viewLabels[result.view]}</span>
-              </div>
-              <div className="text-[10px] text-zinc-500 truncate">
-                {result.ticker ? `Ticker: ${result.ticker}` : result.tickers?.join(", ")}
-              </div>
-            </div>
+          <div className="group flex items-center gap-2">
             <button
+              type="button"
+              onClick={() => handleResultClick(result)}
+              className="flex items-center gap-2 flex-1 min-w-0 px-3 py-2 bg-zinc-900 border border-zinc-800 rounded-lg hover:bg-zinc-800/60 transition-colors text-left"
+            >
+              <span className="text-zinc-500 shrink-0">{viewIcons[result.view]}</span>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-1.5">
+                  <span className="text-zinc-200 text-sm truncate font-medium">{result.label}</span>
+                  <span className="text-[10px] text-zinc-500 flex-shrink-0">{viewLabels[result.view]}</span>
+                </div>
+                <div className="text-[10px] text-zinc-500 truncate">
+                  {result.ticker ? `Ticker: ${result.ticker}` : result.tickers?.join(", ")}
+                </div>
+              </div>
+            </button>
+            <button
+              type="button"
               onClick={(e) => handleRemove(e, result.id)}
               className="opacity-0 group-hover:opacity-100 text-zinc-500 hover:text-red-400 p-0.5 transition-opacity shrink-0"
               aria-label="Hapus dari riwayat"
