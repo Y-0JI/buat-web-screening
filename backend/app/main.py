@@ -1,6 +1,8 @@
 import logging
 import asyncio
+import subprocess
 from contextlib import asynccontextmanager
+from pathlib import Path
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.config import settings
@@ -36,31 +38,25 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning("Database tidak tersedia: %s", e)
 
-    # Migrasi ringan untuk kolom reset password pada database yang sudah ada.
-    # create_all di atas tidak menambahkan kolom baru ke tabel yang sudah terbentuk,
-    # sehingga kolom reset_token / reset_token_expiry ditambahkan secara eksplisit
-    # bila belum ada. Ini menjaga konsistensi antar alur autentikasi yang semua
-    # berbagi tabel users yang sama.
+    # Jalankan migrasi Alembic agar struktur DB konsisten di semua environment
+    # (SQLite maupun database production). create_all di atas hanya membuat tabel
+    # yang belum ada; kolom tambahan pada tabel yang sudah terbentuk ditangani
+    # oleh migrasi resmi di folder alembic (berlaku untuk jenis DB manapun).
     try:
-        from sqlalchemy import text
-
-        if settings.database_url.startswith("sqlite"):
-            async with engine.begin() as conn:
-                cols = (await conn.execute(text("PRAGMA table_info(users)"))).fetchall()
-                existing = {row[1] for row in cols}
-                if "reset_token" not in existing:
-                    await conn.execute(
-                        text("ALTER TABLE users ADD COLUMN reset_token VARCHAR(255)")
-                    )
-                if "reset_token_expiry" not in existing:
-                    await conn.execute(
-                        text(
-                            "ALTER TABLE users ADD COLUMN reset_token_expiry TIMESTAMP"
-                        )
-                    )
-            logger.info("Migrasi kolom reset password siap")
+        backend_dir = Path(__file__).resolve().parent.parent
+        result = subprocess.run(
+            ["alembic", "upgrade", "head"],
+            cwd=str(backend_dir),
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if result.returncode == 0:
+            logger.info("Alembic migration: head terpasang")
+        else:
+            logger.warning("Alembic migration gagal: %s", result.stderr.strip())
     except Exception as e:
-        logger.warning("Migrasi kolom reset password gagal: %s", e)
+        logger.warning("Alembic migration tidak bisa dijalankan: %s", e)
 
     # Bootstrap: kalau tabel listed_tickers kosong, seed dari VALID_TICKERS
     # supaya screening & /api/research tetap pakai daftar lengkap walaupun

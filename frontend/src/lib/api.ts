@@ -213,9 +213,8 @@ export interface ForgotPasswordResponse {
   detail: string;
 }
 
-// Endpoint backend /api/auth/forgot-password belum tersedia.
-// Fungsi ini disiapkan sebagai titik integrasi: cukup pastikan backend
-// mengembalikan { detail: string } agar alur reset password tersambung.
+// Endpoint backend /api/auth/forgot-password sudah tersedia dan mengembalikan
+// { detail: string } — alur reset password tersambung langsung ke backend.
 export async function authForgotPassword(
   email: string
 ): Promise<ForgotPasswordResponse> {

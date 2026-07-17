@@ -25,6 +25,7 @@ class Settings(BaseSettings):
     smtp_user: str = ""
     smtp_password: str = ""
     smtp_from_email: str = "no-reply@bsjp.local"
+    smtp_timeout: int = 10
 
     model_config = {"env_file": ".env", "extra": "ignore"}
 
