@@ -1,19 +1,13 @@
 import logging
 from fastapi import APIRouter
 from pydantic import BaseModel
-from app.data.fetcher import fetch_news
+from app.schemas.news import NewsItem
+from app.services import news_service
+from app.utils.errors import AppError
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/stock", tags=["stock"])
-
-
-class NewsItem(BaseModel):
-    title: str
-    publisher: str = ""
-    link: str = ""
-    published: str = ""
-    summary: str = ""
 
 
 class StockNewsResponse(BaseModel):
@@ -28,20 +22,16 @@ class StockNewsResponse(BaseModel):
 async def stock_news(ticker: str, limit: int = 10):
     clean = ticker.upper().strip()
     try:
-        result = await fetch_news(clean, limit=limit)
-        if result.get("error"):
-            return StockNewsResponse(
-                success=False,
-                ticker=clean,
-                error=result["error"],
-            )
-        items = [NewsItem(**item) for item in result.get("items", [])]
+        result = await news_service.get_news(clean, limit=limit)
         return StockNewsResponse(
             success=True,
             ticker=clean,
-            data=items,
-            fetched_at=result.get("fetched_at"),
+            data=result.items,
+            fetched_at=result.fetched_at,
         )
+    except AppError as e:
+        logger.warning("News error for %s: %s", clean, e.message)
+        return StockNewsResponse(success=False, ticker=clean, error=e.message)
     except Exception as e:
         logger.error("News error for %s: %s", clean, e, exc_info=True)
         return StockNewsResponse(

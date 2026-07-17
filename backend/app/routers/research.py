@@ -4,7 +4,13 @@ from typing import Optional
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.schemas.stock import ResearchRequest, ResearchResponse
-from app.data.fetcher import fetch_stock_data, fetch_company_info, fetch_news, fetch_fundamentals, verify_ticker
+from app.services import (
+    stock_service,
+    company_profile_service,
+    news_service,
+    fundamentals_service,
+)
+from app.utils.errors import AppError
 from app.scoring.funnel import calculate_score
 from app.ai.orchestrator import enhance_with_ai
 from app.database import get_session
@@ -42,13 +48,13 @@ async def research(
     if not ticker:
         return ResearchResponse(success=False, error="Tidak ada ticker saham ditemukan")
 
-    df, is_simulated = await fetch_stock_data(ticker)
+    df, is_simulated = await stock_service.get_price(ticker)
     if df is None or df.empty:
         return ResearchResponse(
             success=False, error=f"Data untuk {ticker} tidak ditemukan"
         )
 
-    info = await fetch_company_info(ticker)
+    info = await company_profile_service.get_profile(ticker)
     mode = (req.mode or "BSJP").upper()
     report = calculate_score(df, ticker, mode, is_simulated=is_simulated)
     report.company_name = info.get("name", ticker)
@@ -62,12 +68,15 @@ async def research(
         await session.commit()
 
     if not is_simulated:
-        news_result, fund_result = await asyncio.gather(
-            fetch_news(ticker, limit=10),
-            fetch_fundamentals(ticker),
-        )
-        report.news = news_result.get("items") if not news_result.get("error") else None
-        report.fundamentals = fund_result if not fund_result.get("error") else None
+        try:
+            news_data = await news_service.get_news(ticker, limit=10)
+            report.news = [item.model_dump() for item in news_data.items]
+        except AppError:
+            report.news = None
+        try:
+            report.fundamentals = await fundamentals_service.get_fundamentals(ticker)
+        except AppError:
+            report.fundamentals = None
 
     try:
         report = await enhance_with_ai(report)
@@ -81,7 +90,7 @@ async def research(
 async def resolve_tickers(req: dict):
     text_in = req.get("text", "")
     candidates = re.findall(r"\b([A-Z]{2,5})\b", text_in.upper())
-    results = await asyncio.gather(*[verify_ticker(c) for c in candidates], return_exceptions=True)
+    results = await asyncio.gather(*[stock_service.verify_ticker(c) for c in candidates], return_exceptions=True)
     valid = [c for c, ok in zip(candidates, results) if ok is True]
     try:
         from app.data.idx_stocks import VALID_TICKERS

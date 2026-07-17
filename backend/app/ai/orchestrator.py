@@ -2,7 +2,7 @@ import asyncio
 from google import genai
 from app.config import settings
 from app.schemas.stock import StockReport
-from app.data.fetcher import fetch_company_info
+from app.services import company_profile_service
 
 
 def _format_news_context(news: list[dict] | None) -> str | None:
@@ -65,7 +65,7 @@ async def enhance_with_ai(report: StockReport) -> StockReport:
         report.summary += " | AI reasoning tidak tersedia (GEMINI_API_KEY tidak diisi)"
         return report
 
-    info = await fetch_company_info(report.ticker)
+    info = await company_profile_service.get_profile(report.ticker)
     company = info.get("name", report.ticker)
 
     breakdown_text = "\n".join(
