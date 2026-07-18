@@ -16,9 +16,11 @@ from app.providers.base import (
     _flatten_columns,
     _generate_mock_data,
     _rate_limit,
+    _retry,
     _run_yf,
     resolve_ticker,
 )
+from app.providers.scheduler import request_scheduler
 from app.utils.errors import RateLimitError
 
 logger = logging.getLogger(__name__)
@@ -31,31 +33,21 @@ class StockPriceProvider:
         ticker_str = resolve_ticker(symbol)
 
         async def _do() -> tuple[pd.DataFrame | None, bool]:
+            await request_scheduler.acquire()
             await _rate_limit()
-            timeouts = [5] if fast_fail else [8, 5, 4]
-            yf_result: pd.DataFrame | None = None
-            for attempt, to in enumerate(timeouts):
-                try:
 
-                    def _sync() -> pd.DataFrame | None:
-                        import yfinance as yf
+            async def _attempt() -> pd.DataFrame | None:
+                def _sync() -> pd.DataFrame | None:
+                    import yfinance as yf
 
-                        df = yf.Ticker(ticker_str).history(period=settings.yfinance_period)
-                        if df is not None and not df.empty:
-                            return _flatten_columns(df)
-                        return None
+                    df = yf.Ticker(ticker_str).history(period=settings.yfinance_period)
+                    if df is not None and not df.empty:
+                        return _flatten_columns(df)
+                    return None
 
-                    yf_result = await _run_yf(_sync, to)
-                    if yf_result is not None:
-                        break
-                except RateLimitError:
-                    if not fast_fail and attempt < len(timeouts) - 1:
-                        await asyncio.sleep(10)
-                    continue
-                except Exception:
-                    if not fast_fail and attempt < len(timeouts) - 1:
-                        await asyncio.sleep(1)
-                    continue
+                return await _run_yf(_sync, 8)
+
+            yf_result = await _retry(_attempt, retries=1 if fast_fail else 3)
             if yf_result is not None:
                 return yf_result, False
             return _generate_mock_data(ticker_str, settings.yfinance_period), True

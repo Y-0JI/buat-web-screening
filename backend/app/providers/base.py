@@ -135,6 +135,29 @@ async def _run_yf(fn: Callable[[], Optional[pd.DataFrame]], timeout: int) -> Opt
         raise NetworkError(f"Gagal menghubungi Yahoo Finance: {e}") from e
 
 
+async def _retry(coro_factory, retries: int = 3, base_delay: float = 1.0) -> any:
+    """Jalankan coroutine dengan exponential backoff.
+
+    `coro_factory` dipanggil ulang tiap percobaan. `RateLimitError` di-backoff
+    lebih lama (5x) karena butuh jeda sebelum retry. Raise error terakhir bila
+    semua percobaan habis.
+    """
+    last_err: Optional[Exception] = None
+    for attempt in range(retries):
+        try:
+            return await coro_factory()
+        except RateLimitError as e:
+            last_err = e
+            if attempt < retries - 1:
+                await asyncio.sleep(base_delay * 5 * (2 ** attempt))
+        except Exception as e:  # noqa: BLE001 - semua kegagalan di-retry
+            last_err = e
+            if attempt < retries - 1:
+                await asyncio.sleep(base_delay * (2 ** attempt))
+    assert last_err is not None
+    raise last_err
+
+
 async def _dedup(key: str, coro_factory) -> any:
     """Jalankan coroutine dengan dedup berdasarkan key (request sedang berjalan)."""
     existing: Optional[asyncio.Future] = None
