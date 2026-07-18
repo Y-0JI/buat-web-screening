@@ -125,6 +125,11 @@ class IdxProvider:
             if not profiles:
                 raise ValueError("Profil kosong")
             p = profiles[0]
+            try:
+                screener = await self._get_screener()
+                mcap = (screener.get(clean) or {}).get("marketCapital")
+            except Exception:  # noqa: BLE001
+                mcap = None
             sec = await self._fetch_securities(clean)
             return {
                 "name": p.get("NamaEmiten") or f"PT {clean} Tbk",
@@ -144,6 +149,7 @@ class IdxProvider:
                 "phone": p.get("Telepon"),
                 "email": p.get("Email"),
                 "status": p.get("Status"),
+                "market_cap": mcap,
                 "shares_outstanding": sec.get("shares") if sec else None,
                 "source": "idx",
             }
