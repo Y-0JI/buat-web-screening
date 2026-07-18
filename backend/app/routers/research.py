@@ -24,7 +24,7 @@ async def extract_ticker(text: str) -> str | None:
     candidates = re.findall(r"\b([A-Z]{2,5})\b", text.upper())
     if not candidates:
         return None
-    results = await asyncio.gather(*[verify_ticker(c) for c in candidates], return_exceptions=True)
+    results = await asyncio.gather(*[stock_service.verify_ticker(c) for c in candidates], return_exceptions=True)
     for candidate, result in zip(candidates, results):
         if result is True:
             return candidate
