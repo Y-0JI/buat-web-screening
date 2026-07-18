@@ -25,6 +25,8 @@ from typing import Any, Dict, Optional, Tuple
 import pandas as pd
 from curl_cffi import requests as curl_requests
 
+from app.providers.scheduler import request_scheduler
+
 logger = logging.getLogger(__name__)
 
 _IDX_BASE = "https://www.idx.co.id"
@@ -74,6 +76,7 @@ async def _rate_limit() -> None:
 async def _fetch_json(url: str, timeout: int = 20) -> Any:
     """GET JSON dari IDX dengan retry exponential backoff (3x). Raise pada
     kegagalan total — pemanggil tiap method sudah menangkapnya jadi fallback."""
+    await request_scheduler.acquire()
     await _rate_limit()
 
     def _sync() -> Any:

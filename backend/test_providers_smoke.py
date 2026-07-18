@@ -1,16 +1,20 @@
 """Smoke test Data Layer (tanpa framework — jalan via `python3 test_providers_smoke.py`).
 
 Cek:
-1. Semua provider & repository terimport tanpa error.
-2. IdxProvider tetap aman saat jaringan gagal: tidak raise, kembalikan dict
+1. Semua provider & repository terimport tanpa error (termasuk wiring IDX).
+2. Repository profile/fundamental/price sudah terhubung ke IdxProvider.
+3. IdxProvider tetap aman saat jaringan gagal: tidak raise, kembalikan dict
    `error` (profile/fundamental) atau (None, False) (price).
+4. RssProvider terdaftar.
 """
 
 import asyncio
 import sys
 
 import app.providers as providers
+import app.repositories as repositories
 from app.providers.idx_provider import IdxProvider, _fetch_json
+from app.providers.rss_provider import RssProvider
 
 
 def test_imports():
@@ -20,8 +24,15 @@ def test_imports():
         "NewsProvider",
         "FundamentalsProvider",
         "IdxProvider",
+        "RssProvider",
     ):
         assert hasattr(providers, name), f"provider {name} tidak ter-export"
+
+
+def test_repository_wiring():
+    assert isinstance(repositories.company_profile_repository._idx_provider, IdxProvider)
+    assert isinstance(repositories.fundamentals_repository._idx_provider, IdxProvider)
+    assert isinstance(repositories.stock_price_repository._idx_provider, IdxProvider)
 
 
 async def _test_idx_fallback():
@@ -48,6 +59,7 @@ async def _test_idx_fallback():
 
 def main():
     test_imports()
+    test_repository_wiring()
     asyncio.run(_test_idx_fallback())
     print("OK: semua smoke test lolos")
 
