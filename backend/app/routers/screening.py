@@ -1,7 +1,6 @@
 import asyncio
 from datetime import datetime
 from typing import Optional
-import pandas as pd
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.schemas.stock import (
@@ -11,9 +10,7 @@ from app.schemas.stock import (
     RankingItem,
     Verdict,
 )
-from app.providers import MOCK_DATA
 from app.services import stock_service, company_profile_service
-from app.scoring.funnel import calculate_score
 from app.repositories.technical_cache import calculate_score_cached
 from app.scheduler import (
     get_cached_screening,
@@ -25,7 +22,6 @@ from app.database.models import User, ScanHistory
 from app.routers.auth import get_current_user_optional
 
 router = APIRouter(prefix="/api", tags=["screening"])
-_screen_semaphore = asyncio.Semaphore(5)
 
 
 @router.post("/compare", response_model=ComparisonResponse)
@@ -64,90 +60,39 @@ async def compare(
     return ComparisonResponse(success=True, data=reports)
 
 
-@router.get("/screen", response_model=ScreeningResponse)
-async def screen(
-    mode: str = "BSJP",
-    user: Optional[User] = Depends(get_current_user_optional),
-    session: AsyncSession = Depends(get_session),
-):
-    cached, cached_mode = await get_cached_screening(mode)
-    if cached and cached_mode == mode:
-        items = []
-        for i, r in enumerate(cached, 1):
-            items.append(RankingItem(
-                rank=i,
-                ticker=r["ticker"],
-                company_name=r.get("company_name"),
-                score=float(r["score"]),
-                verdict=Verdict(r["verdict"]),
-                confidence=float(r["confidence"]),
-                summary=r["summary"],
-                price=r.get("price"),
-                change_percent=r.get("change_percent"),
-                is_simulated=r.get("is_simulated", False),
-            ))
-        ts = await get_screening_timestamp(mode)
-        generated_at = (
-            datetime.fromtimestamp(ts).isoformat() if ts else None
-        )
-        return ScreeningResponse(
-            success=True, data=items, generated_at=generated_at
-        )
-
-    tickers = list(MOCK_DATA)
-
-    async def fetch_one(ticker: str):
-        async with _screen_semaphore:
-            return ticker, await stock_service.get_price(ticker)
-
-    tasks = [fetch_one(t) for t in tickers]
-    results_list = await asyncio.gather(*tasks)
-    results: dict[str, tuple[pd.DataFrame | None, bool]] = {}
-    for t, res in results_list:
-        results[t] = res
-
-    raw = []
-    for ticker in tickers:
-        item = results.get(ticker)
-        if item is None:
-            continue
-        df, is_simulated = item
-        if df is None or df.empty:
-            continue
-        info = await company_profile_service.get_profile(ticker)
-        report = calculate_score(df, ticker, mode, is_simulated=is_simulated)
-        report.company_name = info.get("name", ticker)
-        report.mode = mode
-        raw.append(report)
-
-        if user:
-            session.add(ScanHistory(
-                user_id=user.id, ticker=ticker.upper(),
-                score=report.score, verdict=report.verdict.value,
-            ))
-
-    if user:
-        await session.commit()
-
-    raw.sort(key=lambda x: x.score, reverse=True)
-    top = raw[:10]
-    items = []
-    for i, r in enumerate(top, 1):
-        items.append(RankingItem(
+def _to_ranking_items(rows: list[dict]) -> list[RankingItem]:
+    return [
+        RankingItem(
             rank=i,
-            ticker=r.ticker,
-            company_name=r.company_name,
-            score=r.score,
-            verdict=r.verdict,
-            confidence=r.confidence,
-            summary=r.summary,
-            price=r.price,
-            change_percent=r.change_percent,
-            is_simulated=r.is_simulated,
-        ))
+            ticker=r["ticker"],
+            company_name=r.get("company_name"),
+            score=float(r["score"]),
+            verdict=Verdict(r["verdict"]),
+            confidence=float(r["confidence"]),
+            summary=r["summary"],
+            price=r.get("price"),
+            change_percent=r.get("change_percent"),
+            is_simulated=r.get("is_simulated", False),
+        )
+        for i, r in enumerate(rows, 1)
+    ]
 
+
+@router.get("/screen", response_model=ScreeningResponse)
+async def screen(mode: str = "BSJP"):
+    cached, cached_mode = await get_cached_screening(mode)
+    if not (cached and cached_mode == mode):
+        # ponytail: cold miss men-scan SELURUH universe (get_listed_tickers)
+        # lewat run_batch_scan supaya universe & scoring konsisten dengan
+        # scheduler — bukan lagi subset MOCK_DATA. Normalnya scheduler sudah
+        # menghangatkan cache; jadikan background job bila latency cold-miss
+        # jadi masalah.
+        await run_batch_scan(mode)
+        cached, _ = await get_cached_screening(mode)
+
+    rows = cached or []
+    ts = await get_screening_timestamp(mode)
+    generated_at = datetime.fromtimestamp(ts).isoformat() if ts else None
     return ScreeningResponse(
-        success=True,
-        data=items,
-        generated_at=datetime.now().isoformat(),
+        success=True, data=_to_ranking_items(rows), generated_at=generated_at
     )
