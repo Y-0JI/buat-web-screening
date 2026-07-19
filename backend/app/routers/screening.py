@@ -14,6 +14,7 @@ from app.schemas.stock import (
 from app.providers import MOCK_DATA
 from app.services import stock_service, company_profile_service
 from app.scoring.funnel import calculate_score
+from app.repositories.technical_cache import calculate_score_cached
 from app.scheduler import (
     get_cached_screening,
     get_screening_timestamp,
@@ -38,7 +39,7 @@ async def compare(
         if df is None or df.empty:
             return None
         info = await company_profile_service.get_profile(ticker)
-        report = calculate_score(df, ticker, req.mode, is_simulated=is_simulated)
+        report = await calculate_score_cached(df, ticker, req.mode, is_simulated=is_simulated)
         report.company_name = info.get("name", ticker)
         report.render = "comparison"
         report.mode = req.mode
@@ -85,7 +86,7 @@ async def screen(
                 change_percent=r.get("change_percent"),
                 is_simulated=r.get("is_simulated", False),
             ))
-        ts = get_screening_timestamp(mode)
+        ts = await get_screening_timestamp(mode)
         generated_at = (
             datetime.fromtimestamp(ts).isoformat() if ts else None
         )

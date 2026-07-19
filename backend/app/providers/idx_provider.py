@@ -26,6 +26,7 @@ import pandas as pd
 from curl_cffi import requests as curl_requests
 
 from app.providers.scheduler import request_scheduler
+from app.cache.service import cache_service
 
 logger = logging.getLogger(__name__)
 
@@ -46,10 +47,8 @@ _RATE_LOCK = asyncio.Lock()
 _last_request_time: float = 0.0
 
 # Cache screener (semua emiten) supaya fetch_fundamentals tidak download ulang
-# 600KB tiap ticker. ponytail: cache in-memory global, refresh 6 jam.
-_SCREENER_TTL = 6 * 3600
-_screener_cache: Optional[Dict[str, Dict[str, Any]]] = None
-_screener_ts: float = 0.0
+# 600KB tiap ticker. Cache dikelola terpusat via `cache_service` (kategori
+# "screener", TTL dari cache.ttl) — provider tidak menyimpan cache sendiri.
 _screener_lock = asyncio.Lock()
 
 # Session curl_cffi diinisialisasi malas (pertama kali dipakai).
@@ -289,15 +288,14 @@ class IdxProvider:
             return None
 
     async def _get_screener(self) -> Dict[str, Dict[str, Any]]:
-        global _screener_cache, _screener_ts
         async with _screener_lock:
-            if _screener_cache is not None and (time.time() - _screener_ts) < _SCREENER_TTL:
-                return _screener_cache
+            cached = await cache_service.get("screener", "all")
+            if cached is not None:
+                return cached
             data = await _fetch_json(
                 f"{_IDX_BASE}/support/stock-screener/api/v1/stock-screener/get"
                 f"?Sector=&SubSector="
             )
             out = {r["stockCode"]: r for r in (data.get("results") or []) if r.get("stockCode")}
-            _screener_cache = out
-            _screener_ts = time.time()
+            await cache_service.set("screener", "all", out)
             return out

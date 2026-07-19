@@ -8,13 +8,12 @@ Tidak ada business logic.
 
 import pandas as pd
 
-from app.cache.memory_cache import MemoryCache
+from app.cache.service import cache_service
 from app.providers import IdxProvider, StockPriceProvider
 from app.config import settings
 
-_PRICE_TTL = 3600  # 1 jam
-_HISTORY_TTL = 3600
-_VERIFY_TTL = 300  # 5 menit
+_PRICE_CATEGORY = "price"
+_VERIFY_CATEGORY = "verify"
 
 _PERIOD_LIMITS = {
     "1mo": 22,
@@ -40,29 +39,26 @@ class StockPriceRepository:
     ):
         self._provider = provider or StockPriceProvider()
         self._idx_provider = idx_provider or IdxProvider()
-        self._price_cache = MemoryCache(default_ttl=_PRICE_TTL)
-        self._history_cache = MemoryCache(default_ttl=_HISTORY_TTL)
-        self._verify_cache = MemoryCache(default_ttl=_VERIFY_TTL)
 
     async def get_price(
         self, symbol: str, fast_fail: bool = False
     ) -> tuple[pd.DataFrame | None, bool]:
-        key = f"{symbol.upper().replace('.JK', '')}:{fast_fail}"
-        cached = await self._price_cache.get(key)
+        key = f"price:{symbol.upper().replace('.JK', '')}:{fast_fail}"
+        cached = await cache_service.get(_PRICE_CATEGORY, key)
         if cached is not None:
             return cached
         limit = _period_to_limit(settings.yfinance_period)
         df, sim = await self._idx_provider.fetch_daily_price(symbol, limit=limit)
         if df is None:
             df, sim = await self._provider.fetch_price(symbol, fast_fail=fast_fail)
-        await self._price_cache.set(key, (df, sim))
+        await cache_service.set(_PRICE_CATEGORY, key, (df, sim))
         return df, sim
 
     async def get_history(
         self, symbol: str, period: str = "6mo"
     ) -> tuple[pd.DataFrame | None, bool]:
-        key = f"{symbol.upper().replace('.JK', '')}:{period}"
-        cached = await self._history_cache.get(key)
+        key = f"history:{symbol.upper().replace('.JK', '')}:{period}"
+        cached = await cache_service.get(_PRICE_CATEGORY, key)
         if cached is not None:
             return cached
         df, sim = await self._idx_provider.fetch_daily_price(
@@ -70,14 +66,18 @@ class StockPriceRepository:
         )
         if df is None:
             df, sim = await self._provider.get_history(symbol, period=period)
-        await self._history_cache.set(key, (df, sim))
+        await cache_service.set(_PRICE_CATEGORY, key, (df, sim))
         return df, sim
 
     async def verify_ticker(self, candidate: str) -> bool:
         key = candidate.upper().replace(".JK", "")
-        cached = await self._verify_cache.get(key)
+        cached = await cache_service.get(_VERIFY_CATEGORY, key)
         if cached is not None:
             return cached
         result = await self._provider.verify_ticker(candidate)
-        await self._verify_cache.set(key, result)
+        await cache_service.set(_VERIFY_CATEGORY, key, result)
         return result
+
+    async def clear(self) -> None:
+        await cache_service.clear(_PRICE_CATEGORY)
+        await cache_service.clear(_VERIFY_CATEGORY)

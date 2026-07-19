@@ -10,10 +10,10 @@ supaya konsumen downstream (orchestrator) tidak putus. Field `beta` &
 `book_value` sengaja tidak dikanonikkan (di-drop dari scope 16.4.3).
 """
 
-from app.cache.memory_cache import MemoryCache
+from app.cache.service import cache_service
 from app.providers import FundamentalsProvider, IdxProvider
 
-_FUNDAMENTALS_TTL = 24 * 3600  # 24 jam (sesuai arah 16.4.5)
+_CATEGORY = "fundamental"
 
 # Daftar field kanonik 16.4.3 (urutan sesuai dokumen). Setiap output selalu
 # memuat semua key ini (None bila tidak ada sumber). Beta & Book Value tidak
@@ -92,15 +92,13 @@ class FundamentalsRepository:
         self,
         provider: FundamentalsProvider | None = None,
         idx_provider: IdxProvider | None = None,
-        cache: MemoryCache | None = None,
     ):
         self._provider = provider or FundamentalsProvider()
         self._idx_provider = idx_provider or IdxProvider()
-        self._cache = cache or MemoryCache(default_ttl=_FUNDAMENTALS_TTL)
 
     async def get_fundamentals(self, symbol: str) -> dict:
         key = symbol.upper().replace(".JK", "")
-        cached = await self._cache.get(key)
+        cached = await cache_service.get(_CATEGORY, key)
         if cached is not None:
             return cached
         idx = await self._idx_provider.fetch_fundamentals(symbol)
@@ -110,8 +108,11 @@ class FundamentalsRepository:
         merged = _merge_fundamentals(idx, yf)
         if idx.get("error"):
             merged["source"] = "yahoo"
-        await self._cache.set(key, merged)
+        await cache_service.set(_CATEGORY, key, merged)
         return merged
+
+    async def clear(self) -> None:
+        await cache_service.clear(_CATEGORY)
 
     async def _safe_yahoo(self, symbol: str) -> dict:
         try:

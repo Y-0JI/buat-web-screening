@@ -12,7 +12,7 @@ from app.services import (
     fundamentals_service,
 )
 from app.utils.errors import AppError
-from app.scoring.funnel import calculate_score
+from app.repositories.technical_cache import calculate_score_cached
 from app.ai.orchestrator import enhance_with_ai
 from app.database import get_session
 from app.database.models import User, ScanHistory
@@ -59,7 +59,7 @@ async def research(
 
     info = await company_profile_service.get_profile(ticker)
     mode = (req.mode or "BSJP").upper()
-    report = calculate_score(df, ticker, mode, is_simulated=is_simulated)
+    report = await calculate_score_cached(df, ticker, mode, is_simulated=is_simulated)
     report.company_name = info.get("name", ticker)
     report.mode = mode
 

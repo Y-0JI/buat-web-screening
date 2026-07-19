@@ -6,29 +6,24 @@ from app.services import stock_service, company_profile_service
 # from app.data.idx_stocks import VALID_TICKERS
 from app.data.ticker_sync import get_listed_tickers
 from app.scoring.funnel import calculate_score
+from app.cache.service import cache_service
 
 logger = logging.getLogger(__name__)
 
-_screen_cache: dict[str, dict] = {}
-_cache_ts: dict[str, float] = {}
-_CACHE_TTL = 7200
 _screen_semaphore = asyncio.Semaphore(10)
-_screen_cache_lock = asyncio.Lock()
 
 
 async def get_cached_screening(mode: str = "BSJP") -> tuple[list[dict] | None, str | None]:
-    async with _screen_cache_lock:
-        cached = _screen_cache.get(mode)
-        ts = _cache_ts.get(mode, 0)
-        if cached and time.time() - ts < _CACHE_TTL:
-            return cached.get("results"), mode
-        return None, None
+    cached = await cache_service.get("screen", mode)
+    if cached:
+        return cached.get("results"), mode
+    return None, None
 
 
-def get_screening_timestamp(mode: str = "BSJP") -> float | None:
-    ts = _cache_ts.get(mode, 0)
-    if ts > 0 and time.time() - ts < _CACHE_TTL:
-        return ts
+async def get_screening_timestamp(mode: str = "BSJP") -> float | None:
+    cached = await cache_service.get("screen", mode)
+    if cached:
+        return cached.get("ts")
     return None
 
 
@@ -65,10 +60,9 @@ async def run_batch_scan(mode: str = "BSJP"):
     results = [r for r in results_list if r is not None]
 
     results.sort(key=lambda x: x["score"], reverse=True)
-    global _screen_cache, _cache_ts
-    async with _screen_cache_lock:
-        _screen_cache[mode] = {"results": results, "mode": mode}
-        _cache_ts[mode] = time.time()
+    await cache_service.set(
+        "screen", mode, {"results": results, "mode": mode, "ts": time.time()}
+    )
     logger.info("Batch scan selesai: %d saham (mode=%s)", len(results), mode)
 
 
