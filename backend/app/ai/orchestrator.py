@@ -10,7 +10,7 @@ def _format_news_context(news: list[dict] | None) -> str | None:
         return None
     lines = []
     for n in news:
-        title = n.get("title", "")
+        title = n.get("headline") or n.get("title", "")
         publisher = n.get("publisher", "")
         summary = n.get("summary", "")
         if not title:

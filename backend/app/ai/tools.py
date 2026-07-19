@@ -66,8 +66,8 @@ def get_company_news(ticker: str, limit: int = 5) -> dict:
         limit: Jumlah berita yang diambil (default 5).
 
     Returns:
-        Dict berisi items [{title, publisher, link, published, summary}]
-        atau {"error": "..."} jika gagal.
+        Dict berisi items [{headline, publisher, published_date, summary, url,
+        related_ticker, source}] atau {"error": "..."} jika gagal.
     """
 
     async def _run() -> dict:
