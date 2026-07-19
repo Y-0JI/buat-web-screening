@@ -460,3 +460,101 @@ export async function resolveTickers(
   const res = await api.post<ResolveTickersResponse>("/api/resolve-tickers", { text });
   return res.data;
 }
+
+// --- Market Intelligence (16.5) ---
+export interface MIDividendItem {
+  type?: string | null;
+  fiscal_year?: string | null;
+  cash_dividend_per_share?: number | null;
+  cash_dividend_total?: number | null;
+  currency?: string | null;
+  bonus_shares_total?: number | null;
+  ratio?: string | null;
+  cum_date?: string | null;
+  ex_date?: string | null;
+  recording_date?: string | null;
+  payment_date?: string | null;
+}
+
+export interface MICorporateActionItem {
+  action_type: string;
+  code?: string | null;
+  name?: string | null;
+  ratio?: string | null;
+  date?: string | null;
+  recording_date?: string | null;
+  nominal_value_old?: number | null;
+  nominal_value_new?: number | null;
+  additional_listed_shares?: number | null;
+  exercise_price?: number | null;
+  shares_issued?: number | null;
+  fund_raised?: number | null;
+}
+
+export interface MIForeignFlowItem {
+  date?: string | null;
+  foreign_buy?: number | null;
+  foreign_sell?: number | null;
+  foreign_net?: number | null;
+  close?: number | null;
+  volume?: number | null;
+  value?: number | null;
+}
+
+export interface MIBrokerItem {
+  broker_code?: string | null;
+  broker_name?: string | null;
+  volume?: number | null;
+  value?: number | null;
+  frequency?: number | null;
+}
+
+export interface MIEarningsItem {
+  earnings_date?: string | null;
+  eps_estimate_avg?: number | null;
+  eps_estimate_high?: number | null;
+  eps_estimate_low?: number | null;
+  revenue_estimate_avg?: number | null;
+  revenue_estimate_high?: number | null;
+  revenue_estimate_low?: number | null;
+}
+
+export interface MIPriceTargetItem {
+  mean?: number | null;
+  high?: number | null;
+  low?: number | null;
+  currency?: string | null;
+  number_of_analysts?: number | null;
+}
+
+export interface MIRecommendationItem {
+  key?: string | null;
+  mean?: number | null;
+  number_of_analysts?: number | null;
+}
+
+export interface MarketIntelligenceData {
+  ticker: string;
+  dividend?: MIDividendItem | null;
+  corporate_actions?: MICorporateActionItem[];
+  foreign_flow?: MIForeignFlowItem | null;
+  broker_summary?: MIBrokerItem[];
+  earnings?: MIEarningsItem | null;
+  price_target?: MIPriceTargetItem | null;
+  recommendation?: MIRecommendationItem | null;
+}
+
+export interface MarketIntelligenceResponse {
+  success: boolean;
+  data?: MarketIntelligenceData;
+  error?: string;
+}
+
+export async function fetchMarketIntelligence(
+  ticker: string
+): Promise<MarketIntelligenceResponse> {
+  const res = await api.get<MarketIntelligenceResponse>(
+    `/api/market-intelligence/${ticker}`
+  );
+  return res.data;
+}
