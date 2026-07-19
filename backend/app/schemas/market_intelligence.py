@@ -69,6 +69,20 @@ class EarningsItem(BaseModel):
     revenue_estimate_low: Optional[float] = None
 
 
+class PriceTargetItem(BaseModel):
+    mean: Optional[float] = None
+    high: Optional[float] = None
+    low: Optional[float] = None
+    currency: Optional[str] = None
+    number_of_analysts: Optional[int] = None
+
+
+class RecommendationItem(BaseModel):
+    key: Optional[str] = None  # strong_buy / buy / hold / sell / strong_sell
+    mean: Optional[float] = None  # 1.0 (strong buy) .. 5.0 (strong sell)
+    number_of_analysts: Optional[int] = None
+
+
 class MarketIntelligenceData(BaseModel):
     ticker: str
     dividend: Optional[DividendItem] = None
@@ -76,9 +90,9 @@ class MarketIntelligenceData(BaseModel):
     foreign_flow: Optional[ForeignFlowItem] = None
     broker_summary: list[BrokerItem] = []
     earnings: Optional[EarningsItem] = None
-    # Belum ada sumber reliabel (lihat doc 16.5) — empty-safe, diisi di 16.5.3.
-    price_target: Optional[float] = None
-    recommendation: list[str] = []
+    # Sumber best-effort Yahoo (lihat doc 16.5) — empty-safe, banyak saham kosong.
+    price_target: Optional[PriceTargetItem] = None
+    recommendation: Optional[RecommendationItem] = None
 
 
 class MarketIntelligenceResponse(BaseModel):

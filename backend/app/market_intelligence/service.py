@@ -27,12 +27,13 @@ class MarketIntelligenceService:
         ticker = validate_ticker(symbol)
         result = models.empty_intelligence(ticker)
 
-        dividend, corp_actions, foreign_flow, broker, earnings = await asyncio.gather(
+        dividend, corp_actions, foreign_flow, broker, earnings, analyst = await asyncio.gather(
             self._repo.get_dividend(ticker),
             self._repo.get_corporate_actions(ticker),
             self._repo.get_foreign_flow(ticker),
             self._repo.get_broker_summary(),
             self._repo.get_earnings(ticker),
+            self._repo.get_analyst(ticker),
             return_exceptions=True,
         )
 
@@ -41,6 +42,9 @@ class MarketIntelligenceService:
         result["foreign_flow"] = self._safe(foreign_flow, None, "foreign_flow", ticker)
         result["broker_summary"] = self._safe(broker, [], "broker_summary", ticker)
         result["earnings"] = self._safe(earnings, None, "earnings", ticker)
+        analyst = self._safe(analyst, {}, "analyst", ticker) or {}
+        result["price_target"] = analyst.get("price_target")
+        result["recommendation"] = analyst.get("recommendation")
         return result
 
     @staticmethod

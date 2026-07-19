@@ -51,6 +51,7 @@ async def _measure_one(ticker: str):
         key = ticker.upper().replace(".JK", "")
         await cache_service.delete("dividend", key)
         await cache_service.delete("earnings", key)
+        await cache_service.delete("price_target", key)
 
         t0 = time.perf_counter()
         data = await svc.get_intelligence(ticker)
@@ -67,7 +68,7 @@ async def _measure_one(ticker: str):
             "broker_summary": len(data["broker_summary"]) > 0,
             "earnings": data["earnings"] is not None,
             "price_target": data["price_target"] is not None,
-            "recommendation": len(data["recommendation"]) > 0,
+            "recommendation": data["recommendation"] is not None,
         }
     except Exception as e:  # noqa: BLE001
         rec["err"] = f"{type(e).__name__}: {e}"

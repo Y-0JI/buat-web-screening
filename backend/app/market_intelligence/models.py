@@ -134,6 +134,47 @@ def normalize_earnings(cal: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     }
 
 
+def _int(v: Any) -> Optional[int]:
+    n = _num(v)
+    return int(n) if n is not None else None
+
+
+def normalize_price_target(info: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    """Yahoo `info` → price target kanonik. None bila tak ada target sama sekali."""
+    if not info:
+        return None
+    mean = _num(info.get("targetMeanPrice"))
+    high = _num(info.get("targetHighPrice"))
+    low = _num(info.get("targetLowPrice"))
+    if mean is None and high is None and low is None:
+        return None
+    return {
+        "mean": mean,
+        "high": high,
+        "low": low,
+        "currency": _str(info.get("currency")),
+        "number_of_analysts": _int(info.get("numberOfAnalystOpinions")),
+    }
+
+
+def normalize_recommendation(info: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    """Yahoo `info` → recommendation kanonik. None bila tak ada rekomendasi.
+
+    `key`: strong_buy/buy/hold/sell/strong_sell. `mean`: 1.0 (strong buy) .. 5.0
+    (strong sell). Yahoo memakai "none" saat tak ada cakupan analis.
+    """
+    if not info:
+        return None
+    key = _str(info.get("recommendationKey"))
+    if key and key.lower() == "none":
+        key = None
+    mean = _num(info.get("recommendationMean"))
+    n = _int(info.get("numberOfAnalystOpinions"))
+    if key is None and mean is None:
+        return None
+    return {"key": key, "mean": mean, "number_of_analysts": n}
+
+
 def empty_intelligence(ticker: str) -> Dict[str, Any]:
     """Struktur default Market Intelligence — semua kosong tapi valid."""
     return {
@@ -144,7 +185,7 @@ def empty_intelligence(ticker: str) -> Dict[str, Any]:
         "broker_summary": [],
         "earnings": None,
         "price_target": None,
-        "recommendation": [],
+        "recommendation": None,
     }
 
 

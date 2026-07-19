@@ -77,6 +77,12 @@ class _FakeProvider:
                              "Earnings Low": 110.0, "Revenue Average": 1e12,
                              "Revenue High": 1.1e12, "Revenue Low": 0.9e12}}
 
+    async def fetch_analyst(self, symbol):
+        return {"info": {"targetMeanPrice": 5000.0, "targetHighPrice": 6000.0,
+                         "targetLowPrice": 4000.0, "currency": "IDR",
+                         "numberOfAnalystOpinions": 12,
+                         "recommendationKey": "buy", "recommendationMean": 1.9}}
+
 
 class _BoomProvider(_FakeProvider):
     """Sebagian sumber melempar — untuk uji graceful."""
@@ -103,7 +109,8 @@ async def _test_service_structure():
     assert r["foreign_flow"]["foreign_net"] == 300.0
     assert r["broker_summary"] and r["broker_summary"][0]["broker_code"] == "AA"
     assert r["earnings"]["earnings_date"] == "2025-07-22"
-    assert r["price_target"] is None and r["recommendation"] == []
+    assert r["price_target"] and r["price_target"]["mean"] == 5000.0
+    assert r["recommendation"] and r["recommendation"]["key"] == "buy"
 
 
 async def _test_service_graceful():
@@ -190,7 +197,7 @@ def test_empty_intelligence_shape():
     assert e["ticker"] == "XYZ"
     assert e["dividend"] is None and e["foreign_flow"] is None
     assert e["corporate_actions"] == [] and e["broker_summary"] == []
-    assert e["price_target"] is None and e["recommendation"] == []
+    assert e["price_target"] is None and e["recommendation"] is None
 
 
 def test_normalizers_defensive():
@@ -201,6 +208,11 @@ def test_normalizers_defensive():
     assert models.normalize_foreign_flow(None, "2025-01-01") is None
     assert models.normalize_earnings({}) is None
     assert models.normalize_earnings({"Earnings Date": []}) is None
+    assert models.normalize_price_target({}) is None
+    assert models.normalize_price_target({"targetMeanPrice": 100.0})["mean"] == 100.0
+    assert models.normalize_recommendation({}) is None
+    assert models.normalize_recommendation({"recommendationKey": "none"}) is None
+    assert models.normalize_recommendation({"recommendationKey": "buy"})["key"] == "buy"
 
 
 # ------------------------------------------------------ await coverage guard
@@ -213,6 +225,7 @@ def test_await_coverage():
         await repo.get_foreign_flow("TEST")
         await repo.get_broker_summary()
         await repo.get_earnings("AW")
+        await repo.get_analyst("AW")
         await repo.clear()
 
     with warnings.catch_warnings():
