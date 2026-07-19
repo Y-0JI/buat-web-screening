@@ -1,7 +1,7 @@
-"""Implementasi CacheBackend berbasis in-memory dengan TTL per-entry.
+"""Cache in-memory dengan TTL per-entry.
 
 Aman untuk digunakan dalam event loop asyncio (dilindungi `asyncio.Lock`).
-Setiap entry menyimpan waktu kedaluwarsa sendiri sehingga satu backend bisa
+Setiap entry menyimpan waktu kedaluwarsa sendiri sehingga satu instance bisa
 menampung banyak kategori dengan TTL berbeda (dipakai oleh `CacheService`).
 """
 
@@ -9,10 +9,7 @@ import asyncio
 import time
 from typing import Any, Optional
 
-from app.cache import CacheBackend
-
-
-class MemoryCache(CacheBackend):
+class MemoryCache:
     def __init__(self, default_ttl: int = 3600) -> None:
         self._default_ttl = default_ttl
         self._store: dict[str, tuple[float, Any]] = {}

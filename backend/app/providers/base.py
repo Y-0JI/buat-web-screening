@@ -9,12 +9,10 @@ disediakan sebagai helper bersama agar setiap provider konsisten.
 import asyncio
 import logging
 import random
-import time
 from datetime import datetime, timedelta
 from typing import Callable, Optional
 
 import pandas as pd
-from app.config import settings
 from app.utils.errors import (
     NetworkError,
     ProviderTimeoutError,
@@ -23,10 +21,6 @@ from app.utils.errors import (
 from yfinance.exceptions import YFRateLimitError
 
 logger = logging.getLogger(__name__)
-
-_MIN_REQUEST_INTERVAL = 1.0
-_rate_lock = asyncio.Lock()
-_last_request_time: float = 0.0
 
 # Dedup request yang sedang berjalan agar fetch paralel untuk ticker sama
 # tidak memanggil yfinance berulang kali.
@@ -107,15 +101,6 @@ def _generate_mock_data(symbol: str, period: str = "6mo") -> pd.DataFrame:
     df = pd.DataFrame(data)
     df.set_index("Date", inplace=True)
     return df
-
-
-async def _rate_limit() -> None:
-    global _last_request_time
-    async with _rate_lock:
-        elapsed = time.time() - _last_request_time
-        if elapsed < _MIN_REQUEST_INTERVAL:
-            await asyncio.sleep(_MIN_REQUEST_INTERVAL - elapsed)
-        _last_request_time = time.time()
 
 
 async def _run_yf(fn: Callable[[], Optional[pd.DataFrame]], timeout: int) -> Optional[pd.DataFrame]:

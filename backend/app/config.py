@@ -12,7 +12,9 @@ class Settings(BaseSettings):
     database_url: str = "sqlite+aiosqlite:///./bsjp.db"
     yfinance_period: str = "6mo"
     cache_ttl_seconds: int = 3600
-    rate_limit_per_minute: int = 120
+    # 60/menit menyamai throttle efektif lama (interval 1.0s per request) setelah
+    # rate limiter ganda disatukan ke RequestScheduler — jaga agar tidak lebih cepat.
+    rate_limit_per_minute: int = 60
     scheduler_enabled: bool = True
     jwt_secret: str = "change-me-in-production"
     jwt_algorithm: str = "HS256"

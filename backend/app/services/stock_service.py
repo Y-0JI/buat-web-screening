@@ -7,10 +7,14 @@ lebih lanjut oleh scoring/scheduler. Tidak membentuk response API.
 
 import pandas as pd
 
-from app.services.base import BaseService, validate_ticker
+from app.repositories import stock_price_repository
+from app.services.base import validate_ticker
 
 
-class StockService(BaseService):
+class StockService:
+    def __init__(self, stock_repo=stock_price_repository):
+        self._stock_repo = stock_repo
+
     async def get_price(
         self, symbol: str, fast_fail: bool = False
     ) -> tuple[pd.DataFrame | None, bool]:

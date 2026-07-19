@@ -11,7 +11,8 @@ import logging
 from datetime import datetime
 from typing import Any, Dict
 
-from app.providers.base import _rate_limit, resolve_ticker
+from app.providers.base import resolve_ticker
+from app.providers.scheduler import request_scheduler
 
 logger = logging.getLogger(__name__)
 
@@ -19,7 +20,7 @@ logger = logging.getLogger(__name__)
 class FundamentalsProvider:
     async def fetch_fundamentals(self, symbol: str) -> Dict[str, Any]:
         clean = symbol.upper().replace(".JK", "")
-        await _rate_limit()
+        await request_scheduler.acquire()
 
         def _sync() -> Dict[str, Any]:
             try:

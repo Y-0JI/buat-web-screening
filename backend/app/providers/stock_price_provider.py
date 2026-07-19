@@ -6,7 +6,6 @@ jalan saat Yahoo Finance tidak responsif — flag `is_simulated` selalu dikembal
 agar caller tahu data bukan live.
 """
 
-import asyncio
 import logging
 
 import pandas as pd
@@ -15,13 +14,11 @@ from app.providers.base import (
     _dedup,
     _flatten_columns,
     _generate_mock_data,
-    _rate_limit,
     _retry,
     _run_yf,
     resolve_ticker,
 )
 from app.providers.scheduler import request_scheduler
-from app.utils.errors import RateLimitError
 
 logger = logging.getLogger(__name__)
 
@@ -34,7 +31,6 @@ class StockPriceProvider:
 
         async def _do() -> tuple[pd.DataFrame | None, bool]:
             await request_scheduler.acquire()
-            await _rate_limit()
 
             async def _attempt() -> pd.DataFrame | None:
                 def _sync() -> pd.DataFrame | None:
@@ -62,7 +58,7 @@ class StockPriceProvider:
         async def _do() -> tuple[pd.DataFrame | None, bool]:
             if period == settings.yfinance_period:
                 return await self.fetch_price(symbol)
-            await _rate_limit()
+            await request_scheduler.acquire()
 
             def _sync() -> pd.DataFrame | None:
                 import yfinance as yf
@@ -87,7 +83,7 @@ class StockPriceProvider:
         ticker_str = resolve_ticker(candidate)
 
         async def _do() -> bool:
-            await _rate_limit()
+            await request_scheduler.acquire()
 
             def _sync() -> pd.DataFrame | None:
                 import yfinance as yf

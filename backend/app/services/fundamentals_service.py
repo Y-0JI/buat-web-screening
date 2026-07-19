@@ -6,11 +6,15 @@ domain object. Router yang membungkus hasil ke `APIResponse`.
 
 from typing import Any, Dict
 
-from app.services.base import BaseService, validate_ticker
+from app.repositories import fundamentals_repository
+from app.services.base import validate_ticker
 from app.utils.errors import DataNotFoundError
 
 
-class FundamentalsService(BaseService):
+class FundamentalsService:
+    def __init__(self, fundamentals_repo=fundamentals_repository):
+        self._fundamentals_repo = fundamentals_repo
+
     async def get_fundamentals(self, symbol: str) -> Dict[str, Any]:
         clean = validate_ticker(symbol)
         result = await self._fundamentals_repo.get_fundamentals(clean)
