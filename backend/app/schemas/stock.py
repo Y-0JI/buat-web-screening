@@ -45,6 +45,7 @@ class StockReport(BaseModel):
     verdict: Verdict
     confidence: float = Field(ge=0, le=100)
     summary: str
+    ai_available: bool = True
     indicators: IndicatorData = IndicatorData()
     score_breakdown: list[ScoreBreakdown] = []
     stop_loss: Optional[float] = None

@@ -113,7 +113,8 @@ RINGKASAN: <ringkasan>"""
             elif in_summary and line.strip():
                 summary_parts.append(line.strip())
         summary = " ".join(summary_parts) if summary_parts else raw
-    except Exception:
+    except Exception as e:
+        logger.error("Market insight AI gagal: %s", e, exc_info=True)
         sentiment = "neutral"
         summary = "Ringkasan AI tidak tersedia saat ini."
 

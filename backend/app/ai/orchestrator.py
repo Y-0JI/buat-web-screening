@@ -1,8 +1,11 @@
 import asyncio
+import logging
 from google import genai
 from app.config import settings
 from app.schemas.stock import StockReport
 from app.services import company_profile_service
+
+logger = logging.getLogger(__name__)
 
 
 def _format_news_context(news: list[dict] | None) -> str | None:
@@ -10,7 +13,7 @@ def _format_news_context(news: list[dict] | None) -> str | None:
         return None
     lines = []
     for n in news:
-        title = n.get("title", "")
+        title = n.get("headline") or n.get("title", "")
         publisher = n.get("publisher", "")
         summary = n.get("summary", "")
         if not title:
@@ -62,7 +65,8 @@ def _format_fundamentals_context(fundamentals: dict | None) -> str | None:
 
 async def enhance_with_ai(report: StockReport) -> StockReport:
     if not settings.gemini_api_key:
-        report.summary += " | AI reasoning tidak tersedia (GEMINI_API_KEY tidak diisi)"
+        report.ai_available = False
+        report.summary += " | Insight AI belum dikonfigurasi."
         return report
 
     info = await company_profile_service.get_profile(report.ticker)
@@ -116,8 +120,12 @@ Jangan buat rekomendasi investasi. Akhiri dengan disclaimer bahwa ini alat riset
         )
         report.summary = ai_summary
     except asyncio.TimeoutError:
-        report.summary += " | AI enhancement timeout"
+        logger.error("AI enhancement timeout untuk %s", report.ticker)
+        report.ai_available = False
+        report.summary += " | Insight AI timeout, silakan coba lagi."
     except Exception as e:
-        report.summary += f" | Gagal memanggil AI: {str(e)}"
+        logger.error("AI enhancement gagal untuk %s: %s", report.ticker, e, exc_info=True)
+        report.ai_available = False
+        report.summary += " | Insight AI sedang tidak tersedia, silakan coba beberapa saat lagi."
 
     return report

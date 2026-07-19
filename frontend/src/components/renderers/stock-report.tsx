@@ -5,6 +5,7 @@ import {
   addWatchlist,
   fetchStockHistory,
   fetchStockNews,
+  type NewsItem,
   type OHLCVPoint,
   type StockReport,
 } from "@/lib/api";
@@ -43,7 +44,7 @@ function IndicatorGrid({ data }: { data: StockReport["indicators"] }) {
 }
 
 function NewsSection({ ticker }: { ticker: string }) {
-  const [news, setNews] = useState<Array<{ title: string; publisher: string; link: string; published: string }>>([]);
+  const [news, setNews] = useState<NewsItem[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -52,9 +53,7 @@ function NewsSection({ ticker }: { ticker: string }) {
       try {
         const res = await fetchStockNews(ticker, 5);
         if (!cancelled && res.success && res.data) {
-          setNews(res.data.map((n: { title: string; publisher: string; link: string; published: string }) => ({
-            title: n.title, publisher: n.publisher, link: n.link, published: n.published,
-          })));
+          setNews(res.data);
         }
       } catch {
         // silent
@@ -83,13 +82,13 @@ function NewsSection({ ticker }: { ticker: string }) {
       {news.map((n, i) => (
         <a
           key={i}
-          href={n.link}
+          href={n.url}
           target="_blank"
           rel="noopener noreferrer"
           className="block p-3 bg-zinc-800 rounded-lg hover:bg-zinc-700 transition-colors"
         >
-          <div className="text-sm text-zinc-200 font-medium leading-snug">{n.title}</div>
-          <div className="text-xs text-zinc-500 mt-1">{n.publisher} · {n.published}</div>
+          <div className="text-sm text-zinc-200 font-medium leading-snug">{n.headline}</div>
+          <div className="text-xs text-zinc-500 mt-1">{n.publisher} · {n.source} · {n.published_date}</div>
         </a>
       ))}
     </div>
@@ -218,6 +217,11 @@ export function StockReportCard({ data }: { data: StockReport }) {
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
           </svg>
           <h3 className="text-sm font-semibold text-zinc-300">Insight AI</h3>
+          {data.ai_available === false && (
+            <span className="text-[10px] font-medium text-amber-400 bg-amber-500/10 border border-amber-500/30 px-1.5 py-0.5 rounded">
+              AI sedang tidak tersedia — coba lagi nanti
+            </span>
+          )}
         </div>
         <p className="text-sm text-zinc-300 leading-relaxed">{data.summary}</p>
       </Card>

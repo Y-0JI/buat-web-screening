@@ -1,8 +1,11 @@
 import asyncio
+import logging
 from google import genai
 from google.genai import types
 from app.config import settings
 import re
+
+logger = logging.getLogger(__name__)
 
 
 VISION_PROMPT = """Kamu adalah analis teknikal saham Indonesia.
@@ -106,9 +109,10 @@ async def analyze_chart_image(image_bytes: bytes, filename: str) -> dict:
         parsed["file_name"] = filename
         return parsed
     except Exception as e:
+        logger.error("Vision AI gagal untuk %s: %s", filename, e, exc_info=True)
         return {
             "file_name": filename,
-            "analysis_text": f"Gagal menganalisis gambar: {str(e)}",
+            "analysis_text": "Gagal menganalisis gambar karena layanan AI sedang tidak tersedia. Coba lagi nanti.",
             "patterns_detected": [],
             "trend": None,
             "support_level": None,

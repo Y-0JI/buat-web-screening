@@ -15,6 +15,7 @@ export interface StockReport {
   verdict: "BUY" | "HOLD" | "SELL" | "AVOID";
   confidence: number;
   summary: string;
+  ai_available?: boolean;
   mode?: string;
   is_simulated?: boolean;
   indicators: {
@@ -320,11 +321,13 @@ export async function fetchStockHistory(
 }
 
 export interface NewsItem {
-  title: string;
+  headline: string;
   publisher: string;
-  link: string;
-  published: string;
+  published_date: string;
   summary?: string;
+  url: string;
+  related_ticker: string;
+  source: string;
 }
 
 export interface StockNewsResponse {

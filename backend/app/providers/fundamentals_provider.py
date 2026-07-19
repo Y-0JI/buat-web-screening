@@ -1,7 +1,8 @@
 """Provider Fundamental dari Yahoo Finance.
 
 Mengembalikan dict mentah dengan field market_cap, pe, pb, dividend_yield,
-beta, sector, industry, description, dll. Provider tidak memetakan ke schema
+sector, industry, description, dll (daftar kanonik 16.4.3; beta & book_value
+sengaja tidak diambil — di-drop dari scope). Provider tidak memetakan ke schema
 response — itu tugas Service.
 """
 
@@ -41,15 +42,28 @@ class FundamentalsProvider:
 
                 return {
                     "market_cap": fast.get("market_cap") or info.get("marketCap"),
+                    "enterprise_value": info.get("enterpriseValue"),
                     "previous_close": fast.get("previous_close") or info.get("previousClose"),
                     "last_price": fast.get("last_price"),
                     "shares_outstanding": fast.get("shares_outstanding") or info.get("sharesOutstanding"),
                     "pe": info.get("trailingPE") or info.get("forwardPE"),
                     "forward_pe": info.get("forwardPE"),
                     "pb": info.get("priceToBook"),
+                    "peg": info.get("pegRatio") or info.get("trailingPegRatio"),
+                    "eps": info.get("trailingEps") or info.get("forwardEps"),
+                    "roe": info.get("returnOnEquity"),
+                    "roa": info.get("returnOnAssets"),
+                    "revenue": info.get("totalRevenue"),
+                    "revenue_growth": info.get("revenueGrowth"),
+                    "net_income": info.get("netIncomeToCommon"),
+                    "gross_margin": info.get("grossMargins"),
+                    "operating_margin": info.get("operatingMargins"),
+                    "debt_to_equity": info.get("debtToEquity"),
+                    "current_ratio": info.get("currentRatio"),
+                    "free_cash_flow": info.get("freeCashflow"),
                     "dividend_yield": info.get("dividendYield"),
+                    "dividend_payout_ratio": info.get("payoutRatio"),
                     "trailing_annual_dividend_yield": info.get("trailingAnnualDividendYield"),
-                    "beta": info.get("beta"),
                     "fifty_two_week_high": info.get("fiftyTwoWeekHigh"),
                     "fifty_two_week_low": info.get("fiftyTwoWeekLow"),
                     "fifty_day_average": info.get("fiftyDayAverage"),

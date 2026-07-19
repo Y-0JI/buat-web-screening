@@ -6,11 +6,13 @@ from pydantic import BaseModel
 
 
 class NewsItem(BaseModel):
-    title: str
+    headline: str
     publisher: str = ""
-    link: str = ""
-    published: str = ""
+    published_date: str = ""
     summary: str = ""
+    url: str = ""
+    related_ticker: str = ""
+    source: str = ""
 
 
 class NewsListData(BaseModel):

@@ -188,6 +188,49 @@ class IdxProvider:
             logger.warning("%s | idx fetch_fundamentals error: %s", clean, e)
             return {"error": f"Gagal mengambil fundamental IDX: {e}", "source": "idx", "fetched_at": None}
 
+    async def fetch_company_announcements(self, symbol: str, limit: int = 10) -> Dict[str, Any]:
+        """Pengumuman/berita resmi IDX (primary source News Engine, raw only).
+
+        Endpoint: GetProfileAnnouncement. Struktur respons (diverifikasi live):
+        `Replies[].{pengumuman:{JudulPengumuman,TglPengumuman,PerihalPengumuman},
+        attachments:[{FullSavePath}]}`. URL item = base + FullSavePath (backslash
+        → slash). Semua kegagalan aman: return dict ber-key `error`.
+        """
+        clean = symbol.upper().replace(".JK", "")
+        try:
+            await _ensure_session_warm()
+            data = await _fetch_json(
+                f"{_IDX_BASE}/primary/ListedCompany/GetProfileAnnouncement"
+                f"?KodeEmiten={clean}&indexFrom=0&pageSize={limit}&lang=id&keyword="
+            )
+            replies = data.get("Replies") or []
+            items = []
+            for rep in replies:
+                p = rep.get("pengumuman") or {}
+                atts = rep.get("attachments") or []
+                url = ""
+                if atts:
+                    path = (atts[0].get("FullSavePath") or "").replace("\\", "/")
+                    if path:
+                        url = f"{_IDX_BASE}{path if path.startswith('/') else '/' + path}"
+                headline = (p.get("JudulPengumuman") or "").strip()
+                if not headline:
+                    continue
+                items.append(
+                    {
+                        "headline": headline,
+                        "publisher": "IDX",
+                        "published_date": p.get("TglPengumuman") or "",
+                        "summary": (p.get("PerihalPengumuman") or "").strip(),
+                        "url": url,
+                        "related_ticker": clean,
+                    }
+                )
+            return {"items": items, "fetched_at": datetime.now().isoformat()}
+        except Exception as e:
+            logger.warning("%s | idx fetch_announcements error: %s", clean, e)
+            return {"error": f"Gagal mengambil pengumuman IDX: {e}", "fetched_at": None}
+
     async def fetch_daily_price(
         self, symbol: str, limit: int = 250
     ) -> Tuple[Optional[pd.DataFrame], bool]:
