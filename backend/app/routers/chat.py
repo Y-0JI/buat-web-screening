@@ -148,4 +148,4 @@ async def chat(req: ChatRequest):
         return {"success": True, "reply": reply}
     except Exception as e:
         logger.error("Chat error: %s", e, exc_info=True)
-        return {"success": False, "error": str(e)}
+        return {"success": False, "error": "Layanan AI sedang tidak tersedia. Coba kirim pesan lagi nanti."}

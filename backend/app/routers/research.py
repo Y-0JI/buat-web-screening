@@ -1,4 +1,5 @@
 import asyncio
+import logging
 import re
 from typing import Optional
 from fastapi import APIRouter, Depends
@@ -16,6 +17,8 @@ from app.ai.orchestrator import enhance_with_ai
 from app.database import get_session
 from app.database.models import User, ScanHistory
 from app.routers.auth import get_current_user_optional
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api", tags=["research"])
 
@@ -81,7 +84,9 @@ async def research(
     try:
         report = await enhance_with_ai(report)
     except Exception as e:
-        report.summary += f" | AI enhancement gagal: {str(e)}"
+        logger.error("AI enhancement gagal untuk %s: %s", ticker, e, exc_info=True)
+        report.ai_available = False
+        report.summary += " | Insight AI sedang tidak tersedia, silakan coba lagi."
 
     return ResearchResponse(success=True, data=report)
 

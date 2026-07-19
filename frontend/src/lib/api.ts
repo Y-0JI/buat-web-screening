@@ -15,6 +15,7 @@ export interface StockReport {
   verdict: "BUY" | "HOLD" | "SELL" | "AVOID";
   confidence: number;
   summary: string;
+  ai_available?: boolean;
   mode?: string;
   is_simulated?: boolean;
   indicators: {
