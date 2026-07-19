@@ -5,6 +5,8 @@ import { useWorkspace } from "@/lib/workspace-context";
 import { Card, Skeleton } from "@/components/ui";
 import { StockReportCard } from "@/components/renderers/stock-report";
 import { CompanyProfileCard } from "@/components/renderers/company-profile";
+import { FundamentalCard } from "@/components/renderers/fundamental-card";
+import { QuickStats } from "@/components/renderers/quick-stats";
 import { researchStock, fetchCompanyProfile, type CompanyProfile } from "@/lib/api";
 
 export function ResearchView() {
@@ -98,6 +100,8 @@ export function ResearchView() {
       ) : report ? (
         <>
           {profile && <CompanyProfileCard data={profile} />}
+          {report.fundamentals && <QuickStats data={report.fundamentals} />}
+          {report.fundamentals && <FundamentalCard data={report.fundamentals} />}
           <StockReportCard data={report} />
         </>
       ) : tickerInput.trim() ? (
