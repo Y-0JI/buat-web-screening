@@ -36,7 +36,38 @@ export interface StockReport {
   }>;
   stop_loss?: number;
   risk_percent?: number;
+  fundamentals?: Fundamentals | null;
   disclaimer: string;
+}
+
+export interface Fundamentals {
+  market_cap?: number | null;
+  enterprise_value?: number | null;
+  pe?: number | null;
+  forward_pe?: number | null;
+  pbv?: number | null;
+  pb?: number | null;
+  peg?: number | null;
+  eps?: number | null;
+  roe?: number | null;
+  roa?: number | null;
+  revenue?: number | null;
+  revenue_growth?: number | null;
+  net_income?: number | null;
+  gross_margin?: number | null;
+  operating_margin?: number | null;
+  debt_to_equity?: number | null;
+  current_ratio?: number | null;
+  free_cash_flow?: number | null;
+  dividend_yield?: number | null;
+  dividend_payout_ratio?: number | null;
+  week_52_high?: number | null;
+  week_52_low?: number | null;
+  average_volume?: number | null;
+  shares_outstanding?: number | null;
+  source?: string;
+  error?: string;
+  [key: string]: number | string | null | undefined;
 }
 
 export interface ResearchResponse {
