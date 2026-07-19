@@ -35,6 +35,28 @@ def test_repository_wiring():
     assert isinstance(repositories.stock_price_repository._idx_provider, IdxProvider)
 
 
+def test_profile_endpoint_wiring():
+    from app.routers.stock import router as stock_router
+
+    paths = [r.path for r in stock_router.routes]
+    assert "/api/stock/{ticker}/profile" in paths, paths
+
+
+async def _test_profile_fields():
+    """Profile IDX (langkah 16.4.2): online → field lengkap + employees/logo None.
+    Offline → tetap dict aman dengan name/symbol + error (tidak raise)."""
+    provider = IdxProvider()
+    prof = await provider.fetch_company_profile("BBCA")
+    assert isinstance(prof, dict) and prof.get("symbol") == "BBCA", prof
+    if not prof.get("error"):
+        for key in ("name", "sector", "industry", "website",
+                    "business_summary", "listing_date", "market_segment",
+                    "employees", "logo"):
+            assert key in prof, f"field {key} hilang dari profile"
+        assert prof["employees"] is None
+        assert prof["logo"] is None
+
+
 async def _test_idx_fallback():
     provider = IdxProvider()
 
@@ -60,7 +82,9 @@ async def _test_idx_fallback():
 def main():
     test_imports()
     test_repository_wiring()
+    test_profile_endpoint_wiring()
     asyncio.run(_test_idx_fallback())
+    asyncio.run(_test_profile_fields())
     print("OK: semua smoke test lolos")
 
 

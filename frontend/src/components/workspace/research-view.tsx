@@ -4,13 +4,15 @@ import { useEffect, useState } from "react";
 import { useWorkspace } from "@/lib/workspace-context";
 import { Card, Skeleton } from "@/components/ui";
 import { StockReportCard } from "@/components/renderers/stock-report";
-import { researchStock } from "@/lib/api";
+import { CompanyProfileCard } from "@/components/renderers/company-profile";
+import { researchStock, fetchCompanyProfile, type CompanyProfile } from "@/lib/api";
 
 export function ResearchView() {
   const { state, openResearch } = useWorkspace();
   const [tickerInput, setTickerInput] = useState(state.activeTicker ?? "");
   const [mode, setMode] = useState<"BSJP" | "BPJS">(state.activeMode);
   const [report, setReport] = useState<ReturnType<typeof StockReportCard>["props"]["data"] | null>(null);
+  const [profile, setProfile] = useState<CompanyProfile | null>(null);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -27,14 +29,20 @@ export function ResearchView() {
 
   async function loadReport(t: string) {
     setLoading(true);
-    try {
-      const res = await researchStock(t, undefined, mode);
-      if (res.success && res.data) setReport(res.data);
-    } catch {
+    setProfile(null);
+    const [res, prof] = await Promise.allSettled([
+      researchStock(t, undefined, mode),
+      fetchCompanyProfile(t),
+    ]);
+    if (res.status === "fulfilled" && res.value.success && res.value.data) {
+      setReport(res.value.data);
+    } else {
       setReport(null);
-    } finally {
-      setLoading(false);
     }
+    if (prof.status === "fulfilled" && prof.value.success && prof.value.data) {
+      setProfile(prof.value.data);
+    }
+    setLoading(false);
   }
 
   function handleTickerChange(e: React.ChangeEvent<HTMLInputElement>) {
@@ -88,7 +96,10 @@ export function ResearchView() {
           <Skeleton variant="card" />
         </div>
       ) : report ? (
-        <StockReportCard data={report} />
+        <>
+          {profile && <CompanyProfileCard data={profile} />}
+          <StockReportCard data={report} />
+        </>
       ) : tickerInput.trim() ? (
         <Card padding="md">
           <p className="text-zinc-500 text-center">Data tidak ditemukan untuk <strong className="text-zinc-200">{tickerInput}</strong>.</p>

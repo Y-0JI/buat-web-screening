@@ -345,6 +345,45 @@ export async function fetchStockNews(
   return res.data;
 }
 
+export interface CompanyProfile {
+  name?: string;
+  symbol?: string;
+  exchange?: string;
+  country?: string;
+  sector?: string;
+  sub_sector?: string;
+  industry?: string;
+  website?: string;
+  business_summary?: string;
+  listing_date?: string;
+  market_segment?: string;
+  address?: string;
+  phone?: string;
+  email?: string;
+  status?: string;
+  market_cap?: number;
+  shares_outstanding?: number;
+  employees?: number | null;
+  logo?: string | null;
+  source?: string;
+}
+
+export interface CompanyProfileResponse {
+  success: boolean;
+  ticker: string;
+  data?: CompanyProfile;
+  error?: string;
+}
+
+export async function fetchCompanyProfile(
+  ticker: string
+): Promise<CompanyProfileResponse> {
+  const res = await api.get<CompanyProfileResponse>(
+    `/api/stock/${ticker}/profile`
+  );
+  return res.data;
+}
+
 export interface ChatMessage {
   role: string;
   content: string;
