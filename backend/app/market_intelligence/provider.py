@@ -109,3 +109,26 @@ class MarketIntelligenceProvider:
         except Exception as e:  # noqa: BLE001
             logger.warning("%s | MI fetch_earnings error: %s", ticker, e)
             return {"error": f"Gagal mengambil earnings Yahoo: {e}"}
+
+    async def fetch_analyst(self, symbol: str) -> Dict[str, Any]:
+        """Price target & recommendation analis dari Yahoo `info` (best-effort).
+
+        Banyak saham kecil-menengah IDX tidak punya cakupan analis → field bernilai
+        None; itu wajar (lihat doc 16.5). Kegagalan aman: return dict ber-key `error`.
+        """
+        ticker = symbol.upper()
+        if not ticker.endswith(".JK"):
+            ticker += ".JK"
+
+        def _sync() -> Dict[str, Any]:
+            import yfinance as yf
+
+            info = yf.Ticker(ticker).info
+            return info if isinstance(info, dict) else {}
+
+        try:
+            info = await asyncio.to_thread(_sync)
+            return {"info": info}
+        except Exception as e:  # noqa: BLE001
+            logger.warning("%s | MI fetch_analyst error: %s", ticker, e)
+            return {"error": f"Gagal mengambil data analis Yahoo: {e}"}

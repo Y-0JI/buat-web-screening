@@ -146,6 +146,26 @@ class MarketIntelligenceRepository:
         await self._store("earnings", key, result)
         return result
 
+    # ---------- Analyst: Price Target & Recommendation (Yahoo, per-ticker) ----------
+
+    async def get_analyst(self, ticker: str) -> Dict[str, Any]:
+        """Price target + recommendation. Best-effort; kosong itu wajar (empty-safe)."""
+        key = ticker.upper().replace(".JK", "")
+        cached = await self._cached_or_none("price_target", key)
+        if cached is not _MISS:
+            return cached
+        raw = await self._provider.fetch_analyst(key)
+        result = {"price_target": None, "recommendation": None}
+        if not raw.get("error"):
+            info = raw.get("info") or {}
+            result = {
+                "price_target": models.normalize_price_target(info),
+                "recommendation": models.normalize_recommendation(info),
+            }
+        await self._store("price_target", key, result)
+        return result
+
     async def clear(self) -> None:
-        for cat in ("dividend", "corp_action", "foreign_flow", "broker_summary", "earnings"):
+        for cat in ("dividend", "corp_action", "foreign_flow",
+                    "broker_summary", "earnings", "price_target"):
             await cache_service.clear(cat)
