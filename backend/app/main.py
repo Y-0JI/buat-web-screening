@@ -20,6 +20,7 @@ from app.routers.chat import router as chat_router
 from app.routers.insight import router as insight_router
 from app.routers.news import router as news_router
 from app.routers.stock import router as stock_router
+from app.routers.cache import router as cache_router
 from app.ai.tools import set_main_loop
 
 configure_logging()
@@ -142,6 +143,7 @@ app.include_router(chat_router)
 app.include_router(insight_router)
 app.include_router(news_router)
 app.include_router(stock_router)
+app.include_router(cache_router)
 
 
 @app.get("/")

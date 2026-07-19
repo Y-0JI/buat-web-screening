@@ -1,8 +1,8 @@
-"""Implementasi CacheBackend berbasis in-memory dengan TTL.
+"""Implementasi CacheBackend berbasis in-memory dengan TTL per-entry.
 
 Aman untuk digunakan dalam event loop asyncio (dilindungi `asyncio.Lock`).
-Detail strategi cache (persistence, invalidation otomatis per kategori)
-dikerjakan lebih lanjut di fase 16.4.5.
+Setiap entry menyimpan waktu kedaluwarsa sendiri sehingga satu backend bisa
+menampung banyak kategori dengan TTL berbeda (dipakai oleh `CacheService`).
 """
 
 import asyncio
@@ -23,8 +23,8 @@ class MemoryCache(CacheBackend):
             entry = self._store.get(key)
             if entry is None:
                 return None
-            ts, value = entry
-            if time.time() - ts >= self._default_ttl:
+            expiry, value = entry
+            if time.time() >= expiry:
                 self._store.pop(key, None)
                 return None
             return value
@@ -32,15 +32,19 @@ class MemoryCache(CacheBackend):
     async def set(self, key: str, value: Any, ttl: Optional[int] = None) -> None:
         ttl = ttl if ttl is not None else self._default_ttl
         async with self._lock:
-            self._store[key] = (time.time(), value)
+            self._store[key] = (time.time() + ttl, value)
 
     async def delete(self, key: str) -> None:
         async with self._lock:
             self._store.pop(key, None)
 
-    async def clear(self) -> None:
+    async def clear(self, prefix: Optional[str] = None) -> None:
         async with self._lock:
-            self._store.clear()
+            if prefix is None:
+                self._store.clear()
+            else:
+                for k in [k for k in self._store if k.startswith(prefix)]:
+                    self._store.pop(k, None)
 
     async def invalidate(self) -> None:
         """Alias untuk `clear` sesuai terminologi dokumen (cache invalidation)."""

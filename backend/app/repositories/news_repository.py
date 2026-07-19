@@ -12,10 +12,10 @@ import re
 from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
 
-from app.cache.memory_cache import MemoryCache
+from app.cache.service import cache_service
 from app.providers import IdxProvider, NewsProvider, RssProvider
 
-_NEWS_TTL = 3600  # 1 jam (sesuai arah 16.4.5)
+_CATEGORY = "news"
 
 
 def _normalize_item(raw: dict, source: str, ticker: str) -> dict:
@@ -104,17 +104,15 @@ class NewsRepository:
         provider: NewsProvider | None = None,
         idx_provider: IdxProvider | None = None,
         rss_provider: RssProvider | None = None,
-        cache: MemoryCache | None = None,
     ):
         self._provider = provider or NewsProvider()
         self._idx_provider = idx_provider or IdxProvider()
         self._rss_provider = rss_provider or RssProvider()
-        self._cache = cache or MemoryCache(default_ttl=_NEWS_TTL)
 
     async def get_news(self, symbol: str, limit: int = 10) -> dict:
         clean = symbol.upper().replace(".JK", "")
         key = f"{clean}:{limit}"
-        cached = await self._cache.get(key)
+        cached = await cache_service.get(_CATEGORY, key)
         if cached is not None:
             return cached
 
@@ -141,8 +139,11 @@ class NewsRepository:
             "items": _sort_items(_dedupe(collected))[:limit],
             "fetched_at": datetime.now().isoformat(),
         }
-        await self._cache.set(key, result)
+        await cache_service.set(_CATEGORY, key, result)
         return result
+
+    async def clear(self) -> None:
+        await cache_service.clear(_CATEGORY)
 
     async def _safe(self, coro) -> dict:
         try:

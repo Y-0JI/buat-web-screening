@@ -15,7 +15,7 @@ class CacheBackend(ABC):
         """Ambil value berdasarkan key, atau None bila tidak ada/kadaluarsa."""
 
     @abstractmethod
-    async def set(self, key: str, value: Any, ttl: int) -> None:
+    async def set(self, key: str, value: Any, ttl: Optional[int] = None) -> None:
         """Simpan value dengan time-to-live (detik)."""
 
     @abstractmethod
@@ -23,5 +23,11 @@ class CacheBackend(ABC):
         """Hapus satu entry."""
 
     @abstractmethod
-    async def clear(self) -> None:
-        """Hapus semua entry (digunakan untuk manual refresh global)."""
+    async def clear(self, prefix: Optional[str] = None) -> None:
+        """Hapus entry. `prefix` None → semua; selain itu hanya key berawalan prefix."""
+
+
+def get_cache_service():
+    """Akses singleton CacheService (import malas hindari circular import)."""
+    from app.cache.service import cache_service
+    return cache_service
