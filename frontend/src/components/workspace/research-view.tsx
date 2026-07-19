@@ -23,6 +23,7 @@ export function ResearchView() {
   const [report, setReport] = useState<ReturnType<typeof StockReportCard>["props"]["data"] | null>(null);
   const [profile, setProfile] = useState<CompanyProfile | null>(null);
   const [mi, setMi] = useState<MarketIntelligenceData | null>(null);
+  const [miError, setMiError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -41,6 +42,7 @@ export function ResearchView() {
     setLoading(true);
     setProfile(null);
     setMi(null);
+    setMiError(null);
     const [res, prof, miRes] = await Promise.allSettled([
       researchStock(t, undefined, mode),
       fetchCompanyProfile(t),
@@ -56,6 +58,12 @@ export function ResearchView() {
     }
     if (miRes.status === "fulfilled" && miRes.value.success && miRes.value.data) {
       setMi(miRes.value.data);
+    } else {
+      const msg =
+        miRes.status === "fulfilled"
+          ? miRes.value.error
+          : "Gagal memuat market intelligence.";
+      setMiError(msg ?? "Gagal memuat market intelligence.");
     }
     setLoading(false);
   }
@@ -116,6 +124,11 @@ export function ResearchView() {
           {report.fundamentals && <QuickStats data={report.fundamentals} />}
           {report.fundamentals && <FundamentalCard data={report.fundamentals} />}
           {mi && <MarketIntelligenceCard data={mi} />}
+          {miError && (
+            <Card padding="md">
+              <p className="text-red-400 text-sm">{miError}</p>
+            </Card>
+          )}
           <StockReportCard data={report} />
         </>
       ) : tickerInput.trim() ? (
