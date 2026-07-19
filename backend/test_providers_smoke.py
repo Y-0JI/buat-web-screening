@@ -15,6 +15,10 @@ import app.providers as providers
 import app.repositories as repositories
 from app.providers.idx_provider import IdxProvider, _fetch_json
 from app.providers.rss_provider import RssProvider
+from app.repositories.fundamentals_repository import (
+    _CANONICAL_FIELDS,
+    _merge_fundamentals,
+)
 
 
 def test_imports():
@@ -40,6 +44,45 @@ def test_profile_endpoint_wiring():
 
     paths = [r.path for r in stock_router.routes]
     assert "/api/stock/{ticker}/profile" in paths, paths
+
+
+def test_fundamentals_endpoint_wiring():
+    from app.routers.stock import router as stock_router
+
+    paths = [r.path for r in stock_router.routes]
+    assert "/api/stock/{ticker}/fundamentals" in paths, paths
+
+
+def test_fundamentals_canonical_merge():
+    """16.4.3: _merge_fundamentals selalu keluarkan daftar field kanonik.
+
+    IDX (primary) menang untuk field yang ia punya; Yahoo isi sisanya. Beta &
+    book_value TIDAK boleh muncul (di-drop). `pb` = alias `pbv`. net_income
+    di-estimasi dari revenue*net_margin bila Yahoo tak beri.
+    """
+    idx = {
+        "market_cap": 100, "pe": 10, "pbv": 2, "roe": 0.15, "roa": 0.08,
+        "revenue": 1000, "net_margin": 20, "debt_to_equity": 0.5,
+        "shares_outstanding": 500, "source": "idx", "fetched_at": "t0",
+    }
+    yf = {
+        "enterprise_value": 120, "forward_pe": 9, "eps": 5, "peg": 1.2,
+        "revenue_growth": 0.1, "gross_margin": 0.4, "operating_margin": 0.25,
+        "current_ratio": 1.5, "free_cash_flow": 300, "dividend_yield": 0.03,
+        "dividend_payout_ratio": 0.4, "fifty_two_week_high": 200,
+        "fifty_two_week_low": 80, "avg_volume_3m": 12345, "beta": 1.1,
+        "source": "yahoo", "fetched_at": "t1",
+    }
+    out = _merge_fundamentals(idx, yf)
+    for f in _CANONICAL_FIELDS:
+        assert f in out, f"field kanonik {f} hilang"
+    assert "beta" not in out and "book_value" not in out, out
+    assert out["market_cap"] == 100  # IDX menang
+    assert out["enterprise_value"] == 120  # Yahoo isi
+    assert out["pb"] == out["pbv"] == 2  # alias
+    assert out["week_52_high"] == 200 and out["average_volume"] == 12345
+    assert out["net_income"] == 200  # 1000 * 20%
+    assert out["source"] == "idx+yahoo"
 
 
 async def _test_profile_fields():
@@ -79,12 +122,28 @@ async def _test_idx_fallback():
         providers.idx_provider._fetch_json = orig
 
 
+async def _test_fundamentals_repo():
+    """Repo fundamental: online → dict field kanonik lengkap. Offline → dict
+    aman ber-key `error` (tidak raise)."""
+    repo = repositories.fundamentals_repository
+    result = await repo.get_fundamentals("BBCA")
+    assert isinstance(result, dict), result
+    if not result.get("error"):
+        for f in _CANONICAL_FIELDS:
+            assert f in result, f"field kanonik {f} hilang dari hasil repo"
+        assert "beta" not in result and "book_value" not in result, result
+        assert "pb" in result, "alias pb harus ada"
+
+
 def main():
     test_imports()
     test_repository_wiring()
     test_profile_endpoint_wiring()
+    test_fundamentals_endpoint_wiring()
+    test_fundamentals_canonical_merge()
     asyncio.run(_test_idx_fallback())
     asyncio.run(_test_profile_fields())
+    asyncio.run(_test_fundamentals_repo())
     print("OK: semua smoke test lolos")
 
 
