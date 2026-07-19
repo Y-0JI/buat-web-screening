@@ -8,7 +8,8 @@ default bila yfinance gagal.
 import asyncio
 import logging
 
-from app.providers.base import _rate_limit, resolve_ticker
+from app.providers.base import resolve_ticker
+from app.providers.scheduler import request_scheduler
 from app.utils.errors import NetworkError
 
 logger = logging.getLogger(__name__)
@@ -19,7 +20,7 @@ class CompanyProfileProvider:
         clean = symbol.upper().replace(".JK", "")
         ticker_str = resolve_ticker(symbol)
 
-        await _rate_limit()
+        await request_scheduler.acquire()
 
         try:
 

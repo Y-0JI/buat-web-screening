@@ -1,17 +1,11 @@
-"""Base class untuk semua Service.
+"""Helper bersama untuk Service layer.
 
-Menyediakan validasi ticker yang dipakai bersama. Service memegang seluruh
-business logic & validasi; ia memanggil Repository (bukan Provider langsung).
+Hanya `validate_ticker` — fungsi biasa yang dipakai semua service (bukan
+di-inherit). Tiap service memegang sendiri repository yang benar-benar ia pakai.
 """
 
 import re
 
-from app.repositories import (
-    company_profile_repository,
-    fundamentals_repository,
-    news_repository,
-    stock_price_repository,
-)
 from app.utils.errors import InvalidTickerError
 
 _TICKER_RE = re.compile(r"^[A-Z0-9]{1,6}$")
@@ -25,17 +19,3 @@ def validate_ticker(symbol: str) -> str:
     if not _TICKER_RE.match(clean):
         raise InvalidTickerError(f"Ticker '{symbol}' tidak valid (harus 1-6 huruf/angka).")
     return clean
-
-
-class BaseService:
-    def __init__(
-        self,
-        stock_repo=stock_price_repository,
-        company_repo=company_profile_repository,
-        news_repo=news_repository,
-        fundamentals_repo=fundamentals_repository,
-    ):
-        self._stock_repo = stock_repo
-        self._company_repo = company_repo
-        self._news_repo = news_repo
-        self._fundamentals_repo = fundamentals_repo

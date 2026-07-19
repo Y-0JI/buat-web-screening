@@ -17,7 +17,7 @@ import xml.etree.ElementTree as ET
 from datetime import datetime
 from typing import Any, Dict
 
-from app.providers.base import _rate_limit
+from app.providers.scheduler import request_scheduler
 
 logger = logging.getLogger(__name__)
 
@@ -64,6 +64,6 @@ class RssProvider:
                 logger.warning("%s | fetch_rss error: %s", clean, e)
                 return {"error": "Gagal mengambil RSS berita", "fetched_at": None}
 
-        await _rate_limit()
+        await request_scheduler.acquire()
         return await asyncio.to_thread(_sync)
 

@@ -13,13 +13,12 @@ Key disimpan dengan namespace `"{category}:{key}"` pada satu backend sehingga
 
 from typing import Any, Optional
 
-from app.cache import CacheBackend
 from app.cache.memory_cache import MemoryCache
 from app.cache.ttl import TTL_BY_CATEGORY
 
 
 class CacheService:
-    def __init__(self, backend: Optional[CacheBackend] = None) -> None:
+    def __init__(self, backend: Optional[MemoryCache] = None) -> None:
         self._backend = backend or MemoryCache()
 
     @staticmethod

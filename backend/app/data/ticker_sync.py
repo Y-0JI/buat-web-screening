@@ -1,17 +1,13 @@
 import asyncio
-import io
 import logging
 from datetime import datetime
-from typing import Any
 
-import requests
 from curl_cffi import requests as curl_requests
-import pandas as pd
 from sqlalchemy import text
 
 from app.config import settings
 from app.database import get_session
-from app.database.models import ListedTicker, SyncStatus
+from app.database.models import SyncStatus
 
 logger = logging.getLogger(__name__)
 
@@ -127,7 +123,7 @@ async def _fetch_sectors():
         out = []
         for url in SECTORS_ENDPOINTS:
             try:
-                resp = requests.get(url, headers=SECTORS_HEADERS, timeout=15)
+                resp = curl_requests.get(url, headers=SECTORS_HEADERS, timeout=15)
                 resp.raise_for_status()
                 json_data = resp.json()
                 if isinstance(json_data, list):

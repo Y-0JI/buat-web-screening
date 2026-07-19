@@ -18,7 +18,6 @@ data tetap 200 tanpa cookie), tapi kita tetap hangatkan session best-effort.
 
 import asyncio
 import logging
-import time
 from datetime import datetime
 from typing import Any, Dict, Optional, Tuple
 
@@ -42,10 +41,6 @@ _BROWSER_HEADERS = {
     ),
 }
 
-_MIN_REQUEST_INTERVAL = 1.0
-_RATE_LOCK = asyncio.Lock()
-_last_request_time: float = 0.0
-
 # Cache screener (semua emiten) supaya fetch_fundamentals tidak download ulang
 # 600KB tiap ticker. Cache dikelola terpusat via `cache_service` (kategori
 # "screener", TTL dari cache.ttl) — provider tidak menyimpan cache sendiri.
@@ -63,20 +58,10 @@ def _get_session() -> curl_requests.Session:
     return _session
 
 
-async def _rate_limit() -> None:
-    global _last_request_time
-    async with _RATE_LOCK:
-        elapsed = time.time() - _last_request_time
-        if elapsed < _MIN_REQUEST_INTERVAL:
-            await asyncio.sleep(_MIN_REQUEST_INTERVAL - elapsed)
-        _last_request_time = time.time()
-
-
 async def _fetch_json(url: str, timeout: int = 20) -> Any:
     """GET JSON dari IDX dengan retry exponential backoff (3x). Raise pada
     kegagalan total — pemanggil tiap method sudah menangkapnya jadi fallback."""
     await request_scheduler.acquire()
-    await _rate_limit()
 
     def _sync() -> Any:
         s = _get_session()

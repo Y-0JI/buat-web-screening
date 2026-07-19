@@ -4,12 +4,16 @@ Business logic: validasi ticker, ambil dari repository, lalu transformasi ke
 domain object `NewsListData`. Router yang membungkus hasil ini ke `APIResponse`.
 """
 
+from app.repositories import news_repository
 from app.schemas.news import NewsItem, NewsListData
-from app.services.base import BaseService, validate_ticker
+from app.services.base import validate_ticker
 from app.utils.errors import DataNotFoundError
 
 
-class NewsService(BaseService):
+class NewsService:
+    def __init__(self, news_repo=news_repository):
+        self._news_repo = news_repo
+
     async def get_news(self, symbol: str, limit: int = 10) -> NewsListData:
         clean = validate_ticker(symbol)
         result = await self._news_repo.get_news(clean, limit=limit)
