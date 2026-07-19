@@ -16,24 +16,42 @@ from app.market_intelligence.provider import MarketIntelligenceProvider
 logger = logging.getLogger(__name__)
 
 _LOOKBACK_TRADING_DAYS = 7  # cari tanggal bursa terakhir (skip weekend/libur)
+_MISS = object()  # sentinel: bedakan "belum di-cache" vs "ter-cache bernilai None"
 
 
 class MarketIntelligenceRepository:
     def __init__(self, provider: Optional[MarketIntelligenceProvider] = None):
         self._provider = provider or MarketIntelligenceProvider()
 
+    @staticmethod
+    async def _cached_or_none(category: str, key: str):
+        """Ambil nilai ter-cache dengan negative caching.
+
+        Membedakan "belum di-cache" (return sentinel MISS) vs "sudah di-cache
+        bernilai None" (hasil kosong yang sah). Tanpa ini, hasil None akan
+        dianggap cache-miss dan di-fetch ulang tiap permintaan.
+        """
+        wrapper = await cache_service.get(category, key)
+        if wrapper is None:
+            return _MISS
+        return wrapper.get("value")
+
+    @staticmethod
+    async def _store(category: str, key: str, value) -> None:
+        await cache_service.set(category, key, {"value": value})
+
     # ---------- Dividend (per-ticker) ----------
 
     async def get_dividend(self, ticker: str) -> Optional[Dict[str, Any]]:
         key = ticker.upper().replace(".JK", "")
-        cached = await cache_service.get("dividend", key)
-        if cached is not None:
+        cached = await self._cached_or_none("dividend", key)
+        if cached is not _MISS:
             return cached
         raw = await self._provider.fetch_dividend(key)
         result = None
         if not raw.get("error"):
             result = models.normalize_dividend(raw.get("item"))
-        await cache_service.set("dividend", key, result)
+        await self._store("dividend", key, result)
         return result
 
     # ---------- Corporate Action (market-wide → filter per-ticker) ----------
@@ -118,14 +136,14 @@ class MarketIntelligenceRepository:
 
     async def get_earnings(self, ticker: str) -> Optional[Dict[str, Any]]:
         key = ticker.upper().replace(".JK", "")
-        cached = await cache_service.get("earnings", key)
-        if cached is not None:
+        cached = await self._cached_or_none("earnings", key)
+        if cached is not _MISS:
             return cached
         raw = await self._provider.fetch_earnings(key)
         result = None
         if not raw.get("error"):
             result = models.normalize_earnings(raw.get("calendar"))
-        await cache_service.set("earnings", key, result)
+        await self._store("earnings", key, result)
         return result
 
     async def clear(self) -> None:
