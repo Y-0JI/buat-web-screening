@@ -5,6 +5,7 @@ import {
   addWatchlist,
   fetchStockHistory,
   fetchStockNews,
+  type NewsItem,
   type OHLCVPoint,
   type StockReport,
 } from "@/lib/api";
@@ -43,7 +44,7 @@ function IndicatorGrid({ data }: { data: StockReport["indicators"] }) {
 }
 
 function NewsSection({ ticker }: { ticker: string }) {
-  const [news, setNews] = useState<Array<{ title: string; publisher: string; link: string; published: string }>>([]);
+  const [news, setNews] = useState<NewsItem[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -52,9 +53,7 @@ function NewsSection({ ticker }: { ticker: string }) {
       try {
         const res = await fetchStockNews(ticker, 5);
         if (!cancelled && res.success && res.data) {
-          setNews(res.data.map((n: { title: string; publisher: string; link: string; published: string }) => ({
-            title: n.title, publisher: n.publisher, link: n.link, published: n.published,
-          })));
+          setNews(res.data);
         }
       } catch {
         // silent
@@ -83,13 +82,13 @@ function NewsSection({ ticker }: { ticker: string }) {
       {news.map((n, i) => (
         <a
           key={i}
-          href={n.link}
+          href={n.url}
           target="_blank"
           rel="noopener noreferrer"
           className="block p-3 bg-zinc-800 rounded-lg hover:bg-zinc-700 transition-colors"
         >
-          <div className="text-sm text-zinc-200 font-medium leading-snug">{n.title}</div>
-          <div className="text-xs text-zinc-500 mt-1">{n.publisher} · {n.published}</div>
+          <div className="text-sm text-zinc-200 font-medium leading-snug">{n.headline}</div>
+          <div className="text-xs text-zinc-500 mt-1">{n.publisher} · {n.source} · {n.published_date}</div>
         </a>
       ))}
     </div>

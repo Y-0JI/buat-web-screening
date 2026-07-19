@@ -320,11 +320,13 @@ export async function fetchStockHistory(
 }
 
 export interface NewsItem {
-  title: string;
+  headline: string;
   publisher: string;
-  link: string;
-  published: string;
+  published_date: string;
   summary?: string;
+  url: string;
+  related_ticker: string;
+  source: string;
 }
 
 export interface StockNewsResponse {
