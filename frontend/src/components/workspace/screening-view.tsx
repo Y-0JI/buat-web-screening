@@ -73,7 +73,11 @@ export function ScreeningView() {
         </div>
       ) : items.length === 0 ? (
         <Card padding="md">
-          <p className="text-zinc-500 text-center">Tidak ada data screening tersedia.</p>
+          <p className="text-zinc-500 text-center">
+            {generatedAt
+              ? "Tidak ada data screening tersedia."
+              : "Screening sedang diproses, muat ulang dalam beberapa menit."}
+          </p>
         </Card>
       ) : (
         <div className="space-y-2">

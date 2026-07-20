@@ -1,7 +1,7 @@
 import asyncio
 from datetime import datetime
 from typing import Optional
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, BackgroundTasks
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.schemas.stock import (
     ComparisonRequest,
@@ -79,16 +79,14 @@ def _to_ranking_items(rows: list[dict]) -> list[RankingItem]:
 
 
 @router.get("/screen", response_model=ScreeningResponse)
-async def screen(mode: str = "BSJP"):
+async def screen(mode: str = "BSJP", background: BackgroundTasks = BackgroundTasks()):
     cached, cached_mode = await get_cached_screening(mode)
     if not (cached and cached_mode == mode):
-        # ponytail: cold miss men-scan SELURUH universe (get_listed_tickers)
-        # lewat run_batch_scan supaya universe & scoring konsisten dengan
-        # scheduler — bukan lagi subset MOCK_DATA. Normalnya scheduler sudah
-        # menghangatkan cache; jadikan background job bila latency cold-miss
-        # jadi masalah.
-        await run_batch_scan(mode)
-        cached, _ = await get_cached_screening(mode)
+        # cold miss: scan universe (~978 ticker @ 60/menit ≈ 16 mnt)
+        # di background, jangan di dalam request (axios FE timeout 45s).
+        # Cache scheduler 16:30 WIB + pre-warm startup yg menghangatkan;
+        # request langsung balik (data bisa kosong sekali) tanpa timeout.
+        background.add_task(run_batch_scan, mode)
 
     rows = cached or []
     ts = await get_screening_timestamp(mode)
