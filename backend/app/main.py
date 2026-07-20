@@ -23,11 +23,13 @@ from app.routers.stock import router as stock_router
 from app.routers.cache import router as cache_router
 from app.routers.market_intelligence import router as market_intelligence_router
 from app.ai.tools import set_main_loop
+from app.scheduler import run_daily_scan
 
 configure_logging()
 logger = logging.getLogger(__name__)
 
 _scheduler = None
+_preheat_task: "asyncio.Task | None" = None
 
 
 @asynccontextmanager
@@ -93,6 +95,24 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning("Bootstrap listed_tickers gagal: %s", e)
 
+    # Hangatkan cache screening di background saat boot supaya cold
+    # miss tidak memicu scan ~978 ticker (≈16 mnt @ 60/menit)
+    # di dalam request pertama. Scheduler 16:30 WIB juga me-warm;
+    # ini menutup kasus server baru nyala di luar window itu.
+    # Task di-track & di-handle error-nya agar exception tidak hilang
+    # diam-diam; dibatalkan saat shutdown agar loop tidak ditutup
+    # di bawah task yang masih berjalan.
+    async def _run_preheat():
+        try:
+            await run_daily_scan()
+        except Exception:
+            logger.exception("Pre-warm screening gagal")
+
+    try:
+        _preheat_task = asyncio.create_task(_run_preheat())
+    except Exception as e:
+        logger.warning("Pre-warm screening gagal: %s", e)
+
     if settings.scheduler_enabled:
         try:
             from apscheduler.schedulers.asyncio import AsyncIOScheduler
@@ -120,6 +140,8 @@ async def lifespan(app: FastAPI):
     yield
     if _scheduler:
         _scheduler.shutdown()
+    if _preheat_task is not None:
+        _preheat_task.cancel()
 
 
 app = FastAPI(title="BSJP AI", version="0.1.0", lifespan=lifespan)
