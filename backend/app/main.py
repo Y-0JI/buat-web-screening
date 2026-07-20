@@ -23,6 +23,7 @@ from app.routers.stock import router as stock_router
 from app.routers.cache import router as cache_router
 from app.routers.market_intelligence import router as market_intelligence_router
 from app.ai.tools import set_main_loop
+from app.scheduler import run_daily_scan
 
 configure_logging()
 logger = logging.getLogger(__name__)
@@ -92,6 +93,15 @@ async def lifespan(app: FastAPI):
             break
     except Exception as e:
         logger.warning("Bootstrap listed_tickers gagal: %s", e)
+
+    # Hangatkan cache screening di background saat boot supaya cold
+    # miss tidak memicu scan ~978 ticker (≈16 mnt @ 60/menit)
+    # di dalam request pertama. Scheduler 16:30 WIB juga me-warm;
+    # ini menutup kasus server baru nyala di luar window itu.
+    try:
+        asyncio.create_task(run_daily_scan())
+    except Exception as e:
+        logger.warning("Pre-warm screening gagal: %s", e)
 
     if settings.scheduler_enabled:
         try:
