@@ -79,7 +79,7 @@ export function SummaryCards({ items, generatedAt }: SummaryCardsProps) {
             </span>
           </div>
           <div className="text-xs text-zinc-500 mt-2">
-            {generatedAt ? `Diperbarui ${timeAgo(generatedAt)}` : "-"}
+            {generatedAt ? `Diperbarui ${timeAgo(generatedAt)}` : "Screening diproses…"}
           </div>
         </div>
       </div>

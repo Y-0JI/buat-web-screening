@@ -160,7 +160,11 @@ export function DashboardView() {
             {loading.screen ? (
               <div className="space-y-2">{[...Array(3)].map((_, i) => <Skeleton key={i} variant="row" />)}</div>
             ) : topPicks.length === 0 ? (
-              <p className="text-zinc-500 text-sm">Belum ada data screening.</p>
+              <p className="text-zinc-500 text-sm">
+                {generatedAt
+                  ? "Tidak ada data screening tersedia."
+                  : "Screening sedang diproses, muat ulang dalam beberapa menit."}
+              </p>
             ) : (
               <div className="space-y-2">{topPicks.map(item => <PickCard key={item.ticker} item={item} onResearch={openResearch} />)}</div>
             )}
