@@ -59,27 +59,39 @@ def _get_session() -> curl_requests.Session:
 
 
 async def _fetch_json(url: str, timeout: int = 20) -> Any:
-    """GET JSON dari IDX dengan retry exponential backoff (3x). Raise pada
-    kegagalan total — pemanggil tiap method sudah menangkapnya jadi fallback."""
-    await request_scheduler.acquire()
-
-    def _sync() -> Any:
-        s = _get_session()
-        resp = s.get(url, headers=_BROWSER_HEADERS, timeout=timeout)
-        resp.raise_for_status()
-        return resp.json()
-
-    delays = [1, 2, 4]
+    """GET JSON dari IDX dengan retry + backoff, hormati 429 (Retry-After).
+    Raise pada kegagalan total — pemanggil tiap method sudah menangkapnya jadi
+    fallback. acquire() di dalam loop agar retry juga menghormati rate limiter."""
+    delays = [1, 2, 4, 8]
     last_err: Optional[Exception] = None
     for attempt in range(len(delays) + 1):
+        await request_scheduler.acquire()
+
+        def _sync() -> Any:
+            s = _get_session()
+            resp = s.get(url, headers=_BROWSER_HEADERS, timeout=timeout)
+            resp.raise_for_status()
+            return resp.json()
+
         try:
             return await asyncio.to_thread(_sync)
         except Exception as e:  # noqa: BLE001 - semua kegagalan jadi fallback
             last_err = e
             if attempt < len(delays):
-                await asyncio.sleep(delays[attempt])
+                await asyncio.sleep(_backoff_for(e, delays[attempt]))
     assert last_err is not None
     raise last_err
+
+
+def _backoff_for(err: Exception, base: float) -> float:
+    # ponytail: baca Retry-After bila 429, plafon 30s; tanpa header → 2x base
+    resp = getattr(err, "response", None)
+    if getattr(resp, "status_code", None) == 429:
+        try:
+            return min(max(int(resp.headers.get("Retry-After", "")), base), 30)
+        except (TypeError, ValueError):
+            return min(base * 2, 30)
+    return base
 
 
 async def _ensure_session_warm() -> None:
