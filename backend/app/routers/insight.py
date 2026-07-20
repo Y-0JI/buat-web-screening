@@ -1,7 +1,6 @@
 import asyncio
 import logging
 from datetime import datetime
-from google import genai
 from fastapi import APIRouter
 from pydantic import BaseModel
 from app.config import settings
@@ -91,6 +90,8 @@ SENTIMEN: bullish/bearish/neutral
 RINGKASAN: <ringkasan>"""
 
     def _call() -> str:
+        from google import genai
+
         client = genai.Client(api_key=settings.gemini_api_key)
         response = client.models.generate_content(
             model="gemini-3.5-flash",

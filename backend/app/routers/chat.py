@@ -1,7 +1,5 @@
 import asyncio
 import logging
-from google import genai
-from google.genai import types
 from fastapi import APIRouter
 from pydantic import BaseModel
 from app.config import settings
@@ -31,6 +29,9 @@ TOOL_MAP = {
 
 
 def _run_chat(messages: list[ChatMessage], mode: str, context: dict | None = None) -> str:
+    from google import genai
+    from google.genai import types
+
     client = genai.Client(api_key=settings.gemini_api_key)
 
     context_str = ""

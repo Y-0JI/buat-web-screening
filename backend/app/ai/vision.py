@@ -1,7 +1,5 @@
 import asyncio
 import logging
-from google import genai
-from google.genai import types
 from app.config import settings
 import re
 
@@ -81,6 +79,9 @@ def parse_vision_response(text: str) -> dict:
 
 
 async def analyze_chart_image(image_bytes: bytes, filename: str) -> dict:
+    from google import genai
+    from google.genai import types
+
     if not settings.gemini_api_key:
         return {
             "file_name": filename,
