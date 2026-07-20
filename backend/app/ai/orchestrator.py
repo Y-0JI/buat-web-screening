@@ -1,6 +1,5 @@
 import asyncio
 import logging
-from google import genai
 from app.config import settings
 from app.schemas.stock import StockReport
 from app.services import company_profile_service
@@ -106,6 +105,8 @@ Beri narasi (max 5-7 kalimat) dalam Bahasa Indonesia:
 Jangan buat rekomendasi investasi. Akhiri dengan disclaimer bahwa ini alat riset, bukan rekomendasi."""
 
     def _call_gemini():
+        from google import genai
+
         client = genai.Client(api_key=settings.gemini_api_key)
         response = client.models.generate_content(
             model="gemini-3.5-flash",
