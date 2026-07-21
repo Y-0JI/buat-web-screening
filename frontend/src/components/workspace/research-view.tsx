@@ -7,7 +7,14 @@ import { StockReportCard } from "@/components/renderers/stock-report";
 import { CompanyProfileCard } from "@/components/renderers/company-profile";
 import { FundamentalCard } from "@/components/renderers/fundamental-card";
 import { QuickStats } from "@/components/renderers/quick-stats";
-import { researchStock, fetchCompanyProfile, type CompanyProfile } from "@/lib/api";
+import { MarketIntelligenceCard } from "@/components/renderers/market-intelligence-card";
+import {
+  researchStock,
+  fetchCompanyProfile,
+  fetchMarketIntelligence,
+  type CompanyProfile,
+  type MarketIntelligenceData,
+} from "@/lib/api";
 
 export function ResearchView() {
   const { state, openResearch } = useWorkspace();
@@ -15,6 +22,8 @@ export function ResearchView() {
   const [mode, setMode] = useState<"BSJP" | "BPJS">(state.activeMode);
   const [report, setReport] = useState<ReturnType<typeof StockReportCard>["props"]["data"] | null>(null);
   const [profile, setProfile] = useState<CompanyProfile | null>(null);
+  const [mi, setMi] = useState<MarketIntelligenceData | null>(null);
+  const [miError, setMiError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -32,9 +41,12 @@ export function ResearchView() {
   async function loadReport(t: string) {
     setLoading(true);
     setProfile(null);
-    const [res, prof] = await Promise.allSettled([
+    setMi(null);
+    setMiError(null);
+    const [res, prof, miRes] = await Promise.allSettled([
       researchStock(t, undefined, mode),
       fetchCompanyProfile(t),
+      fetchMarketIntelligence(t),
     ]);
     if (res.status === "fulfilled" && res.value.success && res.value.data) {
       setReport(res.value.data);
@@ -43,6 +55,15 @@ export function ResearchView() {
     }
     if (prof.status === "fulfilled" && prof.value.success && prof.value.data) {
       setProfile(prof.value.data);
+    }
+    if (miRes.status === "fulfilled" && miRes.value.success && miRes.value.data) {
+      setMi(miRes.value.data);
+    } else {
+      const msg =
+        miRes.status === "fulfilled"
+          ? miRes.value.error
+          : "Gagal memuat market intelligence.";
+      setMiError(msg ?? "Gagal memuat market intelligence.");
     }
     setLoading(false);
   }
@@ -102,6 +123,12 @@ export function ResearchView() {
           {profile && <CompanyProfileCard data={profile} />}
           {report.fundamentals && <QuickStats data={report.fundamentals} />}
           {report.fundamentals && <FundamentalCard data={report.fundamentals} />}
+          {mi && <MarketIntelligenceCard data={mi} />}
+          {miError && (
+            <Card padding="md">
+              <p className="text-red-400 text-sm">{miError}</p>
+            </Card>
+          )}
           <StockReportCard data={report} />
         </>
       ) : tickerInput.trim() ? (
