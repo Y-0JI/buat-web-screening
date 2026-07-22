@@ -134,17 +134,19 @@ async def _retry(coro_factory, retries: int = 3, base_delay: float = 1.0) -> any
         except RateLimitError as e:
             last_err = e
             if attempt < retries - 1:
-                await asyncio.sleep(base_delay * 5 * (2 ** attempt))
-        except Exception as e:  # noqa: BLE001 - semua kegagalan di-retry
+                delay = base_delay * 5 * (2 ** attempt)
+                await asyncio.sleep(delay + random.uniform(0, delay * 0.25))
+        except Exception as e:
             last_err = e
             if attempt < retries - 1:
-                await asyncio.sleep(base_delay * (2 ** attempt))
+                delay = base_delay * (2 ** attempt)
+                await asyncio.sleep(delay + random.uniform(0, delay * 0.25))
     assert last_err is not None
     raise last_err
 
 
 async def _dedup(key: str, coro_factory) -> any:
-    """Jalankan coroutine dengan dedup berdasarkan key (request sedang berjalan)."""
+    """Jalankan coroutine dengan dedup. Jika concurrent pertama gagal, retry."""
     existing: Optional[asyncio.Future] = None
     async with _in_flight_lock:
         if key in _in_flight:
@@ -157,7 +159,15 @@ async def _dedup(key: str, coro_factory) -> any:
         try:
             return await existing
         except Exception:
-            return None
+            logger.debug("dedup %s — previous failed, retrying", key)
+            async with _in_flight_lock:
+                _in_flight.pop(key, None)
+
+    if existing is not None:
+        async with _in_flight_lock:
+            if key not in _in_flight:
+                loop = asyncio.get_running_loop()
+                _in_flight[key] = loop.create_future()
 
     try:
         result = await coro_factory()
