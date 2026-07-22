@@ -42,3 +42,4 @@ class RequestScheduler:
 
 
 request_scheduler = RequestScheduler()
+batch_scheduler = RequestScheduler(max_per_minute=120)
