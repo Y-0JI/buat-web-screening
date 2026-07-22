@@ -8,7 +8,7 @@ import {
   useCallback,
   type ReactNode,
 } from "react";
-import { setToken, type UserProfile } from "@/lib/api";
+import { setToken, setLogoutHandler, type UserProfile } from "@/lib/api";
 
 interface AuthState {
   user: UserProfile | null;
@@ -46,6 +46,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
     setIsLoading(false);
   }, []);
+
+  useEffect(() => {
+    setLogoutHandler(() => {
+      logout();
+      window.location.href = "/login";
+    });
+  }, [logout]);
 
   const login = useCallback((t: string, u: UserProfile) => {
     setTokenState(t);

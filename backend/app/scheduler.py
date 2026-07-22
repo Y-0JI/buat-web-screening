@@ -9,9 +9,9 @@ from app.cache.service import cache_service
 
 logger = logging.getLogger(__name__)
 
-_screen_semaphore = asyncio.Semaphore(10)
+_screen_semaphore = asyncio.Semaphore(5)
 _scan_running: set[str] = set()
-_SCAN_TIMEOUT = 60
+_SCAN_TIMEOUT = 180
 
 
 async def get_cached_screening(mode: str = "BSJP") -> tuple[list[dict] | None, str | None]:
@@ -45,7 +45,7 @@ async def run_batch_scan(mode: str = "BSJP"):
                     if df is None or df.empty:
                         return None
                     info = await asyncio.wait_for(
-                        company_profile_service.get_profile(ticker), timeout=15
+                        company_profile_service.get_profile(ticker), timeout=30
                     )
                     report = calculate_score(df, ticker, mode, is_simulated=is_simulated)
                     report.company_name = info.get("name", ticker)

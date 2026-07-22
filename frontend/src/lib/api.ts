@@ -5,6 +5,22 @@ const api = axios.create({
   timeout: 45000,
 });
 
+let _logoutHandler: (() => void) | null = null;
+
+export function setLogoutHandler(fn: () => void) {
+  _logoutHandler = fn;
+}
+
+api.interceptors.response.use(
+  (res) => res,
+  (err) => {
+    if (err.response?.status === 401 && _logoutHandler) {
+      _logoutHandler();
+    }
+    return Promise.reject(err);
+  }
+);
+
 export interface StockReport {
   render: string;
   ticker: string;
