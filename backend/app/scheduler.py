@@ -56,21 +56,35 @@ async def run_batch_scan(mode: str = "BSJP"):
                 return None
 
     tickers = await get_listed_tickers()
+    if not tickers:
+        logger.error("Tidak ada ticker untuk di-scan (mode=%s)", mode)
+        return
+
+    total = len(tickers)
     results_list = await asyncio.gather(*[scan_one(t) for t in tickers])
     results = [r for r in results_list if r is not None]
+    failed = total - len(results)
+
+    if not results:
+        logger.error(
+            "Batch scan %s: %d/%d gagal — cache tidak diperbarui",
+            mode, failed, total,
+        )
+        return
 
     results.sort(key=lambda x: x["score"], reverse=True)
     await cache_service.set(
         "screen", mode, {"results": results, "mode": mode, "ts": time.time()}
     )
-    logger.info("Batch scan selesai: %d saham (mode=%s)", len(results), mode)
+    logger.info(
+        "Batch scan selesai: %d berhasil, %d gagal (mode=%s)",
+        len(results), failed, mode,
+    )
 
 
 async def run_daily_scan():
-    """Jalankan scan untuk kedua mode (BSJP dan BPJS) secara paralel."""
-    logger.info("Memulai daily scan untuk BSJP dan BPJS...")
-    await asyncio.gather(
-        run_batch_scan("BSJP"),
-        run_batch_scan("BPJS"),
-    )
+    """Jalankan scan untuk kedua mode secara berurutan — hindari berebut rate limit."""
+    logger.info("Memulai daily scan: BSJP dulu, lalu BPJS...")
+    await run_batch_scan("BSJP")
+    await run_batch_scan("BPJS")
     logger.info("Daily scan selesai untuk kedua mode")
