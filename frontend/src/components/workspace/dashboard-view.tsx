@@ -195,6 +195,10 @@ export function DashboardView() {
             <Section title="Riwayat Terakhir" defaultOpen>
               {loading.hist ? (
                 <div className="space-y-2">{[...Array(3)].map((_, i) => <Skeleton key={i} variant="row" />)}</div>
+              ) : visibleHistory.length === 0 && generatedAt ? (
+                <p className="text-zinc-500 text-sm">
+                  Data screening terakhir: {new Date(generatedAt).toLocaleString("id-ID")}
+                </p>
               ) : visibleHistory.length === 0 ? (
                 <p className="text-zinc-500 text-sm">Belum ada riwayat riset.</p>
               ) : (

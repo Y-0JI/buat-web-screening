@@ -21,9 +21,9 @@ class MarketInsightResponse(BaseModel):
     error: str | None = None
 
 
-async def _generate_market_insight() -> dict:
-    results, mode = await get_cached_screening()
-    if not results or not mode:
+async def _generate_market_insight(mode: str = "BSJP") -> dict:
+    results, actual_mode = await get_cached_screening(mode)
+    if not results or not actual_mode:
         return {
             "summary": "Data screening belum tersedia.",
             "sentiment": "neutral",
@@ -129,14 +129,14 @@ RINGKASAN: <ringkasan>"""
 
 
 @router.get("/market", response_model=MarketInsightResponse)
-async def market_insight():
+async def market_insight(mode: str = "BSJP"):
     global _insight_cache
     now = datetime.now().timestamp()
     if _insight_cache and now - _insight_cache.get("ts", 0) < _insight_ttl:
         return MarketInsightResponse(success=True, data=_insight_cache["data"])
 
     try:
-        data = await _generate_market_insight()
+        data = await _generate_market_insight(mode)
         _insight_cache = {"data": data, "ts": now}
         return MarketInsightResponse(success=True, data=data)
     except Exception as e:
