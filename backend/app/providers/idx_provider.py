@@ -48,7 +48,8 @@ _screener_lock = asyncio.Lock()
 
 # Session curl_cffi diinisialisasi malas (pertama kali dipakai).
 _session = None
-_session_lock = asyncio.Lock()
+_session_warmed: bool = False
+_session_warm_lock = asyncio.Lock()
 
 
 def _get_session() -> curl_requests.Session:
@@ -83,17 +84,36 @@ async def _fetch_json(url: str, timeout: int = 20) -> Any:
 
 
 async def _ensure_session_warm() -> None:
-    """Hangatkan cookie session IDX (best-effort, tidak fatal bila gagal)."""
-    def _sync() -> None:
-        s = _get_session()
-        try:
-            s.get(f"{_IDX_BASE}/id", headers=_BROWSER_HEADERS, timeout=15)
-            s.get(f"{_IDX_BASE}/primary/home/GetIndexList", headers=_BROWSER_HEADERS, timeout=15)
-        except Exception:  # noqa: BLE001
-            pass
+    """Hangatkan cookie session IDX (best-effort, tidak fatal bila gagal).
 
-    async with _session_lock:
+    Hanya eksekusi sekali seumur aplikasi — double-checked locking aman
+    dari race condition paralel. Request warming lewat request_scheduler
+    agar ikut dihitung dalam kuota rate limiter.
+    """
+    global _session_warmed
+    if _session_warmed:
+        return
+    async with _session_warm_lock:
+        if _session_warmed:
+            return
+
+        await request_scheduler.acquire()
+        await request_scheduler.acquire()
+
+        def _sync() -> None:
+            s = _get_session()
+            try:
+                s.get(f"{_IDX_BASE}/id", headers=_BROWSER_HEADERS, timeout=15)
+                s.get(
+                    f"{_IDX_BASE}/primary/home/GetIndexList",
+                    headers=_BROWSER_HEADERS, timeout=15,
+                )
+            except Exception:  # noqa: BLE001
+                pass
+
         await asyncio.to_thread(_sync)
+        _session_warmed = True
+        logger.info("Session IDX warmed")
 
 
 class IdxProvider:
