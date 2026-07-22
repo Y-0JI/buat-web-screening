@@ -144,7 +144,10 @@ async def _retry(coro_factory, retries: int = 3, base_delay: float = 1.0) -> any
 
 
 async def _dedup(key: str, coro_factory) -> any:
-    """Jalankan coroutine dengan dedup berdasarkan key (request sedang berjalan)."""
+    """Jalankan coroutine dengan dedup berdasarkan key (request sedang berjalan).
+
+    Jika request pertama gagal, request berikutnya tidak diam-diam return None
+    — mereka akan retry dengan coroutine_factory sendiri."""
     existing: Optional[asyncio.Future] = None
     async with _in_flight_lock:
         if key in _in_flight:
@@ -157,7 +160,15 @@ async def _dedup(key: str, coro_factory) -> any:
         try:
             return await existing
         except Exception:
-            return None
+            logger.debug("dedup %s — previous failed, retrying", key)
+            async with _in_flight_lock:
+                _in_flight.pop(key, None)
+
+    if existing is not None:
+        async with _in_flight_lock:
+            if key not in _in_flight:
+                loop = asyncio.get_running_loop()
+                _in_flight[key] = loop.create_future()
 
     try:
         result = await coro_factory()

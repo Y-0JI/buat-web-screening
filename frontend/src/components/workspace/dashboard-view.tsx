@@ -100,6 +100,7 @@ export function DashboardView() {
   const { openResearch } = useWorkspace();
   const [screenItems, setScreenItems] = useState<RankingItem[]>([]);
   const [generatedAt, setGeneratedAt] = useState<string | undefined>();
+  const [screenError, setScreenError] = useState<string | null>(null);
   const [watchlist, setWatchlist] = useState<WatchlistItem[]>([]);
   const [history, setHistory] = useState<HistoryItem[]>([]);
   const [wlInput, setWlInput] = useState("");
@@ -110,8 +111,16 @@ export function DashboardView() {
 
   async function loadAll() {
     setLoading({ screen: true, wl: true, hist: true });
+    setScreenError(null);
     await Promise.allSettled([
-      screenStocks().then(r => { if (r.success && r.data) { setScreenItems(r.data); setGeneratedAt(r.generated_at); } }),
+      screenStocks().then(r => {
+        if (r.success && r.data) {
+          setScreenItems(r.data);
+          setGeneratedAt(r.generated_at);
+        } else if (r.error) {
+          setScreenError(r.error);
+        }
+      }),
       isAuthenticated && fetchWatchlist().then(r => { if (r.success && r.data) setWatchlist(r.data); }),
       isAuthenticated && fetchHistory(20).then(r => { if (r.success && r.data) setHistory(r.data); }),
     ]);
@@ -160,7 +169,7 @@ export function DashboardView() {
             {loading.screen ? (
               <div className="space-y-2">{[...Array(3)].map((_, i) => <Skeleton key={i} variant="row" />)}</div>
             ) : topPicks.length === 0 ? (
-              <p className="text-zinc-500 text-sm">Belum ada data screening.</p>
+              <p className="text-zinc-500 text-sm">{screenError || "Belum ada data screening."}</p>
             ) : (
               <div className="space-y-2">{topPicks.map(item => <PickCard key={item.ticker} item={item} onResearch={openResearch} />)}</div>
             )}

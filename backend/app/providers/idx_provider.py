@@ -46,16 +46,13 @@ _BROWSER_HEADERS = {
 # "screener", TTL dari cache.ttl) — provider tidak menyimpan cache sendiri.
 _screener_lock = asyncio.Lock()
 
-# Session curl_cffi diinisialisasi malas (pertama kali dipakai).
-_session = None
-_session_lock = asyncio.Lock()
+# Lock untuk session warming — tiap thread bikin Session sendiri biar aman
+# (curl_cffi.Session bukan thread-safe).
+_session_warm_lock = asyncio.Lock()
 
 
-def _get_session() -> curl_requests.Session:
-    global _session
-    if _session is None:
-        _session = curl_requests.Session(impersonate="chrome124")
-    return _session
+def _make_session() -> curl_requests.Session:
+    return curl_requests.Session(impersonate="chrome124")
 
 
 async def _fetch_json(url: str, timeout: int = 20) -> Any:
@@ -64,10 +61,13 @@ async def _fetch_json(url: str, timeout: int = 20) -> Any:
     await request_scheduler.acquire()
 
     def _sync() -> Any:
-        s = _get_session()
-        resp = s.get(url, headers=_BROWSER_HEADERS, timeout=timeout)
-        resp.raise_for_status()
-        return resp.json()
+        s = _make_session()
+        try:
+            resp = s.get(url, headers=_BROWSER_HEADERS, timeout=timeout)
+            resp.raise_for_status()
+            return resp.json()
+        finally:
+            s.close()
 
     delays = [1, 2, 4]
     last_err: Optional[Exception] = None
@@ -85,14 +85,16 @@ async def _fetch_json(url: str, timeout: int = 20) -> Any:
 async def _ensure_session_warm() -> None:
     """Hangatkan cookie session IDX (best-effort, tidak fatal bila gagal)."""
     def _sync() -> None:
-        s = _get_session()
+        s = _make_session()
         try:
             s.get(f"{_IDX_BASE}/id", headers=_BROWSER_HEADERS, timeout=15)
             s.get(f"{_IDX_BASE}/primary/home/GetIndexList", headers=_BROWSER_HEADERS, timeout=15)
         except Exception:  # noqa: BLE001
             pass
+        finally:
+            s.close()
 
-    async with _session_lock:
+    async with _session_warm_lock:
         await asyncio.to_thread(_sync)
 
 
