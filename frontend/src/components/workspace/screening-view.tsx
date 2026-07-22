@@ -11,6 +11,7 @@ export function ScreeningView() {
   const [items, setItems] = useState<RankingItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [generatedAt, setGeneratedAt] = useState<string | undefined>();
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   useEffect(() => {
     loadData();
@@ -18,14 +19,18 @@ export function ScreeningView() {
 
   async function loadData() {
     setLoading(true);
+    setErrorMsg(null);
     try {
       const res = await screenStocks(mode);
       if (res.success && res.data) {
         setItems(res.data);
         setGeneratedAt(res.generated_at);
+      } else if (res.error) {
+        setErrorMsg(res.error);
       }
     } catch {
       setItems([]);
+      setErrorMsg("Gagal mengambil data screening. Coba lagi.");
     } finally {
       setLoading(false);
     }
@@ -73,7 +78,9 @@ export function ScreeningView() {
         </div>
       ) : items.length === 0 ? (
         <Card padding="md">
-          <p className="text-zinc-500 text-center">Tidak ada data screening tersedia.</p>
+          <p className="text-zinc-500 text-center">
+            {errorMsg || "Tidak ada data screening tersedia."}
+          </p>
         </Card>
       ) : (
         <div className="space-y-2">

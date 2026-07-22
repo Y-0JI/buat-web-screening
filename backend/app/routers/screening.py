@@ -1,4 +1,5 @@
 import asyncio
+import logging
 from datetime import datetime
 from typing import Optional
 from fastapi import APIRouter, Depends
@@ -21,6 +22,7 @@ from app.database import get_session
 from app.database.models import User, ScanHistory
 from app.routers.auth import get_current_user_optional
 
+logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api", tags=["screening"])
 
 
@@ -30,31 +32,42 @@ async def compare(
     user: Optional[User] = Depends(get_current_user_optional),
     session: AsyncSession = Depends(get_session),
 ):
-    async def process_ticker(ticker: str):
-        df, is_simulated = await stock_service.get_price(ticker)
-        if df is None or df.empty:
+    async def process_ticker(ticker: str) -> tuple | None:
+        try:
+            df, is_simulated = await stock_service.get_price(ticker)
+            if df is None or df.empty:
+                return None
+            info = await company_profile_service.get_profile(ticker)
+            report = await calculate_score_cached(df, ticker, req.mode, is_simulated=is_simulated)
+            report.company_name = info.get("name", ticker)
+            report.render = "comparison"
+            report.mode = req.mode
+            return report, ticker
+        except Exception as e:
+            logger.warning("Gagal proses %s untuk compare: %s", ticker, e)
             return None
-        info = await company_profile_service.get_profile(ticker)
-        report = await calculate_score_cached(df, ticker, req.mode, is_simulated=is_simulated)
-        report.company_name = info.get("name", ticker)
-        report.render = "comparison"
-        report.mode = req.mode
-        if user:
-            session.add(ScanHistory(
-                user_id=user.id, ticker=ticker.upper(),
-                score=report.score, verdict=report.verdict.value,
-            ))
-        return report
 
     results = await asyncio.gather(*[process_ticker(t) for t in req.tickers])
-    reports = [r for r in results if r is not None]
+    reports = []
+    histories = []
+    for r in results:
+        if r is not None:
+            report, ticker = r
+            reports.append(report)
+            if user:
+                histories.append(ScanHistory(
+                    user_id=user.id, ticker=ticker.upper(),
+                    score=report.score, verdict=report.verdict.value,
+                ))
 
     if len(reports) != len(req.tickers):
         return ComparisonResponse(
             success=False, error="Data untuk beberapa saham tidak ditemukan"
         )
 
-    if user:
+    if user and histories:
+        for h in histories:
+            session.add(h)
         await session.commit()
 
     return ComparisonResponse(success=True, data=reports)
@@ -82,17 +95,17 @@ def _to_ranking_items(rows: list[dict]) -> list[RankingItem]:
 async def screen(mode: str = "BSJP"):
     cached, cached_mode = await get_cached_screening(mode)
     if not (cached and cached_mode == mode):
-        # ponytail: cold miss men-scan SELURUH universe (get_listed_tickers)
-        # lewat run_batch_scan supaya universe & scoring konsisten dengan
-        # scheduler — bukan lagi subset MOCK_DATA. Normalnya scheduler sudah
-        # menghangatkan cache; jadikan background job bila latency cold-miss
-        # jadi masalah.
-        await run_batch_scan(mode)
-        cached, _ = await get_cached_screening(mode)
+        logger.info("Cache cold for mode=%s — triggering background scan", mode)
+        asyncio.create_task(run_batch_scan(mode))
 
     rows = cached or []
     ts = await get_screening_timestamp(mode)
     generated_at = datetime.fromtimestamp(ts).isoformat() if ts else None
+    if not rows:
+        return ScreeningResponse(
+            success=True, data=[], generated_at=generated_at,
+            error="Data screening sedang diperbarui, silakan coba lagi dalam beberapa menit."
+        )
     return ScreeningResponse(
         success=True, data=_to_ranking_items(rows), generated_at=generated_at
     )
