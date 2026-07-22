@@ -47,13 +47,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setIsLoading(false);
   }, []);
 
-  useEffect(() => {
-    setLogoutHandler(() => {
-      logout();
-      window.location.href = "/login";
-    });
-  }, [logout]);
-
   const login = useCallback((t: string, u: UserProfile) => {
     setTokenState(t);
     setUser(u);
@@ -69,6 +62,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     sessionStorage.removeItem(TOKEN_KEY);
     sessionStorage.removeItem(USER_KEY);
   }, []);
+
+  useEffect(() => {
+    setLogoutHandler(() => {
+      logout();
+      window.location.href = "/login";
+    });
+  }, [logout]);
 
   return (
     <AuthContext.Provider
