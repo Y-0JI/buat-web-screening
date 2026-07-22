@@ -22,13 +22,6 @@ SECTORS_ENDPOINTS = [
 
 SECTORS_HEADERS = {"Authorization": SECTORS_API_KEY} if SECTORS_API_KEY else {}
 
-# 2️⃣ IDX.co.id (publik, tapi harus pakai header browser‑like)
-IDX_HEADERS = {
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36",
-    "Accept": "application/json",
-}
-# URL publik daftar emiten (JSON) – lebih ringan dan peluang lebih besar lolos Cloudflare
-IDX_JSON_URL = "https://www.idx.co.id/primary/ListedCompany/GetCompanyProfiles"
 
 # -------- Fungsi fetch ----------
 async def fetch_and_store_tickers():
@@ -142,42 +135,33 @@ async def _fetch_sectors():
 
 
 async def _fetch_idx():
-    """Fetch tickers dari idx.co.id (JSON endpoint)."""
-    def _parse_rows(rows):
-        out = []
-        for row in rows:
-            out.append({
-                "ticker": str(row.get("KodeEmiten") or row.get("Kode") or "").strip().upper(),
+    """Fetch tickers dari idx.co.id (JSON endpoint) via rate-limited _fetch_json."""
+    from app.providers.idx_provider import _fetch_json, _IDX_BASE
+
+    url = f"{_IDX_BASE}/primary/ListedCompany/GetCompanyProfiles?emitenType=s&start=0&length=9999"
+    try:
+        data = await _fetch_json(url, timeout=15)
+    except Exception as e:
+        logger.warning("IDX JSON endpoint gagal: %s", e)
+        return []
+
+    if isinstance(data, dict) and "data" in data:
+        raw_rows = data["data"]
+    elif isinstance(data, list):
+        raw_rows = data
+    else:
+        raw_rows = data if isinstance(data, list) else []
+
+    parsed = []
+    for row in raw_rows:
+        ticker = str(row.get("KodeEmiten") or row.get("Kode") or "").strip().upper()
+        if ticker:
+            parsed.append({
+                "ticker": ticker,
                 "company_name": row.get("NamaEmiten") or row.get("Nama") or "",
                 "sector": row.get("Sektor") or "",
             })
-        return out
-
-    def _sync():
-        try:
-            resp = curl_requests.get(
-                IDX_JSON_URL,
-                params={"emitenType": "s", "start": 0, "length": 9999},
-                headers=IDX_HEADERS,
-                impersonate="chrome124",
-                timeout=15,
-            )
-            resp.raise_for_status()
-            data = resp.json()
-
-            if isinstance(data, dict) and "data" in data:
-                raw_rows = data["data"]
-            elif isinstance(data, list):
-                raw_rows = data
-            else:
-                raw_rows = data if isinstance(data, list) else []
-
-            parsed = _parse_rows(raw_rows)
-            return [r for r in parsed if r["ticker"]]
-        except Exception as e:
-            logger.warning("IDX JSON endpoint gagal: %s", e)
-            return []
-    return await asyncio.to_thread(_sync)
+    return parsed
 
 
 async def _get_current_ticker_count() -> int:

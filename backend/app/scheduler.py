@@ -90,7 +90,11 @@ async def run_batch_scan(mode: str = "BSJP"):
         return
 
     total = len(tickers)
-    results_list = await asyncio.gather(*[scan_one(t) for t in tickers])
+    # ponytail: stagger 100ms antar ticker biar rate limiter gak kaget
+    async def start_one(t: str, i: int):
+        await asyncio.sleep(i * 0.1)
+        return await scan_one(t)
+    results_list = await asyncio.gather(*[start_one(t, i) for i, t in enumerate(tickers)])
     results = [r for r in results_list if r is not None]
     failed = total - len(results)
 

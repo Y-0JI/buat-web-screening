@@ -26,7 +26,6 @@ import pandas as pd
 from curl_cffi import requests as curl_requests
 
 from app.providers.scheduler import batch_scheduler
-from app.cache.service import cache_service
 
 logger = logging.getLogger(__name__)
 
@@ -42,7 +41,7 @@ _BROWSER_HEADERS = {
     ),
 }
 
-_screener_lock = asyncio.Lock()
+
 
 
 class _IdxRateLimited(Exception):
@@ -51,13 +50,12 @@ class _IdxRateLimited(Exception):
 
 
 async def _fetch_json(url: str, timeout: int = 20) -> Any:
-    """GET JSON dari IDX dengan exponential backoff + jitter + 429 detection."""
-    await batch_scheduler.acquire()
-
+    """GET JSON dari IDX dengan rate-limit, retry + backoff + jitter."""
     max_retries = 4
     base_delay = 2.0
 
     for attempt in range(max_retries + 1):
+        await batch_scheduler.acquire()
         try:
             s = curl_requests.Session(impersonate="chrome124")
             def _sync() -> Any:
@@ -225,15 +223,4 @@ class IdxProvider:
         except Exception:  # noqa: BLE001
             return None
 
-    async def _get_screener(self) -> Dict[str, Dict[str, Any]]:
-        async with _screener_lock:
-            cached = await cache_service.get("screener", "all")
-            if cached is not None:
-                return cached
-            data = await _fetch_json(
-                f"{_IDX_BASE}/support/stock-screener/api/v1/stock-screener/get"
-                f"?Sector=&SubSector="
-            )
-            out = {r["stockCode"]: r for r in (data.get("results") or []) if r.get("stockCode")}
-            await cache_service.set("screener", "all", out)
-            return out
+
