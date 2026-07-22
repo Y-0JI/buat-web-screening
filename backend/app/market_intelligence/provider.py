@@ -15,7 +15,6 @@ from typing import Any, Dict, List, Optional
 
 from app.providers.idx_provider import (
     _IDX_BASE,
-    _ensure_session_warm,
     _fetch_json,
 )
 
@@ -29,7 +28,6 @@ class MarketIntelligenceProvider:
         """Dividen terbaru per emiten dari GetCompanyProfilesDetail (`Dividen`)."""
         clean = symbol.upper().replace(".JK", "")
         try:
-            await _ensure_session_warm()
             data = await _fetch_json(
                 f"{_IDX_BASE}/primary/ListedCompany/GetCompanyProfilesDetail"
                 f"?KodeEmiten={clean}&language=id-id"
@@ -52,7 +50,6 @@ class MarketIntelligenceProvider:
     async def fetch_corporate_actions_year(self, year: int) -> Dict[str, Any]:
         """Split + right offering market-wide untuk satu tahun (2 request)."""
         try:
-            await _ensure_session_warm()
             splits = await self._fetch_year_list("LINK_STOCK_SPLIT", year)
             rights = await self._fetch_year_list("LINK_RIGHT_OFFERING", year)
             return {"splits": splits, "rights": rights}
@@ -63,7 +60,6 @@ class MarketIntelligenceProvider:
     async def fetch_stock_summary(self, date_str: str) -> Optional[Dict[str, Any]]:
         """GetStockSummary satu tanggal → map {StockCode: row}. None bila kosong."""
         try:
-            await _ensure_session_warm()
             data = await _fetch_json(
                 f"{_IDX_BASE}/primary/TradingSummary/GetStockSummary?date={date_str}"
             )
@@ -80,7 +76,6 @@ class MarketIntelligenceProvider:
     ) -> Optional[List[Dict[str, Any]]]:
         """GetBrokerSummary satu tanggal (market-wide). None bila kosong."""
         try:
-            await _ensure_session_warm()
             data = await _fetch_json(
                 f"{_IDX_BASE}/primary/TradingSummary/GetBrokerSummary"
                 f"?length={limit}&start=0&date={date_str}"

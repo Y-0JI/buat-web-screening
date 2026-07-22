@@ -24,7 +24,7 @@ from typing import Any, Dict, Optional, Tuple
 import pandas as pd
 from curl_cffi import requests as curl_requests
 
-from app.providers.scheduler import request_scheduler
+from app.providers.scheduler import batch_scheduler
 from app.cache.service import cache_service
 
 logger = logging.getLogger(__name__)
@@ -46,25 +46,13 @@ _BROWSER_HEADERS = {
 # "screener", TTL dari cache.ttl) — provider tidak menyimpan cache sendiri.
 _screener_lock = asyncio.Lock()
 
-# Session curl_cffi diinisialisasi malas (pertama kali dipakai).
-_session = None
-_session_lock = asyncio.Lock()
-
-
-def _get_session() -> curl_requests.Session:
-    global _session
-    if _session is None:
-        _session = curl_requests.Session(impersonate="chrome124")
-    return _session
-
-
 async def _fetch_json(url: str, timeout: int = 20) -> Any:
-    """GET JSON dari IDX dengan retry exponential backoff (3x). Raise pada
-    kegagalan total — pemanggil tiap method sudah menangkapnya jadi fallback."""
-    await request_scheduler.acquire()
+    """GET JSON dari IDX dengan retry. Raise pada kegagalan total —
+    pemanggil tiap method sudah catch jadi fallback."""
+    await batch_scheduler.acquire()
 
+    s = curl_requests.Session(impersonate="chrome124")
     def _sync() -> Any:
-        s = _get_session()
         resp = s.get(url, headers=_BROWSER_HEADERS, timeout=timeout)
         resp.raise_for_status()
         return resp.json()
@@ -74,33 +62,17 @@ async def _fetch_json(url: str, timeout: int = 20) -> Any:
     for attempt in range(len(delays) + 1):
         try:
             return await asyncio.to_thread(_sync)
-        except Exception as e:  # noqa: BLE001 - semua kegagalan jadi fallback
+        except Exception as e:
             last_err = e
             if attempt < len(delays):
                 await asyncio.sleep(delays[attempt])
-    assert last_err is not None
     raise last_err
-
-
-async def _ensure_session_warm() -> None:
-    """Hangatkan cookie session IDX (best-effort, tidak fatal bila gagal)."""
-    def _sync() -> None:
-        s = _get_session()
-        try:
-            s.get(f"{_IDX_BASE}/id", headers=_BROWSER_HEADERS, timeout=15)
-            s.get(f"{_IDX_BASE}/primary/home/GetIndexList", headers=_BROWSER_HEADERS, timeout=15)
-        except Exception:  # noqa: BLE001
-            pass
-
-    async with _session_lock:
-        await asyncio.to_thread(_sync)
 
 
 class IdxProvider:
     async def fetch_company_profile(self, symbol: str) -> Dict[str, Any]:
         clean = symbol.upper().replace(".JK", "")
         try:
-            await _ensure_session_warm()
             detail = await _fetch_json(
                 f"{_IDX_BASE}/primary/ListedCompany/GetCompanyProfilesDetail"
                 f"?KodeEmiten={clean}&language=id-id"
@@ -109,11 +81,6 @@ class IdxProvider:
             if not profiles:
                 raise ValueError("Profil kosong")
             p = profiles[0]
-            try:
-                screener = await self._get_screener()
-                mcap = (screener.get(clean) or {}).get("marketCapital")
-            except Exception:  # noqa: BLE001
-                mcap = None
             sec = await self._fetch_securities(clean)
             return {
                 "name": p.get("NamaEmiten") or f"PT {clean} Tbk",
@@ -133,7 +100,7 @@ class IdxProvider:
                 "phone": p.get("Telepon"),
                 "email": p.get("Email"),
                 "status": p.get("Status"),
-                "market_cap": mcap,
+                "market_cap": None,
                 "shares_outstanding": sec.get("shares") if sec else None,
                 "source": "idx",
             }
@@ -143,34 +110,7 @@ class IdxProvider:
 
     async def fetch_fundamentals(self, symbol: str) -> Dict[str, Any]:
         clean = symbol.upper().replace(".JK", "")
-        try:
-            await _ensure_session_warm()
-            screener = await self._get_screener()
-            row = screener.get(clean)
-            sec = await self._fetch_securities(clean)
-            if row is None:
-                return {"error": f"Tidak ada data fundamental IDX untuk {clean}", "source": "idx"}
-            return {
-                "market_cap": row.get("marketCapital"),
-                "revenue": row.get("tRevenue"),
-                "net_margin": row.get("npm"),
-                "pe": row.get("per"),
-                "pbv": row.get("pbv"),
-                "roa": row.get("roa"),
-                "roe": row.get("roe"),
-                "debt_to_equity": row.get("der"),
-                "week52_change_pct": row.get("week52PC"),
-                "mtd_change_pct": row.get("mtdpc"),
-                "ytd_change_pct": row.get("ytdpc"),
-                "sector": row.get("sector"),
-                "industry": row.get("industry"),
-                "shares_outstanding": sec.get("shares") if sec else None,
-                "source": "idx",
-                "fetched_at": datetime.now().isoformat(),
-            }
-        except Exception as e:
-            logger.warning("%s | idx fetch_fundamentals error: %s", clean, e)
-            return {"error": f"Gagal mengambil fundamental IDX: {e}", "source": "idx", "fetched_at": None}
+        return {"error": "Screener IDX tidak difetch otomatis", "source": "idx", "fetched_at": None}
 
     async def fetch_company_announcements(self, symbol: str, limit: int = 10) -> Dict[str, Any]:
         """Pengumuman/berita resmi IDX (primary source News Engine, raw only).
@@ -182,7 +122,6 @@ class IdxProvider:
         """
         clean = symbol.upper().replace(".JK", "")
         try:
-            await _ensure_session_warm()
             data = await _fetch_json(
                 f"{_IDX_BASE}/primary/ListedCompany/GetProfileAnnouncement"
                 f"?KodeEmiten={clean}&indexFrom=0&pageSize={limit}&lang=id&keyword="
@@ -226,7 +165,6 @@ class IdxProvider:
         """
         clean = symbol.upper().replace(".JK", "")
         try:
-            await _ensure_session_warm()
             data = await _fetch_json(
                 f"{_IDX_BASE}/primary/ListedCompany/GetTradingInfoSS"
                 f"?code={clean}&start=0&length={limit}"
