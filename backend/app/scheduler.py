@@ -70,7 +70,15 @@ async def run_batch_scan(mode: str = "BSJP"):
 
         tickers = await get_listed_tickers()
         logger.info("Scanning %d tickers for mode=%s", len(tickers), mode)
-        results_list = await asyncio.gather(*[scan_one(t) for t in tickers])
+
+        # Stagger start times agar request ke IDX tidak serempak
+        async def delayed_scan_one(t: str, i: int) -> dict | None:
+            await asyncio.sleep(i * 0.15)
+            return await scan_one(t)
+
+        results_list = await asyncio.gather(
+            *[delayed_scan_one(t, i) for i, t in enumerate(tickers)]
+        )
         success = [r for r in results_list if r is not None]
         failed = len(results_list) - len(success)
 
