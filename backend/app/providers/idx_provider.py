@@ -18,6 +18,7 @@ data tetap 200 tanpa cookie), tapi kita tetap hangatkan session best-effort.
 
 import asyncio
 import logging
+import random
 from datetime import datetime
 from typing import Any, Dict, Optional, Tuple
 
@@ -28,6 +29,12 @@ from app.providers.scheduler import request_scheduler
 from app.cache.service import cache_service
 
 logger = logging.getLogger(__name__)
+
+
+class _IdxRateLimited(Exception):
+    def __init__(self, retry_after: float | None = None):
+        self.retry_after = retry_after
+        super().__init__("IDX rate limited")
 
 _IDX_BASE = "https://www.idx.co.id"
 _BROWSER_HEADERS = {
@@ -46,53 +53,83 @@ _BROWSER_HEADERS = {
 # "screener", TTL dari cache.ttl) — provider tidak menyimpan cache sendiri.
 _screener_lock = asyncio.Lock()
 
-# Session curl_cffi diinisialisasi malas (pertama kali dipakai).
-_session = None
-_session_lock = asyncio.Lock()
+# Lock untuk session warming — tiap thread bikin Session sendiri biar aman
+# (curl_cffi.Session bukan thread-safe).
+_session_warm_lock = asyncio.Lock()
 
 
-def _get_session() -> curl_requests.Session:
-    global _session
-    if _session is None:
-        _session = curl_requests.Session(impersonate="chrome124")
-    return _session
+def _make_session() -> curl_requests.Session:
+    return curl_requests.Session(impersonate="chrome124")
 
 
 async def _fetch_json(url: str, timeout: int = 20) -> Any:
-    """GET JSON dari IDX dengan retry exponential backoff (3x). Raise pada
-    kegagalan total — pemanggil tiap method sudah menangkapnya jadi fallback."""
+    """GET JSON dari IDX dengan exponential backoff + jitter.
+
+    - HTTP 429: baca Retry-After header, fallback ke exponential backoff
+    - Error lain: exponential backoff 2^attempt + jitter 25%
+    - Max 4 retries (total 5 attempts)
+    - Raise pada kegagalan total — pemanggil sudah catch jadi fallback.
+    """
     await request_scheduler.acquire()
 
-    def _sync() -> Any:
-        s = _get_session()
-        resp = s.get(url, headers=_BROWSER_HEADERS, timeout=timeout)
-        resp.raise_for_status()
-        return resp.json()
+    max_retries = 4
+    base_delay = 2.0
 
-    delays = [1, 2, 4]
-    last_err: Optional[Exception] = None
-    for attempt in range(len(delays) + 1):
+    for attempt in range(max_retries + 1):
         try:
+            def _sync() -> Any:
+                s = _make_session()
+                try:
+                    resp = s.get(url, headers=_BROWSER_HEADERS, timeout=timeout)
+                    if resp.status_code == 429:
+                        ra = resp.headers.get("Retry-After")
+                        raise _IdxRateLimited(
+                            float(ra) if ra else None
+                        )
+                    resp.raise_for_status()
+                    return resp.json()
+                finally:
+                    s.close()
+
             return await asyncio.to_thread(_sync)
-        except Exception as e:  # noqa: BLE001 - semua kegagalan jadi fallback
-            last_err = e
-            if attempt < len(delays):
-                await asyncio.sleep(delays[attempt])
-    assert last_err is not None
-    raise last_err
+
+        except _IdxRateLimited as e:
+            if attempt >= max_retries:
+                logger.error("IDX 429 %s — retries exhausted", url)
+                raise
+            delay = e.retry_after if e.retry_after else (base_delay * (2 ** attempt))
+            jitter = random.uniform(0, delay * 0.25)
+            logger.warning(
+                "IDX 429 %s (attempt %d/%d) — retry in %.1fs",
+                url, attempt + 1, max_retries, delay + jitter,
+            )
+            await asyncio.sleep(delay + jitter)
+
+        except Exception as e:
+            if attempt >= max_retries:
+                raise
+            delay = base_delay * (2 ** attempt)
+            jitter = random.uniform(0, delay * 0.25)
+            logger.debug(
+                "IDX error %s (attempt %d/%d): %s — retry in %.1fs",
+                url, attempt + 1, max_retries, e, delay + jitter,
+            )
+            await asyncio.sleep(delay + jitter)
 
 
 async def _ensure_session_warm() -> None:
     """Hangatkan cookie session IDX (best-effort, tidak fatal bila gagal)."""
     def _sync() -> None:
-        s = _get_session()
+        s = _make_session()
         try:
             s.get(f"{_IDX_BASE}/id", headers=_BROWSER_HEADERS, timeout=15)
             s.get(f"{_IDX_BASE}/primary/home/GetIndexList", headers=_BROWSER_HEADERS, timeout=15)
         except Exception:  # noqa: BLE001
             pass
+        finally:
+            s.close()
 
-    async with _session_lock:
+    async with _session_warm_lock:
         await asyncio.to_thread(_sync)
 
 
