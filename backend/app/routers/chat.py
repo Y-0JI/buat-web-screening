@@ -1,9 +1,9 @@
 import asyncio
+import json
 import logging
-from google import genai
-from google.genai import types
 from fastapi import APIRouter
 from pydantic import BaseModel
+from app.ai.client import get_client
 from app.config import settings
 from app.ai.tools import get_stock_data, get_company_news, get_fundamentals
 
@@ -29,10 +29,71 @@ TOOL_MAP = {
     "get_fundamentals": get_fundamentals,
 }
 
+TOOLS = [
+    {
+        "type": "function",
+        "function": {
+            "name": "get_stock_data",
+            "description": get_stock_data.__doc__.split("\n\n")[0],
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "ticker": {
+                        "type": "string",
+                        "description": "Kode saham IDX, 2-5 huruf, contoh BBCA.",
+                    },
+                    "mode": {
+                        "type": "string",
+                        "enum": ["BSJP", "BPJS"],
+                        "description": "Profil trading, BSJP atau BPJS. Default BSJP.",
+                    },
+                },
+                "required": ["ticker"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_company_news",
+            "description": get_company_news.__doc__.split("\n\n")[0],
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "ticker": {
+                        "type": "string",
+                        "description": "Kode saham IDX, contoh BBCA.",
+                    },
+                    "limit": {
+                        "type": "integer",
+                        "description": "Jumlah berita yang diambil (default 5).",
+                    },
+                },
+                "required": ["ticker"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_fundamentals",
+            "description": get_fundamentals.__doc__.split("\n\n")[0],
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "ticker": {
+                        "type": "string",
+                        "description": "Kode saham IDX, contoh BBCA.",
+                    },
+                },
+                "required": ["ticker"],
+            },
+        },
+    },
+]
+
 
 def _run_chat(messages: list[ChatMessage], mode: str, context: dict | None = None) -> str:
-    client = genai.Client(api_key=settings.gemini_api_key)
-
     context_str = ""
     if context:
         view = context.get("view")
@@ -65,82 +126,65 @@ def _run_chat(messages: list[ChatMessage], mode: str, context: dict | None = Non
         "supaya user bisa langsung membukanya. Jangan gunakan markdown link, cukup sebut ticker."
     )
 
-    config = types.GenerateContentConfig(
-        system_instruction=system_instruction,
-        tools=[get_stock_data, get_company_news, get_fundamentals],
-    )
-
-    # Build full conversation as contents list — single API call
-    contents = []
+    msgs: list[dict] = [{"role": "system", "content": system_instruction}]
     for m in messages:
-        role = "user" if m.role == "user" else "model"
-        contents.append(types.Content(
-            role=role,
-            parts=[types.Part.from_text(text=m.content)]
-        ))
+        role = "user" if m.role == "user" else "assistant"
+        msgs.append({"role": role, "content": m.content})
 
-    response = client.models.generate_content(
-        model="gemini-3.5-flash",
-        contents=contents,
-        config=config,
-    )
+    def _call() -> object:
+        return get_client().chat.completions.create(
+            model=settings.ai_model,
+            messages=msgs,
+            tools=TOOLS,
+            tool_choice="auto",
+        )
 
+    response = _call()
     turn = 0
     while turn < 5:
-        function_calls = [
-            part.function_call
-            for part in (response.candidates[0].content.parts or [])
-            if part.function_call
-        ]
-        if not function_calls:
-            break
+        msg = response.choices[0].message
+        tool_calls = msg.tool_calls
+        if not tool_calls:
+            return msg.content
 
-        # Append model's function call parts to conversation history
-        contents.append(response.candidates[0].content)
+        msgs.append({
+            "role": "assistant",
+            "content": msg.content,
+            "tool_calls": [
+                {
+                    "id": tc.id,
+                    "type": "function",
+                    "function": {"name": tc.function.name, "arguments": tc.function.arguments},
+                }
+                for tc in tool_calls
+            ],
+        })
 
-        # Process each function call and build response parts
-        function_response_parts = []
-        for fc in function_calls:
-            func = TOOL_MAP.get(fc.name)
+        for tc in tool_calls:
+            func = TOOL_MAP.get(tc.function.name)
             if func is None:
-                function_response_parts.append(
-                    types.Part.from_function_response(
-                        name=fc.name,
-                        response={"error": f"Unknown function: {fc.name}"},
-                    )
-                )
-                continue
-            try:
-                result = func(**dict(fc.args))
-            except Exception as e:
-                result = {"error": str(e)}
-            function_response_parts.append(
-                types.Part.from_function_response(
-                    name=fc.name,
-                    response=result,
-                )
-            )
+                result = {"error": f"Unknown function: {tc.function.name}"}
+            else:
+                try:
+                    result = func(**json.loads(tc.function.arguments or "{}"))
+                except Exception as e:
+                    result = {"error": str(e)}
+            msgs.append({
+                "role": "tool",
+                "tool_call_id": tc.id,
+                "content": json.dumps(result, default=str),
+            })
 
-        # Append function responses as user role (standard for Gemini function calling)
-        contents.append(types.Content(
-            role="user",
-            parts=function_response_parts,
-        ))
-
-        response = client.models.generate_content(
-            model="gemini-3.5-flash",
-            contents=contents,
-            config=config,
-        )
+        response = _call()
         turn += 1
 
-    return response.text
+    return response.choices[0].message.content
 
 
 @router.post("/chat")
 async def chat(req: ChatRequest):
-    if not settings.gemini_api_key:
-        return {"success": False, "error": "GEMINI_API_KEY belum diisi"}
+    if not settings.ai_api_key:
+        return {"success": False, "error": "AI_API_KEY belum diisi"}
     if not req.messages:
         return {"success": False, "error": "Messages kosong"}
     try:
