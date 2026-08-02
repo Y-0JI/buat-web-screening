@@ -1,6 +1,6 @@
 import asyncio
 import logging
-from google import genai
+from app.ai.client import get_client
 from app.config import settings
 from app.schemas.stock import StockReport
 from app.services import company_profile_service
@@ -64,7 +64,7 @@ def _format_fundamentals_context(fundamentals: dict | None) -> str | None:
 
 
 async def enhance_with_ai(report: StockReport) -> StockReport:
-    if not settings.gemini_api_key:
+    if not settings.ai_api_key:
         report.ai_available = False
         report.summary += " | Insight AI belum dikonfigurasi."
         return report
@@ -105,17 +105,16 @@ Beri narasi (max 5-7 kalimat) dalam Bahasa Indonesia:
 
 Jangan buat rekomendasi investasi. Akhiri dengan disclaimer bahwa ini alat riset, bukan rekomendasi."""
 
-    def _call_gemini():
-        client = genai.Client(api_key=settings.gemini_api_key)
-        response = client.models.generate_content(
-            model="gemini-3.5-flash",
-            contents=prompt,
+    def _call_ai():
+        response = get_client().chat.completions.create(
+            model=settings.ai_model,
+            messages=[{"role": "user", "content": prompt}],
         )
-        return response.text.strip()
+        return response.choices[0].message.content.strip()
 
     try:
         ai_summary = await asyncio.wait_for(
-            asyncio.to_thread(_call_gemini),
+            asyncio.to_thread(_call_ai),
             timeout=30,
         )
         report.summary = ai_summary

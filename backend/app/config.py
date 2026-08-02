@@ -8,7 +8,9 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 
 class Settings(BaseSettings):
     env: str = "development"
-    gemini_api_key: str = ""
+    ai_api_key: str = ""
+    ai_model: str = "coba9router"
+    ai_base_url: str = "http://localhost:20128/v1"
     database_url: str = "sqlite+aiosqlite:///./bsjp.db"
     yfinance_period: str = "6mo"
     cache_ttl_seconds: int = 3600

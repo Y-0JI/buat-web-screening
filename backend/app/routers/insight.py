@@ -1,9 +1,9 @@
 import asyncio
 import logging
 from datetime import datetime
-from google import genai
 from fastapi import APIRouter
 from pydantic import BaseModel
+from app.ai.client import get_client
 from app.config import settings
 from app.scheduler import get_cached_screening
 
@@ -40,7 +40,7 @@ async def _generate_market_insight(mode: str = "BSJP") -> dict:
 
     avg_score = round(sum(scores) / len(scores), 1) if scores else 0
 
-    if not settings.gemini_api_key:
+    if not settings.ai_api_key:
         if verdict_counts.get("BUY", 0) > verdict_counts.get("SELL", 0):
             sentiment = "bullish"
         elif verdict_counts.get("SELL", 0) > verdict_counts.get("BUY", 0):
@@ -91,12 +91,11 @@ SENTIMEN: bullish/bearish/neutral
 RINGKASAN: <ringkasan>"""
 
     def _call() -> str:
-        client = genai.Client(api_key=settings.gemini_api_key)
-        response = client.models.generate_content(
-            model="gemini-3.5-flash",
-            contents=prompt,
+        response = get_client().chat.completions.create(
+            model=settings.ai_model,
+            messages=[{"role": "user", "content": prompt}],
         )
-        return response.text.strip()
+        return response.choices[0].message.content.strip()
 
     try:
         raw = await asyncio.wait_for(asyncio.to_thread(_call), timeout=15)
