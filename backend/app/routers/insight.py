@@ -136,7 +136,10 @@ async def market_insight(mode: str = "BSJP"):
 
     try:
         data = await _generate_market_insight(mode)
-        _insight_cache = {"data": data, "ts": now}
+        # ponytail: hanya cache hasil berisi data; hasil kosong ("belum tersedia")
+        # tidak dicache supaya scan berikutnya langsung terlihat, bukan beku 30 menit.
+        if (data.get("total_stocks") or 0) > 0:
+            _insight_cache = {"data": data, "ts": now}
         return MarketInsightResponse(success=True, data=data)
     except Exception as e:
         logger.error("Market insight error: %s", e, exc_info=True)

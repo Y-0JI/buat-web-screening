@@ -16,6 +16,42 @@ _SCAN_TIMEOUT = 120
 _TICKER_NAMES: dict[str, str] | None = None
 
 
+async def _persist_screening(mode: str, results: list[dict], ts: float) -> None:
+    try:
+        from app.database import async_session
+        from app.database.models import ScreeningResult
+        async with async_session() as session:
+            await session.merge(ScreeningResult(mode=mode, results=results, updated_at=ts))
+            await session.commit()
+    except Exception as e:
+        logger.warning("Persist screening %s gagal: %s", mode, e)
+
+
+async def _load_screening(mode: str) -> dict | None:
+    try:
+        from app.database import async_session
+        from app.database.models import ScreeningResult
+        async with async_session() as session:
+            row = await session.get(ScreeningResult, mode)
+            if row is None:
+                return None
+            return {"results": row.results, "mode": mode, "ts": row.updated_at}
+    except Exception as e:
+        logger.warning("Baca screening %s dari DB gagal: %s", mode, e)
+        return None
+
+
+async def _get_screen(mode: str) -> dict | None:
+    cached = await cache_service.get("screen", mode)
+    if cached:
+        return cached
+    from_db = await _load_screening(mode)
+    if from_db:
+        await cache_service.set("screen", mode, from_db)
+        return from_db
+    return None
+
+
 async def _get_ticker_name(ticker: str) -> str:
     global _TICKER_NAMES
     if _TICKER_NAMES is None:
@@ -38,16 +74,16 @@ async def _get_ticker_name(ticker: str) -> str:
 
 
 async def get_cached_screening(mode: str = "BSJP") -> tuple[list[dict] | None, str | None]:
-    cached = await cache_service.get("screen", mode)
-    if cached:
-        return cached.get("results"), mode
+    s = await _get_screen(mode)
+    if s:
+        return s.get("results"), mode
     return None, None
 
 
 async def get_screening_timestamp(mode: str = "BSJP") -> float | None:
-    cached = await cache_service.get("screen", mode)
-    if cached:
-        return cached.get("ts")
+    s = await _get_screen(mode)
+    if s:
+        return s.get("ts")
     return None
 
 
@@ -106,9 +142,9 @@ async def run_batch_scan(mode: str = "BSJP"):
         return
 
     results.sort(key=lambda x: x["score"], reverse=True)
-    await cache_service.set(
-        "screen", mode, {"results": results, "mode": mode, "ts": time.time()}
-    )
+    payload = {"results": results, "mode": mode, "ts": time.time()}
+    await cache_service.set("screen", mode, payload)
+    await _persist_screening(mode, results, payload["ts"])
     logger.info(
         "Batch scan selesai: %d berhasil, %d gagal (mode=%s)",
         len(results), failed, mode,

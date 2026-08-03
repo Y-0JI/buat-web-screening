@@ -1,17 +1,9 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-
-interface MarketInsightData {
-  summary: string;
-  sentiment: string;
-  score_avg: number | null;
-  total_stocks: number;
-  mode?: string;
-  generated_at: string;
-}
+import { fetchMarketInsight, type MarketInsightData } from "@/lib/api";
 
 interface MarketInsightProps {
   className?: string;
@@ -33,27 +25,32 @@ export function MarketInsight({ className = "" }: MarketInsightProps) {
   const [data, setData] = useState<MarketInsightData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
+    let cancelled = false;
     async function load() {
+      setLoading(true);
+      setError("");
       try {
-        const res = await fetch(
-          `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/api/insight/market`
-        );
-        const json = await res.json();
-        if (json.success && json.data) {
-          setData(json.data);
+        const res = await fetchMarketInsight();
+        if (cancelled) return;
+        if (res.success && res.data) {
+          setData(res.data);
         } else {
-          setError(json.error || "Gagal memuat insight");
+          setError(res.error || "Gagal memuat insight");
         }
       } catch {
-        setError("Gagal memuat insight pasar");
+        if (!cancelled) setError("Gagal memuat insight pasar");
       } finally {
-        setLoading(false);
+        if (!cancelled) setLoading(false);
       }
     }
     load();
-  }, []);
+    return () => { cancelled = true; };
+  }, [attempt]);
+
+  const retry = useCallback(() => setAttempt(a => a + 1), []);
 
   if (loading) {
     return (
@@ -68,7 +65,19 @@ export function MarketInsight({ className = "" }: MarketInsightProps) {
   if (error || !data) {
     return (
       <Card className={className}>
-        <div className="text-zinc-500 text-sm">{error || "Tidak ada data"}</div>
+        <div className="flex items-center justify-between gap-3">
+          <div className="text-zinc-500 text-sm">{error || "Tidak ada data"}</div>
+          {error && (
+            <button
+              type="button"
+              onClick={retry}
+              disabled={loading}
+              className="shrink-0 px-2 py-1 bg-zinc-800 hover:bg-zinc-700 disabled:opacity-50 text-zinc-300 text-xs rounded-md transition-colors"
+            >
+              Coba lagi
+            </button>
+          )}
+        </div>
       </Card>
     );
   }

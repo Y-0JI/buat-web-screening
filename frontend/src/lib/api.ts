@@ -158,6 +158,30 @@ export async function screenStocks(
   return res.data;
 }
 
+export interface MarketInsightData {
+  summary: string;
+  sentiment: string;
+  score_avg: number | null;
+  total_stocks: number;
+  mode?: string;
+  generated_at: string;
+}
+
+export interface MarketInsightResponse {
+  success: boolean;
+  data: MarketInsightData | null;
+  error?: string | null;
+}
+
+export async function fetchMarketInsight(
+  mode?: string
+): Promise<MarketInsightResponse> {
+  const res = await api.get<MarketInsightResponse>("/api/insight/market", {
+    params: mode ? { mode } : undefined,
+  });
+  return res.data;
+}
+
 export async function analyzeVision(
   file: File
 ): Promise<VisionAnalysisResponse> {
