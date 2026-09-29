@@ -1,7 +1,5 @@
-"use client";
-
-import { AppShell } from "@/components/layout/app-shell";
+import { ChatApp } from "@/components/chat/chat-app";
 
 export default function Home() {
-  return <AppShell />;
+  return <ChatApp />;
 }
