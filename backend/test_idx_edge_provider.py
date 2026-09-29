@@ -128,6 +128,59 @@ async def _test_fetch_history_error():
         settings.idx_edge_api_key = old
 
 
+async def _test_market_cap():
+    old = _with_key()
+    seen = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen["url"] = str(request.url)
+        return httpx.Response(200, json={"total": 963, "page": 1, "per_page": 50,
+                                         "total_pages": 20, "data": [{"code": "BBCA"}]})
+
+    p = IdxEdgeProvider(client=_client(handler))
+    try:
+        data = await p.fetch_market_cap(page=2, per_page=50)
+        assert data["total"] == 963 and data["data"][0]["code"] == "BBCA", data
+        assert "/api/market-cap" in seen["url"] and "page=2" in seen["url"], seen
+    finally:
+        settings.idx_edge_api_key = old
+
+
+async def _test_screener():
+    old = _with_key()
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json={"date": "2026-09-29",
+                                         "rows": [{"stock_code": "ASHA"}]})
+
+    p = IdxEdgeProvider(client=_client(handler))
+    try:
+        data = await p.fetch_screener()
+        assert data["rows"][0]["stock_code"] == "ASHA", data
+    finally:
+        settings.idx_edge_api_key = old
+
+
+async def _test_broker_summary():
+    old = _with_key()
+    seen = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen["url"] = str(request.url)
+        return httpx.Response(200, json={"stock_code": "BBCA", "brokers": [
+            {"broker_code": "ZP", "broker_name": "Maybank", "bval": 202, "bvol": 10,
+             "bfrq": 5, "sval": 0, "svol": 0, "nval": 202, "nvol": 10},
+        ]})
+
+    p = IdxEdgeProvider(client=_client(handler))
+    try:
+        data = await p.fetch_broker_summary("BBCA", broker_limit=20)
+        assert data["brokers"][0]["broker_code"] == "ZP", data
+        assert "/api/broker-summary/BBCA" in seen["url"] and "broker_limit=20" in seen["url"], seen
+    finally:
+        settings.idx_edge_api_key = old
+
+
 def main():
     test_enabled_flag()
     test_rows_to_price_df()
@@ -136,7 +189,10 @@ def main():
     asyncio.run(_test_disabled_returns_none())
     asyncio.run(_test_fetch_history())
     asyncio.run(_test_fetch_history_error())
-    print("OK: test_idx_edge_provider (bagian 2) lolos")
+    asyncio.run(_test_market_cap())
+    asyncio.run(_test_screener())
+    asyncio.run(_test_broker_summary())
+    print("OK: test_idx_edge_provider (lengkap) lolos")
 
 
 if __name__ == "__main__":

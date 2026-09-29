@@ -129,3 +129,37 @@ class IdxEdgeProvider:
         if isinstance(data, dict):
             return data.get("rows") or []
         return None
+
+    async def fetch_market_cap(
+        self, page: int = 1, per_page: int = 50, codes: Optional[list[str]] = None
+    ) -> Optional[dict]:
+        params: dict = {"page": page, "per_page": per_page}
+        if codes:
+            params["codes"] = ",".join(codes)
+        data = await self._get_json("/api/market-cap", params)
+        return data if isinstance(data, dict) else None
+
+    async def fetch_screener(self) -> Optional[dict]:
+        data = await self._get_json("/api/screener/latest")
+        return data if isinstance(data, dict) else None
+
+    async def fetch_broker_summary(
+        self,
+        code: str,
+        start_date: Optional[str] = None,
+        end_date: Optional[str] = None,
+        flow: str = "all",
+        net: bool = False,
+        broker_limit: Optional[int] = None,
+    ) -> Optional[dict]:
+        params: dict = {"net": str(net).lower()}
+        if start_date:
+            params["start_date"] = start_date
+        if end_date:
+            params["end_date"] = end_date
+        if flow != "all":
+            params["flow"] = flow
+        if broker_limit:
+            params["broker_limit"] = broker_limit
+        data = await self._get_json(f"/api/broker-summary/{code}", params)
+        return data if isinstance(data, dict) else None
