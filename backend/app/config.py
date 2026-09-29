@@ -8,7 +8,9 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 
 class Settings(BaseSettings):
     env: str = "development"
-    gemini_api_key: str = ""
+    ai_api_key: str = ""
+    ai_model: str = "coba9router"
+    ai_base_url: str = "http://localhost:20128/v1"
     database_url: str = "sqlite+aiosqlite:///./bsjp.db"
     yfinance_period: str = "6mo"
     cache_ttl_seconds: int = 3600
@@ -21,6 +23,10 @@ class Settings(BaseSettings):
     jwt_expire_minutes: int = 1440
     cors_origins: str = "http://localhost:3000"
     sectors_api_key: str = ""
+    idx_edge_api_key: str = ""
+    idx_edge_base_url: str = "https://stock.arjum.com"
+    idx_edge_timeout: int = 20
+    idx_edge_daily_quota: int = 1000
     frontend_url: str = "http://localhost:3000"
     smtp_host: str = ""
     smtp_port: int = 587

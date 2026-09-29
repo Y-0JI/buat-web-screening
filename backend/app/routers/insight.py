@@ -1,9 +1,9 @@
 import asyncio
 import logging
 from datetime import datetime
-from google import genai
 from fastapi import APIRouter
 from pydantic import BaseModel
+from app.ai.client import get_client
 from app.config import settings
 from app.scheduler import get_cached_screening
 
@@ -21,9 +21,9 @@ class MarketInsightResponse(BaseModel):
     error: str | None = None
 
 
-async def _generate_market_insight() -> dict:
-    results, mode = await get_cached_screening()
-    if not results or not mode:
+async def _generate_market_insight(mode: str = "BSJP") -> dict:
+    results, actual_mode = await get_cached_screening(mode)
+    if not results or not actual_mode:
         return {
             "summary": "Data screening belum tersedia.",
             "sentiment": "neutral",
@@ -40,7 +40,7 @@ async def _generate_market_insight() -> dict:
 
     avg_score = round(sum(scores) / len(scores), 1) if scores else 0
 
-    if not settings.gemini_api_key:
+    if not settings.ai_api_key:
         if verdict_counts.get("BUY", 0) > verdict_counts.get("SELL", 0):
             sentiment = "bullish"
         elif verdict_counts.get("SELL", 0) > verdict_counts.get("BUY", 0):
@@ -91,12 +91,11 @@ SENTIMEN: bullish/bearish/neutral
 RINGKASAN: <ringkasan>"""
 
     def _call() -> str:
-        client = genai.Client(api_key=settings.gemini_api_key)
-        response = client.models.generate_content(
-            model="gemini-3.5-flash",
-            contents=prompt,
+        response = get_client().chat.completions.create(
+            model=settings.ai_model,
+            messages=[{"role": "user", "content": prompt}],
         )
-        return response.text.strip()
+        return response.choices[0].message.content.strip()
 
     try:
         raw = await asyncio.wait_for(asyncio.to_thread(_call), timeout=15)
@@ -129,15 +128,18 @@ RINGKASAN: <ringkasan>"""
 
 
 @router.get("/market", response_model=MarketInsightResponse)
-async def market_insight():
+async def market_insight(mode: str = "BSJP"):
     global _insight_cache
     now = datetime.now().timestamp()
     if _insight_cache and now - _insight_cache.get("ts", 0) < _insight_ttl:
         return MarketInsightResponse(success=True, data=_insight_cache["data"])
 
     try:
-        data = await _generate_market_insight()
-        _insight_cache = {"data": data, "ts": now}
+        data = await _generate_market_insight(mode)
+        # ponytail: hanya cache hasil berisi data; hasil kosong ("belum tersedia")
+        # tidak dicache supaya scan berikutnya langsung terlihat, bukan beku 30 menit.
+        if (data.get("total_stocks") or 0) > 0:
+            _insight_cache = {"data": data, "ts": now}
         return MarketInsightResponse(success=True, data=data)
     except Exception as e:
         logger.error("Market insight error: %s", e, exc_info=True)

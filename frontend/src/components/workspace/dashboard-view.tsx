@@ -105,18 +105,65 @@ export function DashboardView() {
   const [wlInput, setWlInput] = useState("");
   const [wlAdding, setWlAdding] = useState(false);
   const [loading, setLoading] = useState({ screen: true, wl: true, hist: true });
+  const [errors, setErrors] = useState({ screen: "", wl: "", hist: "" });
 
-  useEffect(() => { loadAll(); }, []);
-
-  async function loadAll() {
-    setLoading({ screen: true, wl: true, hist: true });
-    await Promise.allSettled([
-      screenStocks().then(r => { if (r.success && r.data) { setScreenItems(r.data); setGeneratedAt(r.generated_at); } }),
-      isAuthenticated && fetchWatchlist().then(r => { if (r.success && r.data) setWatchlist(r.data); }),
-      isAuthenticated && fetchHistory(20).then(r => { if (r.success && r.data) setHistory(r.data); }),
-    ]);
-    setLoading({ screen: false, wl: false, hist: false });
+  async function loadScreen() {
+    setLoading(s => ({ ...s, screen: true }));
+    setErrors(e => ({ ...e, screen: "" }));
+    try {
+      const r = await screenStocks();
+      if (r.success && r.data) {
+        setScreenItems(r.data);
+        setGeneratedAt(r.generated_at);
+        setErrors(e => ({ ...e, screen: r.error || "" }));
+      } else {
+        setErrors(e => ({ ...e, screen: r.error || "Gagal memuat screening" }));
+      }
+    } catch {
+      setErrors(e => ({ ...e, screen: "Gagal memuat screening. Cek koneksi ke backend." }));
+    } finally {
+      setLoading(s => ({ ...s, screen: false }));
+    }
   }
+
+  async function loadWatchlist() {
+    setLoading(s => ({ ...s, wl: true }));
+    setErrors(e => ({ ...e, wl: "" }));
+    try {
+      const r = await fetchWatchlist();
+      if (r.success && r.data) setWatchlist(r.data);
+      else setErrors(e => ({ ...e, wl: "Gagal memuat watchlist" }));
+    } catch {
+      setErrors(e => ({ ...e, wl: "Gagal memuat watchlist" }));
+    } finally {
+      setLoading(s => ({ ...s, wl: false }));
+    }
+  }
+
+  async function loadHistory() {
+    setLoading(s => ({ ...s, hist: true }));
+    setErrors(e => ({ ...e, hist: "" }));
+    try {
+      const r = await fetchHistory(20);
+      if (r.success && r.data) setHistory(r.data);
+      else setErrors(e => ({ ...e, hist: "Gagal memuat riwayat" }));
+    } catch {
+      setErrors(e => ({ ...e, hist: "Gagal memuat riwayat" }));
+    } finally {
+      setLoading(s => ({ ...s, hist: false }));
+    }
+  }
+
+  useEffect(() => {
+    loadScreen();
+    if (isAuthenticated) {
+      loadWatchlist();
+      loadHistory();
+    } else {
+      setLoading({ screen: false, wl: false, hist: false });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   async function handleAddWl() {
     const t = wlInput.trim().toUpperCase();
@@ -159,6 +206,12 @@ export function DashboardView() {
           <Section title="Top Rekomendasi AI" defaultOpen>
             {loading.screen ? (
               <div className="space-y-2">{[...Array(3)].map((_, i) => <Skeleton key={i} variant="row" />)}</div>
+            ) : errors.screen ? (
+              <div className="flex items-center justify-between gap-3">
+                <p className="text-zinc-500 text-sm">{errors.screen}</p>
+                <button type="button" onClick={loadScreen} disabled={loading.screen}
+                  className="shrink-0 px-2 py-1 bg-zinc-800 hover:bg-zinc-700 disabled:opacity-50 text-zinc-300 text-xs rounded-md transition-colors">Coba lagi</button>
+              </div>
             ) : topPicks.length === 0 ? (
               <p className="text-zinc-500 text-sm">Belum ada data screening.</p>
             ) : (
@@ -181,6 +234,12 @@ export function DashboardView() {
             >
               {loading.wl ? (
                 <div className="space-y-2">{[...Array(2)].map((_, i) => <Skeleton key={i} variant="row" />)}</div>
+              ) : errors.wl ? (
+                <div className="flex items-center justify-between gap-3">
+                  <p className="text-zinc-500 text-sm">{errors.wl}</p>
+                  <button type="button" onClick={loadWatchlist} disabled={loading.wl}
+                    className="shrink-0 px-2 py-1 bg-zinc-800 hover:bg-zinc-700 disabled:opacity-50 text-zinc-300 text-xs rounded-md transition-colors">Coba lagi</button>
+                </div>
               ) : watchlist.length === 0 ? (
                 <p className="text-zinc-500 text-sm">Belum ada saham di watchlist.</p>
               ) : (
@@ -195,6 +254,16 @@ export function DashboardView() {
             <Section title="Riwayat Terakhir" defaultOpen>
               {loading.hist ? (
                 <div className="space-y-2">{[...Array(3)].map((_, i) => <Skeleton key={i} variant="row" />)}</div>
+              ) : errors.hist ? (
+                <div className="flex items-center justify-between gap-3">
+                  <p className="text-zinc-500 text-sm">{errors.hist}</p>
+                  <button type="button" onClick={loadHistory} disabled={loading.hist}
+                    className="shrink-0 px-2 py-1 bg-zinc-800 hover:bg-zinc-700 disabled:opacity-50 text-zinc-300 text-xs rounded-md transition-colors">Coba lagi</button>
+                </div>
+              ) : visibleHistory.length === 0 && generatedAt ? (
+                <p className="text-zinc-500 text-sm">
+                  Data screening terakhir: {new Date(generatedAt).toLocaleString("id-ID")}
+                </p>
               ) : visibleHistory.length === 0 ? (
                 <p className="text-zinc-500 text-sm">Belum ada riwayat riset.</p>
               ) : (

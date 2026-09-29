@@ -1,16 +1,20 @@
 """Repository Stock Price — satu pintu akses data harga & verifikasi ticker.
 
-Primary harga: IDX (`IdxProvider.fetch_daily_price`, OHLCV harian). Fallback:
-Yahoo Finance (`StockPriceProvider`) bila IDX tidak memberi data. Verifikasi
-ticker tetap pakai Yahoo (IDX tidak punya endpoint verify). Cache per kategori.
-Tidak ada business logic.
+Primary: IDX Edge PRO (`IdxEdgeProvider`, REST API) saat `IDX_EDGE_API_KEY` diisi.
+Kill-switch: bila key kosong, kembali memakai IDX scraping + Yahoo Finance.
+Tidak ada business logic di sini; hanya orkestrasi sumber + cache.
 """
+
+import logging
 
 import pandas as pd
 
 from app.cache.service import cache_service
-from app.providers import IdxProvider, StockPriceProvider
 from app.config import settings
+from app.providers import IdxProvider, StockPriceProvider
+from app.providers.idx_edge_provider import IdxEdgeProvider, rows_to_price_df
+
+logger = logging.getLogger(__name__)
 
 _PRICE_CATEGORY = "price"
 _VERIFY_CATEGORY = "verify"
@@ -31,14 +35,26 @@ def _period_to_limit(period: str) -> int:
     return 252
 
 
+async def _known_ticker(clean: str) -> bool:
+    """Fallback verifikasi: cek daftar ticker terdaftar (DB → whitelist statis)."""
+    try:
+        from app.data.ticker_sync import get_listed_tickers
+
+        return clean in {t.upper() for t in await get_listed_tickers()}
+    except Exception:  # noqa: BLE001
+        return False
+
+
 class StockPriceRepository:
     def __init__(
         self,
         provider: StockPriceProvider | None = None,
         idx_provider: IdxProvider | None = None,
+        edge_provider: IdxEdgeProvider | None = None,
     ):
         self._provider = provider or StockPriceProvider()
         self._idx_provider = idx_provider or IdxProvider()
+        self._edge = edge_provider or IdxEdgeProvider()
 
     async def get_price(
         self, symbol: str, fast_fail: bool = False
@@ -47,10 +63,7 @@ class StockPriceRepository:
         cached = await cache_service.get(_PRICE_CATEGORY, key)
         if cached is not None:
             return cached
-        limit = _period_to_limit(settings.yfinance_period)
-        df, sim = await self._idx_provider.fetch_daily_price(symbol, limit=limit)
-        if df is None:
-            df, sim = await self._provider.fetch_price(symbol, fast_fail=fast_fail)
+        df, sim = await self._fetch(symbol, _period_to_limit(settings.yfinance_period))
         await cache_service.set(_PRICE_CATEGORY, key, (df, sim))
         return df, sim
 
@@ -61,12 +74,22 @@ class StockPriceRepository:
         cached = await cache_service.get(_PRICE_CATEGORY, key)
         if cached is not None:
             return cached
-        df, sim = await self._idx_provider.fetch_daily_price(
-            symbol, limit=_period_to_limit(period)
-        )
-        if df is None:
-            df, sim = await self._provider.get_history(symbol, period=period)
+        df, sim = await self._fetch(symbol, _period_to_limit(period))
         await cache_service.set(_PRICE_CATEGORY, key, (df, sim))
+        return df, sim
+
+    async def _fetch(
+        self, symbol: str, limit: int
+    ) -> tuple[pd.DataFrame | None, bool]:
+        if self._edge.enabled:
+            clean = symbol.upper().replace(".JK", "")
+            rows = await self._edge.fetch_history(clean, limit=limit)
+            return rows_to_price_df(rows), False
+        df, sim = await self._idx_provider.fetch_daily_price(symbol, limit=limit)
+        if df is None:
+            df, sim = await self._provider.fetch_history(
+                symbol, period=settings.yfinance_period
+            )
         return df, sim
 
     async def verify_ticker(self, candidate: str) -> bool:
@@ -74,7 +97,15 @@ class StockPriceRepository:
         cached = await cache_service.get(_VERIFY_CATEGORY, key)
         if cached is not None:
             return cached
-        result = await self._provider.verify_ticker(candidate)
+        if self._edge.enabled:
+            results = await self._edge.search(key)
+            result = any(
+                (r.get("stock_code") or "").upper() == key for r in results
+            )
+            if not result:
+                result = await _known_ticker(key)
+        else:
+            result = await self._provider.verify_ticker(candidate)
         await cache_service.set(_VERIFY_CATEGORY, key, result)
         return result
 

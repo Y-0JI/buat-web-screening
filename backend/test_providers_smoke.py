@@ -45,6 +45,7 @@ def test_imports():
         "FundamentalsProvider",
         "IdxProvider",
         "RssProvider",
+        "IdxEdgeProvider",
     ):
         assert hasattr(providers, name), f"provider {name} tidak ter-export"
 
@@ -253,6 +254,48 @@ async def _test_news_primary_and_order():
         assert it["related_ticker"] == "BBCA" and it["source"] == "IDX"
 
 
+def test_stock_price_edge_wiring():
+    from app.providers.idx_edge_provider import IdxEdgeProvider
+    from app.repositories.stock_price_repository import StockPriceRepository
+
+    repo = StockPriceRepository()
+    assert isinstance(repo._edge, IdxEdgeProvider), "repo harus punya _edge"
+
+
+async def _test_stock_price_uses_edge():
+    import httpx
+    from app.config import settings
+    from app.providers.idx_edge_provider import IdxEdgeProvider
+    from app.repositories.stock_price_repository import StockPriceRepository
+
+    old_key = settings.idx_edge_api_key
+    settings.idx_edge_api_key = "test-key"
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if "/api/history/" in str(request.url):
+            return httpx.Response(200, json={"rows": [
+                {"date": "2026-09-28", "open": 6200, "high": 6250, "low": 6100,
+                 "close": 6175, "volume": 120000000},
+                {"date": "2026-09-29", "open": 6100, "high": 6200, "low": 6050,
+                 "close": 6150, "volume": 150000000},
+            ]})
+        if "/api/search" in str(request.url):
+            return httpx.Response(200, json=[{"stock_code": "BBCA"}])
+        return httpx.Response(404, json={})
+
+    edge = IdxEdgeProvider(client=httpx.AsyncClient(
+        transport=httpx.MockTransport(handler), base_url="https://stock.arjum.com"))
+    repo = StockPriceRepository(edge_provider=edge)
+    try:
+        df, sim = await repo.get_history("BBCA", period="1mo")
+        assert df is not None and sim is False, (df, sim)
+        assert list(df.columns) == ["Open", "High", "Low", "Close", "Volume"]
+        assert float(df["Close"].iloc[-1]) == 6150.0
+        assert await repo.verify_ticker("BBCA") is True
+    finally:
+        settings.idx_edge_api_key = old_key
+
+
 def main():
     test_imports()
     test_repository_wiring()
@@ -262,6 +305,8 @@ def main():
     test_news_repo_wiring()
     test_news_normalize_fields()
     test_news_dedupe_and_sort()
+    test_stock_price_edge_wiring()
+    asyncio.run(_test_stock_price_uses_edge())
     asyncio.run(_test_idx_fallback())
     asyncio.run(_test_profile_fields())
     asyncio.run(_test_fundamentals_repo())

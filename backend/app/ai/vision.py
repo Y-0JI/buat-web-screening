@@ -1,9 +1,9 @@
 import asyncio
+import base64
 import logging
-from google import genai
-from google.genai import types
-from app.config import settings
 import re
+from app.ai.client import get_client
+from app.config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -81,30 +81,36 @@ def parse_vision_response(text: str) -> dict:
 
 
 async def analyze_chart_image(image_bytes: bytes, filename: str) -> dict:
-    if not settings.gemini_api_key:
+    if not settings.ai_api_key:
         return {
             "file_name": filename,
-            "analysis_text": "AI vision tidak tersedia (GEMINI_API_KEY tidak diisi)",
+            "analysis_text": "AI vision tidak tersedia (AI_API_KEY belum diisi)",
             "patterns_detected": [],
             "trend": None,
             "support_level": None,
             "resistance_level": None,
         }
 
-    client = genai.Client(api_key=settings.gemini_api_key)
-
     mime_type = "image/jpeg" if filename.lower().endswith((".jpg", ".jpeg")) else "image/png"
-    image_part = types.Part.from_bytes(data=image_bytes, mime_type=mime_type)
+    data_uri = f"data:{mime_type};base64,{base64.b64encode(image_bytes).decode()}"
 
-    def _call_gemini():
-        response = client.models.generate_content(
-            model="gemini-3.5-flash",
-            contents=[VISION_PROMPT, image_part],
+    def _call_ai():
+        response = get_client().chat.completions.create(
+            model=settings.ai_model,
+            messages=[
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": VISION_PROMPT},
+                        {"type": "image_url", "image_url": {"url": data_uri}},
+                    ],
+                }
+            ],
         )
-        return response.text.strip()
+        return response.choices[0].message.content.strip()
 
     try:
-        raw_text = await asyncio.to_thread(_call_gemini)
+        raw_text = await asyncio.to_thread(_call_ai)
         parsed = parse_vision_response(raw_text)
         parsed["file_name"] = filename
         return parsed

@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Float, DateTime, ForeignKey, Text
+from sqlalchemy import Column, Integer, String, Float, DateTime, ForeignKey, Text, JSON
 from sqlalchemy.orm import DeclarativeBase, relationship
 from sqlalchemy.sql import func
 
@@ -70,3 +70,13 @@ class ScanHistory(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     user = relationship("User", back_populates="scan_histories")
+
+
+class ScreeningResult(Base):
+    """Hasil batch scan terakhir per mode — dipertahankan saat restart."""
+
+    __tablename__ = "screening_results"
+
+    mode = Column(String(10), primary_key=True)
+    results = Column(JSON, nullable=False)
+    updated_at = Column(Float, nullable=False)

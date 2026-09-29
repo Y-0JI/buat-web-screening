@@ -1,34 +1,21 @@
-import asyncio
 import logging
 from datetime import datetime
 
-from curl_cffi import requests as curl_requests
 from sqlalchemy import text
 
-from app.config import settings
 from app.database import get_session
 from app.database.models import SyncStatus
 
 logger = logging.getLogger(__name__)
 
-# -------- Konfigurasi sumber eksternal ----------
-# 1️⃣ Sectors.app (memang memerlukan API key berbayar)
-SECTORS_API_KEY = settings.sectors_api_key  # ← tambah env var SECTORS_API_KEY
-SECTORS_ENDPOINTS = [
-    "https://api.sectors.app/v1/index/idx30/",
-    "https://api.sectors.app/v1/index/idx80/",
-    "https://api.sectors.app/v1/index/kompas100/",
-]  # ← sesuaikan dengan endpoint yang benar di docs.sectors.app
 
-SECTORS_HEADERS = {"Authorization": SECTORS_API_KEY} if SECTORS_API_KEY else {}
+# -------- Sumber daftar ticker: IDX Edge PRO --------
+def _edge_provider():
+    """Pabrik provider IDX Edge PRO — dapat diganti pada test."""
+    from app.providers.idx_edge_provider import IdxEdgeProvider
 
-# 2️⃣ IDX.co.id (publik, tapi harus pakai header browser‑like)
-IDX_HEADERS = {
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36",
-    "Accept": "application/json",
-}
-# URL publik daftar emiten (JSON) – lebih ringan dan peluang lebih besar lolos Cloudflare
-IDX_JSON_URL = "https://www.idx.co.id/primary/ListedCompany/GetCompanyProfiles"
+    return IdxEdgeProvider()
+
 
 # -------- Fungsi fetch ----------
 async def fetch_and_store_tickers():
@@ -99,85 +86,30 @@ def _static_tickers():
 
 
 async def _fetch_from_sources():
-    # ① Sectors.app dengan (opsional) API key
-    if SECTORS_API_KEY:
-        try:
-            data = await _fetch_sectors()
-            if data:
-                return data
-        except Exception as e:
-            logger.warning("Sectors.app gagal: %s", e)
-    # ② IDX.co.id publik (JSON)
-    try:
-        data = await _fetch_idx()
-        if data:
-            return data
-    except Exception as e:
-        logger.warning("IDX.co.id gagal: %s", e)
-    return []
-
-
-async def _fetch_sectors():
-    """Fetch tickers dari satu atau beberapa endpoint Sectors.app."""
-    def _sync():
-        out = []
-        for url in SECTORS_ENDPOINTS:
-            try:
-                resp = curl_requests.get(url, headers=SECTORS_HEADERS, timeout=15)
-                resp.raise_for_status()
-                json_data = resp.json()
-                if isinstance(json_data, list):
-                    for item in json_data:
-                        out.append({
-                            "ticker": item.get("symbol") or item.get("ticker"),
-                            "company_name": item.get("company_name") or item.get("name"),
-                            "sector": item.get("sector"),
-                        })
-            except Exception:
-                continue  # Skip this URL if any error occurs
-        return out
-    
-    # Since main function is async, wrap in asyncio.to_thread
-    return await asyncio.to_thread(_sync)
-
-
-async def _fetch_idx():
-    """Fetch tickers dari idx.co.id (JSON endpoint)."""
-    def _parse_rows(rows):
-        out = []
-        for row in rows:
-            out.append({
-                "ticker": str(row.get("KodeEmiten") or row.get("Kode") or "").strip().upper(),
-                "company_name": row.get("NamaEmiten") or row.get("Nama") or "",
-                "sector": row.get("Sektor") or "",
-            })
-        return out
-
-    def _sync():
-        try:
-            resp = curl_requests.get(
-                IDX_JSON_URL,
-                params={"emitenType": "s", "start": 0, "length": 9999},
-                headers=IDX_HEADERS,
-                impersonate="chrome124",
-                timeout=15,
-            )
-            resp.raise_for_status()
-            data = resp.json()
-
-            if isinstance(data, dict) and "data" in data:
-                raw_rows = data["data"]
-            elif isinstance(data, list):
-                raw_rows = data
-            else:
-                raw_rows = data if isinstance(data, list) else []
-
-            parsed = _parse_rows(raw_rows)
-            return [r for r in parsed if r["ticker"]]
-        except Exception as e:
-            logger.warning("IDX JSON endpoint gagal: %s", e)
-            return []
-    return await asyncio.to_thread(_sync)
+    """Ambil seluruh daftar emiten dari IDX Edge PRO (market-cap, paginasi)."""
+    provider = _edge_provider()
+    if not provider.enabled:
+        logger.warning("IDX_EDGE_API_KEY kosong — sync ticker dilewati")
+        return []
+    out: list[dict] = []
+    page = 1
+    while True:
+        data = await provider.fetch_market_cap(page=page, per_page=50)
+        if not data or not data.get("data"):
+            break
+        for row in data["data"]:
+            code = str(row.get("code") or "").strip().upper()
+            if code:
+                out.append({
+                    "ticker": code,
+                    "company_name": row.get("name"),
+                    "sector": None,
+                })
+        total_pages = data.get("total_pages") or page
+        if page >= total_pages:
+            break
+        page += 1
+    return out
 
 
 async def _get_current_ticker_count() -> int:

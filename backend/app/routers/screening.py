@@ -1,4 +1,5 @@
 import asyncio
+import logging
 from datetime import datetime
 from typing import Optional
 from fastapi import APIRouter, Depends
@@ -21,6 +22,7 @@ from app.database import get_session
 from app.database.models import User, ScanHistory
 from app.routers.auth import get_current_user_optional
 
+logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api", tags=["screening"])
 
 
@@ -82,17 +84,17 @@ def _to_ranking_items(rows: list[dict]) -> list[RankingItem]:
 async def screen(mode: str = "BSJP"):
     cached, cached_mode = await get_cached_screening(mode)
     if not (cached and cached_mode == mode):
-        # ponytail: cold miss men-scan SELURUH universe (get_listed_tickers)
-        # lewat run_batch_scan supaya universe & scoring konsisten dengan
-        # scheduler — bukan lagi subset MOCK_DATA. Normalnya scheduler sudah
-        # menghangatkan cache; jadikan background job bila latency cold-miss
-        # jadi masalah.
-        await run_batch_scan(mode)
-        cached, _ = await get_cached_screening(mode)
+        logger.info("Cache cold mode=%s — trigger background scan", mode)
+        asyncio.create_task(run_batch_scan(mode))
 
     rows = cached or []
     ts = await get_screening_timestamp(mode)
     generated_at = datetime.fromtimestamp(ts).isoformat() if ts else None
+    if not rows:
+        return ScreeningResponse(
+            success=True, data=[], generated_at=generated_at,
+            error="Data screening sedang diperbarui, coba lagi dalam beberapa menit.",
+        )
     return ScreeningResponse(
         success=True, data=_to_ranking_items(rows), generated_at=generated_at
     )
