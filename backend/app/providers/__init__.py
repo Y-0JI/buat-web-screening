@@ -3,6 +3,7 @@
 from app.providers.base import MOCK_DATA, resolve_ticker
 from app.providers.company_profile_provider import CompanyProfileProvider
 from app.providers.fundamentals_provider import FundamentalsProvider
+from app.providers.idx_edge_provider import IdxEdgeProvider
 from app.providers.idx_provider import IdxProvider
 from app.providers.news_provider import NewsProvider
 from app.providers.rss_provider import RssProvider
@@ -16,5 +17,6 @@ __all__ = [
     "NewsProvider",
     "FundamentalsProvider",
     "IdxProvider",
+    "IdxEdgeProvider",
     "RssProvider",
 ]

@@ -45,6 +45,7 @@ def test_imports():
         "FundamentalsProvider",
         "IdxProvider",
         "RssProvider",
+        "IdxEdgeProvider",
     ):
         assert hasattr(providers, name), f"provider {name} tidak ter-export"
 
