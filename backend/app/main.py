@@ -1,128 +1,42 @@
+"""Entrypoint backend chat-first.
+
+Hanya menyajikan: chat (agen streaming), katalog model, threads, dan health.
+Layer provider/service/repository tetap dipakai oleh tool agen. Router fitur
+lama tidak lagi dipasang.
+"""
+
 import logging
-import asyncio
-import subprocess
 from contextlib import asynccontextmanager
-from pathlib import Path
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+
 from app.config import settings
 from app.utils.logging import configure_logging, LoggingMiddleware
 from app.utils.error_handler import register_exception_handlers
-from app.routers.research import router as research_router
-from app.routers.screening import router as screening_router
-from app.routers.vision import router as vision_router
-from app.routers.auth import router as auth_router
-from app.routers.watchlist import router as watchlist_router
-from app.routers.history import router as history_router
-from app.data.ticker_sync import fetch_and_store_tickers
-from app.routers.chart import router as chart_router
 from app.routers.chat import router as chat_router
-from app.routers.insight import router as insight_router
-from app.routers.news import router as news_router
-from app.routers.stock import router as stock_router
-from app.routers.cache import router as cache_router
-from app.routers.market_intelligence import router as market_intelligence_router
-from app.ai.tools import set_main_loop
+from app.routers.models import router as models_router
+from app.routers.threads import router as threads_router
 
 configure_logging()
 logger = logging.getLogger(__name__)
 
-_scheduler = None
-
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Set main event loop for tool functions
-    set_main_loop(asyncio.get_running_loop())
     try:
         from app.database import engine
         from app.database.models import Base
+
         async with engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
         logger.info("Database tables ready")
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001
         logger.warning("Database tidak tersedia: %s", e)
-
-    # Jalankan migrasi Alembic agar struktur DB konsisten di semua environment
-    # (SQLite maupun database production). create_all di atas hanya membuat tabel
-    # yang belum ada; kolom tambahan pada tabel yang sudah terbentuk ditangani
-    # oleh migrasi resmi di folder alembic (berlaku untuk jenis DB manapun).
-    try:
-        backend_dir = Path(__file__).resolve().parent.parent
-        result = subprocess.run(
-            ["alembic", "upgrade", "head"],
-            cwd=str(backend_dir),
-            capture_output=True,
-            text=True,
-            check=False,
-        )
-        if result.returncode == 0:
-            logger.info("Alembic migration: head terpasang")
-        else:
-            logger.warning("Alembic migration gagal: %s", result.stderr.strip())
-    except Exception as e:
-        logger.warning("Alembic migration tidak bisa dijalankan: %s", e)
-
-    # Bootstrap: kalau tabel listed_tickers kosong, seed dari VALID_TICKERS
-    # supaya screening & /api/research tetap pakai daftar lengkap walaupun
-    # sync eksternal (idx.co.id/sectors.app) gagal.
-    try:
-        from sqlalchemy import text
-        from app.database import get_session
-        from app.database.models import ListedTicker
-        from app.data.idx_stocks import VALID_TICKERS
-        from datetime import datetime
-
-        async for session in get_session():
-            count = (await session.execute(text("SELECT COUNT(*) FROM listed_tickers"))).scalar()
-            if not count:
-                logger.info("listed_tickers kosong — seeding dari VALID_TICKERS (%d ticker)", len(VALID_TICKERS))
-                for t in VALID_TICKERS:
-                    session.add(ListedTicker(
-                        ticker=t,
-                        company_name=None,
-                        sector=None,
-                        is_active=1,
-                        last_synced_at=datetime.utcnow(),
-                    ))
-                await session.commit()
-                logger.info("Seeding selesai: %d ticker", len(VALID_TICKERS))
-            else:
-                logger.info("listed_tickers sudah terisi (%d ticker)", count)
-            break
-    except Exception as e:
-        logger.warning("Bootstrap listed_tickers gagal: %s", e)
-
-    if settings.scheduler_enabled:
-        try:
-            from apscheduler.schedulers.asyncio import AsyncIOScheduler
-            from apscheduler.triggers.cron import CronTrigger
-            from app.scheduler import run_daily_scan
-
-            global _scheduler
-            _scheduler = AsyncIOScheduler()
-            _scheduler.add_job(
-                run_daily_scan,
-                CronTrigger(day_of_week="mon-fri", hour=16, minute=30, timezone="Asia/Jakarta"),
-                id="daily_scan",
-                replace_existing=True,
-            )
-            _scheduler.add_job(
-                fetch_and_store_tickers,
-                CronTrigger(day_of_week="mon-fri", hour=16, minute=0, timezone="Asia/Jakarta"),
-                id="ticker_sync",
-                replace_existing=True,
-            )
-            _scheduler.start()
-            logger.info("Scheduler aktif: ticker_sync 16:00, batch_scan 16:30 WIB (Sen-Jum)")
-        except Exception as e:
-            logger.warning("Scheduler tidak bisa diaktifkan: %s", e)
     yield
-    if _scheduler:
-        _scheduler.shutdown()
 
 
-app = FastAPI(title="BSJP AI", version="0.1.0", lifespan=lifespan)
+app = FastAPI(title="IDX Copilot", version="0.2.0", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
@@ -133,21 +47,16 @@ app.add_middleware(
 app.add_middleware(LoggingMiddleware)
 register_exception_handlers(app)
 
-app.include_router(research_router)
-app.include_router(screening_router)
-app.include_router(vision_router)
-app.include_router(auth_router)
-app.include_router(watchlist_router)
-app.include_router(history_router)
-app.include_router(chart_router)
 app.include_router(chat_router)
-app.include_router(insight_router)
-app.include_router(news_router)
-app.include_router(stock_router)
-app.include_router(cache_router)
-app.include_router(market_intelligence_router)
+app.include_router(models_router)
+app.include_router(threads_router)
+
+
+@app.get("/health")
+async def health():
+    return {"status": "ok"}
 
 
 @app.get("/")
 async def root():
-    return {"app": "BSJP AI", "version": "0.1.0"}
+    return {"app": "IDX Copilot", "version": "0.2.0"}
