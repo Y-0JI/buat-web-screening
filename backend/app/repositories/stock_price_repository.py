@@ -17,7 +17,6 @@ from app.providers.idx_edge_provider import IdxEdgeProvider, rows_to_price_df
 logger = logging.getLogger(__name__)
 
 _PRICE_CATEGORY = "price"
-_VERIFY_CATEGORY = "verify"
 
 _PERIOD_LIMITS = {
     "1mo": 22,
@@ -33,16 +32,6 @@ def _period_to_limit(period: str) -> int:
         if period.startswith(key):
             return limit
     return 252
-
-
-async def _known_ticker(clean: str) -> bool:
-    """Fallback verifikasi: cek daftar ticker terdaftar (DB → whitelist statis)."""
-    try:
-        from app.data.ticker_sync import get_listed_tickers
-
-        return clean in {t.upper() for t in await get_listed_tickers()}
-    except Exception:  # noqa: BLE001
-        return False
 
 
 class StockPriceRepository:
@@ -92,23 +81,5 @@ class StockPriceRepository:
             )
         return df, sim
 
-    async def verify_ticker(self, candidate: str) -> bool:
-        key = candidate.upper().replace(".JK", "")
-        cached = await cache_service.get(_VERIFY_CATEGORY, key)
-        if cached is not None:
-            return cached
-        if self._edge.enabled:
-            results = await self._edge.search(key)
-            result = any(
-                (r.get("stock_code") or "").upper() == key for r in results
-            )
-            if not result:
-                result = await _known_ticker(key)
-        else:
-            result = await self._provider.verify_ticker(candidate)
-        await cache_service.set(_VERIFY_CATEGORY, key, result)
-        return result
-
     async def clear(self) -> None:
         await cache_service.clear(_PRICE_CATEGORY)
-        await cache_service.clear(_VERIFY_CATEGORY)
