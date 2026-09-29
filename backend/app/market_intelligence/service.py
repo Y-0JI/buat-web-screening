@@ -31,7 +31,7 @@ class MarketIntelligenceService:
             self._repo.get_dividend(ticker),
             self._repo.get_corporate_actions(ticker),
             self._repo.get_foreign_flow(ticker),
-            self._repo.get_broker_summary(),
+            self._repo.get_broker_summary(ticker),
             self._repo.get_earnings(ticker),
             self._repo.get_analyst(ticker),
             return_exceptions=True,

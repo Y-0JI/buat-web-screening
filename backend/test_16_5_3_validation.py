@@ -223,7 +223,7 @@ def test_await_coverage():
         await repo.get_dividend("AW")
         await repo.get_corporate_actions("TEST")
         await repo.get_foreign_flow("TEST")
-        await repo.get_broker_summary()
+        await repo.get_broker_summary("TEST")
         await repo.get_earnings("AW")
         await repo.get_analyst("AW")
         await repo.clear()

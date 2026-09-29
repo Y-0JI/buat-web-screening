@@ -12,6 +12,7 @@ from typing import Any, Dict, List, Optional
 from app.cache.service import cache_service
 from app.market_intelligence import models
 from app.market_intelligence.provider import MarketIntelligenceProvider
+from app.providers.idx_edge_provider import IdxEdgeProvider
 
 logger = logging.getLogger(__name__)
 
@@ -20,8 +21,13 @@ _MISS = object()  # sentinel: bedakan "belum di-cache" vs "ter-cache bernilai No
 
 
 class MarketIntelligenceRepository:
-    def __init__(self, provider: Optional[MarketIntelligenceProvider] = None):
+    def __init__(
+        self,
+        provider: Optional[MarketIntelligenceProvider] = None,
+        edge_provider: Optional[IdxEdgeProvider] = None,
+    ):
         self._provider = provider or MarketIntelligenceProvider()
+        self._edge = edge_provider or IdxEdgeProvider()
 
     @staticmethod
     async def _cached_or_none(category: str, key: str):
@@ -110,9 +116,46 @@ class MarketIntelligenceRepository:
             return None
         return models.normalize_foreign_flow(summary.get(code), d)
 
-    # ---------- Broker Summary (market-wide) ----------
+    # ---------- Broker Summary (per-ticker, IDX Edge PRO) ----------
 
-    async def get_broker_summary(self, limit: int = 20) -> List[Dict[str, Any]]:
+    async def get_broker_summary(
+        self, ticker: str, limit: int = 20
+    ) -> List[Dict[str, Any]]:
+        code = ticker.upper().replace(".JK", "")
+        key = f"{code}:{limit}"
+        cached = await self._cached_or_none("broker_summary", key)
+        if cached is not _MISS:
+            return cached
+        rows = await self._edge_broker(code, limit)
+        if rows is None:
+            rows = await self._legacy_broker_summary(limit)
+        await self._store("broker_summary", key, rows)
+        return rows
+
+    async def _edge_broker(
+        self, code: str, limit: int
+    ) -> Optional[List[Dict[str, Any]]]:
+        if not self._edge.enabled:
+            return None
+        data = await self._edge.fetch_broker_summary(code, broker_limit=limit)
+        if not data:
+            return None
+        items = [
+            {
+                "broker_code": b.get("broker_code"),
+                "broker_name": b.get("broker_name"),
+                "volume": b.get("bvol"),
+                "value": b.get("bval"),
+                "frequency": b.get("bfrq"),
+            }
+            for b in data.get("brokers") or []
+        ]
+        items.sort(key=lambda x: abs(x.get("value") or 0), reverse=True)
+        return items[:limit]
+
+    async def _legacy_broker_summary(
+        self, limit: int
+    ) -> List[Dict[str, Any]]:
         pointer = await cache_service.get("broker_summary", "latest_date")
         rows: Optional[List[Dict[str, Any]]] = None
         if pointer is not None:
