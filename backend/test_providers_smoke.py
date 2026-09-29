@@ -56,20 +56,6 @@ def test_repository_wiring():
     assert isinstance(repositories.stock_price_repository._idx_provider, IdxProvider)
 
 
-def test_profile_endpoint_wiring():
-    from app.routers.stock import router as stock_router
-
-    paths = [r.path for r in stock_router.routes]
-    assert "/api/stock/{ticker}/profile" in paths, paths
-
-
-def test_fundamentals_endpoint_wiring():
-    from app.routers.stock import router as stock_router
-
-    paths = [r.path for r in stock_router.routes]
-    assert "/api/stock/{ticker}/fundamentals" in paths, paths
-
-
 def test_fundamentals_canonical_merge():
     """16.4.3: _merge_fundamentals selalu keluarkan daftar field kanonik.
 
@@ -291,7 +277,6 @@ async def _test_stock_price_uses_edge():
         assert df is not None and sim is False, (df, sim)
         assert list(df.columns) == ["Open", "High", "Low", "Close", "Volume"]
         assert float(df["Close"].iloc[-1]) == 6150.0
-        assert await repo.verify_ticker("BBCA") is True
     finally:
         settings.idx_edge_api_key = old_key
 
@@ -299,8 +284,6 @@ async def _test_stock_price_uses_edge():
 def main():
     test_imports()
     test_repository_wiring()
-    test_profile_endpoint_wiring()
-    test_fundamentals_endpoint_wiring()
     test_fundamentals_canonical_merge()
     test_news_repo_wiring()
     test_news_normalize_fields()

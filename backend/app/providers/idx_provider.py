@@ -49,8 +49,21 @@ class _IdxRateLimited(Exception):
         self.retry_after = retry_after
 
 
+class _IdxClientError(Exception):
+    """4xx (selain 429) — tidak layak di-retry, gagalkan cepat."""
+
+    def __init__(self, status_code: int):
+        self.status_code = status_code
+        super().__init__(f"IDX client error {status_code}")
+
+
 async def _fetch_json(url: str, timeout: int = 20) -> Any:
-    """GET JSON dari IDX dengan rate-limit, retry + backoff + jitter."""
+    """GET JSON dari IDX dengan rate-limit, retry + backoff + jitter.
+
+    Hanya retry untuk 429 dan kegagalan sementara (5xx/network). Error 4xx lain
+    (mis. 403/404) langsung digagalkan agar pemanggil bisa fallback tanpa
+    menunggu backoff panjang.
+    """
     max_retries = 4
     base_delay = 2.0
 
@@ -63,10 +76,14 @@ async def _fetch_json(url: str, timeout: int = 20) -> Any:
                 if resp.status_code == 429:
                     ra = resp.headers.get("Retry-After")
                     raise _IdxRateLimited(float(ra) if ra else None)
+                if 400 <= resp.status_code < 500:
+                    raise _IdxClientError(resp.status_code)
                 resp.raise_for_status()
                 return resp.json()
 
             return await asyncio.to_thread(_sync)
+        except _IdxClientError:
+            raise
         except _IdxRateLimited as e:
             if attempt >= max_retries:
                 raise
