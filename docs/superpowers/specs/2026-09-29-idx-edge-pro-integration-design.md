@@ -1,7 +1,7 @@
 # Desain: Integrasi IDX Edge PRO sebagai Sumber Data
 
 Tanggal: 2026-09-29
-Status: Disetujui (menunggu review spec)
+Status: Diimplementasikan (Tahap 1)
 Pendekatan: A — Adapter provider baru + repository lama sebagai seam
 
 ## 1. Latar Belakang
