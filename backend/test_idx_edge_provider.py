@@ -9,7 +9,7 @@ import sys
 import httpx
 
 from app.config import settings
-from app.providers.idx_edge_provider import IdxEdgeProvider
+from app.providers.idx_edge_provider import IdxEdgeProvider, rows_to_price_df
 
 
 def _client(handler):
@@ -77,12 +77,66 @@ async def _test_disabled_returns_none():
         settings.idx_edge_api_key = old
 
 
+def test_rows_to_price_df():
+    rows = [
+        {"date": "2026-09-29", "open": 6100, "high": 6200, "low": 6050,
+         "close": 6150, "volume": 150000000, "f_buy": 1, "f_sell": 2},
+        {"date": "2026-09-28", "open": 6200, "high": 6250, "low": 6100,
+         "close": 6175, "volume": 120000000},
+    ]
+    df = rows_to_price_df(rows)
+    assert df is not None
+    assert list(df.columns) == ["Open", "High", "Low", "Close", "Volume"], list(df.columns)
+    assert df.index.is_monotonic_increasing
+    assert float(df["Close"].iloc[-1]) == 6150.0
+    assert float(df["Volume"].iloc[0]) == 120000000.0
+    assert rows_to_price_df([]) is None
+    assert rows_to_price_df(None) is None
+
+
+async def _test_fetch_history():
+    old = _with_key()
+    seen = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen["url"] = str(request.url)
+        return httpx.Response(200, json={
+            "stock_code": "BBCA", "frame": "daily",
+            "rows": [{"date": "2026-09-29", "open": 6100, "high": 6200,
+                      "low": 6050, "close": 6150, "volume": 150000000}],
+        })
+
+    p = IdxEdgeProvider(client=_client(handler))
+    try:
+        rows = await p.fetch_history("BBCA", limit=120)
+        assert isinstance(rows, list) and len(rows) == 1, rows
+        assert "/api/history/BBCA" in seen["url"] and "limit=120" in seen["url"], seen
+    finally:
+        settings.idx_edge_api_key = old
+
+
+async def _test_fetch_history_error():
+    old = _with_key()
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(500, json={"detail": "boom"})
+
+    p = IdxEdgeProvider(client=_client(handler))
+    try:
+        assert await p.fetch_history("BBCA") is None
+    finally:
+        settings.idx_edge_api_key = old
+
+
 def main():
     test_enabled_flag()
+    test_rows_to_price_df()
     asyncio.run(_test_search())
     asyncio.run(_test_search_error_returns_empty())
     asyncio.run(_test_disabled_returns_none())
-    print("OK: test_idx_edge_provider (bagian 1) lolos")
+    asyncio.run(_test_fetch_history())
+    asyncio.run(_test_fetch_history_error())
+    print("OK: test_idx_edge_provider (bagian 2) lolos")
 
 
 if __name__ == "__main__":

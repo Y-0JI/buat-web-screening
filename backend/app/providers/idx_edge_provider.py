@@ -14,6 +14,7 @@ from datetime import date
 from typing import Any, Optional
 
 import httpx
+import pandas as pd
 
 from app.config import settings
 from app.providers.scheduler import request_scheduler
@@ -21,6 +22,35 @@ from app.providers.scheduler import request_scheduler
 logger = logging.getLogger(__name__)
 
 _QUOTA_WARN_RATIO = 0.9
+
+
+def rows_to_price_df(rows: Optional[list[dict]]) -> Optional[pd.DataFrame]:
+    """Konversi `rows` respons /api/history → DataFrame siap scoring.
+
+    Index = DatetimeIndex terurut naik; kolom = Open/High/Low/Close/Volume
+    (kapitalisasi awal, sama seperti `_flatten_columns`).
+    """
+    if not rows:
+        return None
+    records = []
+    for r in rows:
+        date_val = r.get("date")
+        if not date_val:
+            continue
+        try:
+            records.append({
+                "Date": pd.to_datetime(date_val),
+                "Open": float(r.get("open") or 0),
+                "High": float(r.get("high") or 0),
+                "Low": float(r.get("low") or 0),
+                "Close": float(r.get("close") or 0),
+                "Volume": float(r.get("volume") or 0),
+            })
+        except (TypeError, ValueError):
+            continue
+    if not records:
+        return None
+    return pd.DataFrame(records).sort_values("Date").set_index("Date")
 
 
 class IdxEdgeProvider:
@@ -89,3 +119,13 @@ class IdxEdgeProvider:
     async def search(self, q: str) -> list[dict]:
         data = await self._get_json("/api/search", {"q": q})
         return data if isinstance(data, list) else []
+
+    async def fetch_history(
+        self, code: str, frame: str = "daily", limit: int = 160
+    ) -> Optional[list[dict]]:
+        data = await self._get_json(
+            f"/api/history/{code}", {"frame": frame, "limit": limit}
+        )
+        if isinstance(data, dict):
+            return data.get("rows") or []
+        return None
