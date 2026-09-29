@@ -1,195 +1,140 @@
-import asyncio
+"""Router chat — agen streaming (SSE) + fallback non-streaming.
+
+Kontrak: klien mengirim SATU pesan baru (+ opsional `thread_id`). Bila
+`thread_id` ada, histori diambil dari DB; bila tidak, thread baru dibuat dan
+id-nya dikirim lewat event `thread`. Pesan user & asisten disimpan ke thread
+(identitas anonim via header `X-Device-Id`).
+"""
+
 import json
 import logging
-from fastapi import APIRouter
+from typing import AsyncGenerator, Optional
+
+from fastapi import APIRouter, Header, HTTPException
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
-from app.ai.client import get_client
+
+from app.ai.agent import stream_agent
 from app.config import settings
-from app.ai.tools import get_stock_data, get_company_news, get_fundamentals
+from app.repositories import chat_repository
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api", tags=["chat"])
 
 
-class ChatMessage(BaseModel):
-    role: str
-    content: str
-
-
 class ChatRequest(BaseModel):
-    messages: list[ChatMessage]
+    message: str
+    thread_id: Optional[int] = None
+    model: Optional[str] = None
     mode: str = "BSJP"
-    context: dict | None = None
+    context: Optional[dict] = None
 
 
-TOOL_MAP = {
-    "get_stock_data": get_stock_data,
-    "get_company_news": get_company_news,
-    "get_fundamentals": get_fundamentals,
-}
-
-TOOLS = [
-    {
-        "type": "function",
-        "function": {
-            "name": "get_stock_data",
-            "description": get_stock_data.__doc__.split("\n\n")[0],
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "ticker": {
-                        "type": "string",
-                        "description": "Kode saham IDX, 2-5 huruf, contoh BBCA.",
-                    },
-                    "mode": {
-                        "type": "string",
-                        "enum": ["BSJP", "BPJS"],
-                        "description": "Profil trading, BSJP atau BPJS. Default BSJP.",
-                    },
-                },
-                "required": ["ticker"],
-            },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "get_company_news",
-            "description": get_company_news.__doc__.split("\n\n")[0],
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "ticker": {
-                        "type": "string",
-                        "description": "Kode saham IDX, contoh BBCA.",
-                    },
-                    "limit": {
-                        "type": "integer",
-                        "description": "Jumlah berita yang diambil (default 5).",
-                    },
-                },
-                "required": ["ticker"],
-            },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "get_fundamentals",
-            "description": get_fundamentals.__doc__.split("\n\n")[0],
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "ticker": {
-                        "type": "string",
-                        "description": "Kode saham IDX, contoh BBCA.",
-                    },
-                },
-                "required": ["ticker"],
-            },
-        },
-    },
-]
+def _sse(event: dict) -> str:
+    return f"data: {json.dumps(event, default=str)}\n\n"
 
 
-def _run_chat(messages: list[ChatMessage], mode: str, context: dict | None = None) -> str:
-    context_str = ""
-    if context:
-        view = context.get("view")
-        ticker = context.get("ticker")
-        tickers = context.get("tickers", [])
-        if view:
-            context_str += f"\n- View aktif user saat ini: {view.upper()}"
-        if ticker:
-            context_str += f"\n- Ticker yang sedang dilihat user: {ticker}"
-        if tickers:
-            context_str += f"\n- Ticker yang sedang dibandingkan: {', '.join(tickers)}"
+async def _prepare(req: ChatRequest, device: str) -> tuple[int, list[dict], Optional[dict]]:
+    """Siapkan thread & histori. Return (thread_id, history, thread_event)."""
+    message = (req.message or "").strip()
+    if not message:
+        raise HTTPException(status_code=400, detail="Pesan kosong.")
 
-    system_instruction = (
-        "Kamu asisten riset saham IDX (Bursa Efek Indonesia). Jawab dalam Bahasa "
-        "Indonesia santai tapi informatif. Kalau user tanya soal saham tertentu, "
-        "panggil tool get_stock_data untuk data teknikal, lalu get_fundamentals "
-        "untuk data fundamental, dan get_company_news untuk berita terkini. "
-        "Kalau user tanya soal berita saham tertentu, panggil get_company_news. "
-        "Kalau user tanya soal fundamental, PE, dividen, atau profil perusahaan, "
-        "panggil get_fundamentals. "
-        "Kalau user minta bandingkan beberapa saham, panggil tool untuk masing-masing "
-        "lalu simpulkan. Jangan buat rekomendasi investasi langsung, selalu akhiri "
-        "analisis dengan disclaimer bahwa ini alat bantu riset. Kalau tool balikin "
-        "error (ticker tidak ditemukan), sampaikan apa adanya ke user, jangan mengarang data. "
-        f"Mode analisis yang aktif: {mode}. "
-        "Selalu sertakan parameter mode ini saat memanggil get_stock_data."
-        f"{context_str}"
-        "\n\nBerikan rekomendasi dalam bentuk yang bisa ditindaklanjuti. Kalau relevan, "
-        "sebutkan ticker spesifik (format: singkatan huruf kapital 1-5 karakter, misal BBCA) "
-        "supaya user bisa langsung membukanya. Jangan gunakan markdown link, cukup sebut ticker."
+    thread_event = None
+    if req.thread_id is not None:
+        thread = await chat_repository.get_thread(device, req.thread_id)
+        if thread is None:
+            raise HTTPException(status_code=404, detail="Thread tidak ditemukan.")
+        tid = req.thread_id
+        history = [{"role": m["role"], "content": m["content"]} for m in thread["messages"]]
+        if not thread["messages"]:
+            await chat_repository.update_thread(device, tid, title=message[:60])
+    else:
+        created = await chat_repository.create_thread(device, title=message[:60], model=req.model)
+        tid = created["id"]
+        history = []
+        thread_event = {"type": "thread", "id": tid, "title": created["title"]}
+
+    await chat_repository.add_message(tid, "user", message, model=req.model)
+    history.append({"role": "user", "content": message})
+    if req.model:
+        await chat_repository.update_thread(device, tid, model=req.model)
+    return tid, history, thread_event
+
+
+@router.post("/chat/stream")
+async def chat_stream(
+    req: ChatRequest, x_device_id: Optional[str] = Header(default=None)
+):
+    if not x_device_id or not x_device_id.strip():
+        raise HTTPException(status_code=400, detail="Header X-Device-Id wajib.")
+    device = x_device_id.strip()[:64]
+
+    tid, history, thread_event = await _prepare(req, device)
+
+    async def gen() -> AsyncGenerator[str, None]:
+        if thread_event:
+            yield _sse(thread_event)
+        assistant = {"content": "", "reasoning": "", "tool_calls": []}
+        async for event in stream_agent(
+            history, req.model or settings.ai_model, req.mode, req.context
+        ):
+            if event["type"] == "done":
+                assistant = event
+            yield _sse(event)
+        try:
+            await chat_repository.add_message(
+                tid,
+                "assistant",
+                assistant.get("content", ""),
+                reasoning=assistant.get("reasoning"),
+                tool_calls=assistant.get("tool_calls") or None,
+                model=req.model or settings.ai_model,
+            )
+        except Exception as e:  # noqa: BLE001
+            logger.warning("Gagal simpan pesan asisten: %s", e)
+
+    return StreamingResponse(
+        gen(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
-
-    msgs: list[dict] = [{"role": "system", "content": system_instruction}]
-    for m in messages:
-        role = "user" if m.role == "user" else "assistant"
-        msgs.append({"role": role, "content": m.content})
-
-    def _call() -> object:
-        return get_client().chat.completions.create(
-            model=settings.ai_model,
-            messages=msgs,
-            tools=TOOLS,
-            tool_choice="auto",
-        )
-
-    response = _call()
-    turn = 0
-    while turn < 5:
-        msg = response.choices[0].message
-        tool_calls = msg.tool_calls
-        if not tool_calls:
-            return msg.content
-
-        msgs.append({
-            "role": "assistant",
-            "content": msg.content,
-            "tool_calls": [
-                {
-                    "id": tc.id,
-                    "type": "function",
-                    "function": {"name": tc.function.name, "arguments": tc.function.arguments},
-                }
-                for tc in tool_calls
-            ],
-        })
-
-        for tc in tool_calls:
-            func = TOOL_MAP.get(tc.function.name)
-            if func is None:
-                result = {"error": f"Unknown function: {tc.function.name}"}
-            else:
-                try:
-                    result = func(**json.loads(tc.function.arguments or "{}"))
-                except Exception as e:
-                    result = {"error": str(e)}
-            msgs.append({
-                "role": "tool",
-                "tool_call_id": tc.id,
-                "content": json.dumps(result, default=str),
-            })
-
-        response = _call()
-        turn += 1
-
-    return response.choices[0].message.content
 
 
 @router.post("/chat")
-async def chat(req: ChatRequest):
+async def chat(req: ChatRequest, x_device_id: Optional[str] = Header(default=None)):
+    if not x_device_id or not x_device_id.strip():
+        raise HTTPException(status_code=400, detail="Header X-Device-Id wajib.")
+    device = x_device_id.strip()[:64]
+
     if not settings.ai_api_key:
         return {"success": False, "error": "AI_API_KEY belum diisi"}
-    if not req.messages:
-        return {"success": False, "error": "Messages kosong"}
+
     try:
-        reply = await asyncio.to_thread(_run_chat, req.messages, req.mode, req.context)
-        return {"success": True, "reply": reply}
-    except Exception as e:
-        logger.error("Chat error: %s", e, exc_info=True)
-        return {"success": False, "error": "Layanan AI sedang tidak tersedia. Coba kirim pesan lagi nanti."}
+        tid, history, _ = await _prepare(req, device)
+    except HTTPException:
+        raise
+
+    content, reasoning, tools = "", "", []
+    async for event in stream_agent(
+        history, req.model or settings.ai_model, req.mode, req.context
+    ):
+        if event["type"] == "done":
+            content = event.get("content", "")
+            reasoning = event.get("reasoning", "")
+            tools = event.get("tool_calls", [])
+        elif event["type"] == "error":
+            return {"success": False, "error": event.get("message"), "thread_id": tid}
+
+    await chat_repository.add_message(
+        tid, "assistant", content, reasoning=reasoning or None,
+        tool_calls=tools or None, model=req.model or settings.ai_model,
+    )
+    return {
+        "success": True,
+        "thread_id": tid,
+        "reply": content,
+        "reasoning": reasoning,
+        "tool_calls": tools,
+    }
