@@ -18,7 +18,6 @@ from app.config import settings
 from app.providers.idx_edge_provider import IdxEdgeProvider
 from app.scoring.funnel import calculate_score
 from app.services import (
-    company_profile_service,
     fundamentals_service,
     news_service,
     stock_service,
@@ -36,15 +35,24 @@ def _edge_provider() -> IdxEdgeProvider:
 
 # --------------------------------------------------------------- tool functions
 
+async def _company_name(ticker: str) -> str:
+    """Nama perusahaan dari IDX Edge PRO (cepat). Fallback: kode itu sendiri."""
+    code = ticker.upper()
+    results = await _edge_provider().search(code)
+    for r in results:
+        if (r.get("stock_code") or "").upper() == code:
+            return r.get("stock_name") or code
+    return code
+
+
 async def _get_stock_data(ticker: str, mode: str = "BSJP") -> dict:
     df, is_simulated = await stock_service.get_price(ticker, fast_fail=True)
     if df is None or df.empty:
         return {"error": f"Data untuk {ticker} tidak tersedia."}
-    info = await company_profile_service.get_profile(ticker)
     report = calculate_score(df, ticker, mode, is_simulated=is_simulated)
     return {
         "ticker": ticker.upper(),
-        "company_name": info.get("name", ticker),
+        "company_name": await _company_name(ticker),
         "price": report.price,
         "change_percent": report.change_percent,
         "score": report.score,
@@ -403,13 +411,20 @@ async def stream_agent(
                 ],
             })
 
+            parsed: list[tuple[dict, dict]] = []
             for r in resolved:
                 try:
                     args = json.loads(r["arguments"])
                 except (json.JSONDecodeError, TypeError):
                     args = {}
+                parsed.append((r, args))
                 yield {"type": "tool_start", "name": r["name"], "args": args}
-                result = await run_tool(r["name"], args)
+
+            outcomes = await asyncio.gather(
+                *(run_tool(r["name"], args) for r, args in parsed)
+            )
+
+            for (r, args), result in zip(parsed, outcomes):
                 ok = not (isinstance(result, dict) and result.get("error"))
                 all_tools.append({"name": r["name"], "args": args, "ok": ok})
                 yield {"type": "tool_result", "name": r["name"], "ok": ok, "summary": _summarize(result)}
