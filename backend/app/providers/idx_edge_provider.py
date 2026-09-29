@@ -163,3 +163,48 @@ class IdxEdgeProvider:
             params["broker_limit"] = broker_limit
         data = await self._get_json(f"/api/broker-summary/{code}", params)
         return data if isinstance(data, dict) else None
+
+    async def fetch_analysis(self, code: str) -> Optional[dict]:
+        data = await self._get_json(f"/api/analysis/{code}")
+        return data if isinstance(data, dict) else None
+
+    async def fetch_seasonal(self, code: str) -> Optional[dict]:
+        data = await self._get_json(f"/api/seasonal/{code}")
+        return data if isinstance(data, dict) else None
+
+    async def fetch_insiders(
+        self, code: str, page: int = 1, limit: int = 20,
+        action_type: Optional[str] = None,
+    ) -> Optional[dict]:
+        params: dict = {"page": page, "limit": limit}
+        if action_type:
+            params["action_type"] = action_type
+        data = await self._get_json(f"/api/insiders/{code}", params)
+        return data if isinstance(data, dict) else None
+
+    async def fetch_financial_statements(
+        self, code: str, report_type: Optional[str] = None,
+        period: Optional[str] = None, limit: Optional[int] = None,
+        year: Optional[str] = None,
+    ) -> Optional[dict]:
+        params: dict = {}
+        if report_type:
+            params["report_type"] = report_type
+        if period:
+            params["period"] = period
+        if limit:
+            params["limit"] = limit
+        if year:
+            params["year"] = year
+        data = await self._get_json(f"/api/financial-statements/{code}", params)
+        return data if isinstance(data, dict) else None
+
+    async def fetch_done_details(
+        self, code: str, date: Optional[str] = None,
+        page: int = 1, per_page: int = 100,
+    ) -> Optional[dict]:
+        params: dict = {"code": code, "page": page, "per_page": per_page}
+        if date:
+            params["date"] = date
+        data = await self._get_json("/api/done-details", params)
+        return data if isinstance(data, dict) else None

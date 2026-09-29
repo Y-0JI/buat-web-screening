@@ -1,10 +1,9 @@
 import type { Metadata } from "next";
 import "./globals.css";
-import { ClientLayout } from "@/components/client-layout";
 
 export const metadata: Metadata = {
-  title: "BSJP AI — Riset Saham Indonesia",
-  description: "AI Search untuk Analisis Saham Indonesia",
+  title: "Analisis Saham AI — IDX Copilot",
+  description: "Asisten AI untuk riset saham IDX (data IDX Edge PRO).",
 };
 
 export default function RootLayout({
@@ -14,8 +13,8 @@ export default function RootLayout({
 }) {
   return (
     <html lang="id">
-      <body className="bg-zinc-950 text-zinc-100 min-h-screen">
-        <ClientLayout>{children}</ClientLayout>
+      <body className="bg-zinc-950 text-zinc-100 min-h-screen antialiased">
+        {children}
       </body>
     </html>
   );
