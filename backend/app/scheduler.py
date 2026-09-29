@@ -16,6 +16,36 @@ _SCAN_TIMEOUT = 120
 _TICKER_NAMES: dict[str, str] | None = None
 
 
+def _edge_provider():
+    """Pabrik provider IDX Edge PRO — dapat diganti pada test."""
+    from app.providers.idx_edge_provider import IdxEdgeProvider
+
+    return IdxEdgeProvider()
+
+
+async def _get_scan_candidates() -> list[str]:
+    """Kandidat scan: pre-filter `screener/latest` saat IDX Edge aktif.
+
+    Bila API gagal/key kosong → fallback whitelist lama hanya saat IDX Edge
+    TIDAK aktif; saat aktif tapi gagal, kembalikan [] agar cache lama dipakai
+    dan kuota tidak jebol karena scan seluruh emiten.
+    """
+    provider = _edge_provider()
+    if provider.enabled:
+        data = await provider.fetch_screener()
+        if data and data.get("rows"):
+            codes = [
+                str(r.get("stock_code")).upper()
+                for r in data["rows"]
+                if r.get("stock_code")
+            ]
+            if codes:
+                return codes
+        logger.warning("Screener IDX Edge PRO gagal/kosong — pakai hasil cache terakhir")
+        return []
+    return await get_listed_tickers()
+
+
 async def _persist_screening(mode: str, results: list[dict], ts: float) -> None:
     try:
         from app.database import async_session
@@ -120,9 +150,9 @@ async def run_batch_scan(mode: str = "BSJP"):
                 logger.warning("Gagal scan %s: %s", ticker, e)
                 return None
 
-    tickers = await get_listed_tickers()
+    tickers = await _get_scan_candidates()
     if not tickers:
-        logger.error("Tidak ada ticker untuk di-scan (mode=%s)", mode)
+        logger.error("Tidak ada kandidat scan (mode=%s) — cache tidak diubah", mode)
         return
 
     total = len(tickers)
