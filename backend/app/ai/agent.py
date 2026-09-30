@@ -15,7 +15,11 @@ from typing import Any, AsyncGenerator, Optional
 
 from app.ai.client import get_async_client
 from app.config import settings
-from app.providers.idx_edge_provider import IdxEdgeProvider, history_series
+from app.providers.idx_edge_provider import (
+    IdxEdgeProvider,
+    broker_summary_payload,
+    history_series,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -57,15 +61,26 @@ async def _get_screener() -> dict:
     }
 
 
-async def _get_broker_summary(ticker: str) -> dict:
-    data = await _edge_provider().fetch_broker_summary(ticker.upper(), broker_limit=20)
-    if not data:
+async def _get_broker_summary(
+    ticker: str,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    flow: str = "all",
+    net: bool = False,
+) -> dict:
+    data = await _edge_provider().fetch_broker_summary(
+        ticker.upper(),
+        start_date=start_date,
+        end_date=end_date,
+        flow=flow,
+        net=net,
+        broker_limit=20,
+        level_limit=5,
+    )
+    payload = broker_summary_payload(data)
+    if not payload:
         return {"error": f"Broker summary {ticker} tidak tersedia."}
-    return {
-        "stock_code": data.get("stock_code"),
-        "flow": data.get("flow"),
-        "brokers": data.get("brokers") or [],
-    }
+    return payload
 
 
 async def _get_seasonality(ticker: str) -> dict:
@@ -150,10 +165,16 @@ TOOL_SPECS: list[dict] = [
     },
     {
         "name": "get_broker_summary",
-        "description": "Broker summary & netflow (bandarmologi) satu saham.",
+        "description": "Broker summary & netflow (bandarmologi) satu saham. Bisa difilter rentang tanggal, investor (asing/domestik), dan net/gross.",
         "parameters": {
             "type": "object",
-            "properties": {"ticker": {"type": "string"}},
+            "properties": {
+                "ticker": {"type": "string"},
+                "start_date": {"type": "string", "description": "YYYY-MM-DD (opsional)."},
+                "end_date": {"type": "string", "description": "YYYY-MM-DD (opsional)."},
+                "flow": {"type": "string", "enum": ["all", "F", "D"], "description": "all=semua, F=asing, D=domestik. Default all."},
+                "net": {"type": "boolean", "description": "true=net, false=gross. Default false."},
+            },
             "required": ["ticker"],
         },
         "fn": _get_broker_summary,
@@ -379,6 +400,8 @@ async def stream_agent(
                         "period": result.get("period"),
                         "series": result.get("series") or [],
                     }
+                if r["name"] == "get_broker_summary" and ok and isinstance(result, dict):
+                    yield {"type": "broker", "data": result}
                 msgs.append({
                     "role": "tool",
                     "tool_call_id": r["id"],

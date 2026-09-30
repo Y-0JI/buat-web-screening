@@ -4,10 +4,12 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import {
   deleteThread,
   fetchModels,
+  getBrokerSummary,
   getHistory,
   getThread,
   listThreads,
   streamChat,
+  type BrokerSummary,
   type ChatEvent,
   type ModelInfo,
   type ThreadSummary,
@@ -101,17 +103,32 @@ export function ChatApp() {
             ? (m.tool_calls as { name: string; args?: Record<string, unknown>; ok?: boolean }[])
             : [];
           const charts: UIChart[] = [];
+          const brokers: BrokerSummary[] = [];
           if (m.role !== "user") {
             for (const c of calls) {
-              if (c.name !== "get_price_history" || c.ok === false) continue;
+              if (c.ok === false) continue;
               const ticker = String(c.args?.ticker || "");
-              const period = String(c.args?.period || "3mo");
               if (!ticker) continue;
-              try {
-                const series = await getHistory(ticker, period);
-                if (series.length) charts.push({ ticker, period, series });
-              } catch {
-                /* lewati */
+              if (c.name === "get_price_history") {
+                const period = String(c.args?.period || "3mo");
+                try {
+                  const series = await getHistory(ticker, period);
+                  if (series.length) charts.push({ ticker, period, series });
+                } catch {
+                  /* lewati */
+                }
+              } else if (c.name === "get_broker_summary") {
+                try {
+                  const res = await getBrokerSummary(ticker, {
+                    start_date: c.args?.start_date as string | undefined,
+                    end_date: c.args?.end_date as string | undefined,
+                    flow: c.args?.flow as string | undefined,
+                    net: c.args?.net as boolean | undefined,
+                  });
+                  if (res) brokers.push(res);
+                } catch {
+                  /* lewati */
+                }
               }
             }
           }
@@ -122,6 +139,7 @@ export function ChatApp() {
             reasoning: m.reasoning || undefined,
             tools: calls.length ? calls.map((t) => ({ name: t.name, ok: t.ok })) : undefined,
             charts: charts.length ? charts : undefined,
+            brokers: brokers.length ? brokers : undefined,
           };
         })
       );
@@ -211,6 +229,12 @@ export function ChatApp() {
                 ...(m.charts || []),
                 { ticker: event.ticker, period: event.period, series: event.series },
               ],
+            }));
+            break;
+          case "broker":
+            patchAssistant(assistantId, (m) => ({
+              ...m,
+              brokers: [...(m.brokers || []), event.data],
             }));
             break;
           case "done":

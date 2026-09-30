@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Markdown } from "./markdown";
 import { PriceChart } from "./chart";
+import { BrokerSummaryCard } from "./broker-summary";
 import type { UIMessage } from "./types";
 
 function ToolChips({ tools }: { tools: NonNullable<UIMessage["tools"]> }) {
@@ -86,6 +87,9 @@ export function Message({ msg }: { msg: UIMessage }) {
         ) : null}
         {msg.charts?.map((c, i) => (
           <PriceChart key={`${c.ticker}-${i}`} chart={c} />
+        ))}
+        {msg.brokers?.map((b, i) => (
+          <BrokerSummaryCard key={`broker-${b.stock_code}-${i}`} initial={b} />
         ))}
       </div>
     </div>

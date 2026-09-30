@@ -48,6 +48,84 @@ def history_series(rows: Optional[list[dict]]) -> list[dict]:
     return [by_date[d] for d in sorted(by_date)]
 
 
+def _avg(val: float, vol: float) -> Optional[float]:
+    return (val / vol) if vol else None
+
+
+def broker_summary_payload(data: Optional[dict]) -> Optional[dict]:
+    """Normalisasi respons /api/broker-summary → struktur untuk UI kartu."""
+    if not data:
+        return None
+    brokers = []
+    buyer_count = seller_count = 0
+    net_value = net_volume = total_bval = total_bvol = 0.0
+    for b in data.get("brokers") or []:
+        bval = float(b.get("bval") or 0)
+        bvol = float(b.get("bvol") or 0)
+        sval = float(b.get("sval") or 0)
+        svol = float(b.get("svol") or 0)
+        nval = float(b.get("nval") or 0)
+        nvol = float(b.get("nvol") or 0)
+        if bval > 0:
+            buyer_count += 1
+        if sval > 0:
+            seller_count += 1
+        net_value += nval
+        net_volume += nvol
+        total_bval += bval
+        total_bvol += bvol
+        brokers.append({
+            "code": b.get("broker_code"),
+            "name": b.get("broker_name"),
+            "bval": bval, "bvol": bvol, "bavg": _avg(bval, bvol),
+            "sval": sval, "svol": svol, "savg": _avg(sval, svol),
+            "nval": nval, "nvol": nvol,
+        })
+
+    ranked = sorted(brokers, key=lambda x: abs(x["nval"]), reverse=True)
+    top = []
+    for n in (1, 3, 5):
+        chunk = ranked[:n]
+        top.append({
+            "n": n,
+            "net_value": sum(x["nval"] for x in chunk),
+            "net_volume": sum(x["nvol"] for x in chunk),
+        })
+
+    levels = []
+    for lvl in data.get("broker_levels") or []:
+        buy = lvl.get("buy") or {}
+        sell = lvl.get("sell") or {}
+        levels.append({
+            "buy": {
+                "code": buy.get("broker_code"), "name": buy.get("broker_name"),
+                "val": buy.get("bval"), "vol": buy.get("bvol"), "avg": buy.get("bavg"),
+            },
+            "sell": {
+                "code": sell.get("broker_code"), "name": sell.get("broker_name"),
+                "val": sell.get("sval"), "vol": sell.get("svol"), "avg": sell.get("savg"),
+            },
+        })
+
+    return {
+        "stock_code": data.get("stock_code"),
+        "flow": data.get("flow"),
+        "net": data.get("broker_net"),
+        "start_date": data.get("broker_start_date"),
+        "end_date": data.get("broker_end_date"),
+        "summary": {
+            "buyer_count": buyer_count,
+            "seller_count": seller_count,
+            "net_value": net_value,
+            "net_volume": net_volume,
+            "avg_price": _avg(total_bval, total_bvol),
+        },
+        "top": top,
+        "levels": levels,
+        "brokers": brokers,
+    }
+
+
 class IdxEdgeProvider:
     def __init__(self, client: Optional[httpx.AsyncClient] = None):
         self._client = client
@@ -146,6 +224,7 @@ class IdxEdgeProvider:
         flow: str = "all",
         net: bool = False,
         broker_limit: Optional[int] = None,
+        level_limit: Optional[int] = None,
     ) -> Optional[dict]:
         params: dict = {"net": str(net).lower()}
         if start_date:
@@ -156,6 +235,8 @@ class IdxEdgeProvider:
             params["flow"] = flow
         if broker_limit:
             params["broker_limit"] = broker_limit
+        if level_limit:
+            params["level_limit"] = level_limit
         data = await self._get_json(f"/api/broker-summary/{code}", params)
         return data if isinstance(data, dict) else None
 
