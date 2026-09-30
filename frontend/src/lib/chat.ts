@@ -63,6 +63,14 @@ export interface BrokerRow {
   nvol: number;
 }
 
+export interface BrokerLevelSide {
+  code: string | null;
+  name?: string | null;
+  val: number | null;
+  vol: number | null;
+  avg: number | null;
+}
+
 export interface BrokerSummary {
   stock_code: string | null;
   flow: string | null;
@@ -77,7 +85,7 @@ export interface BrokerSummary {
     avg_price: number | null;
   };
   top: { n: number; net_value: number; net_volume: number }[];
-  levels: unknown;
+  levels: { buy: BrokerLevelSide; sell: BrokerLevelSide }[];
   brokers: BrokerRow[];
 }
 
@@ -142,6 +150,7 @@ export interface BrokerParams {
   flow?: string;
   net?: boolean;
   limit?: number;
+  level_limit?: number;
 }
 
 export async function getBrokerSummary(
@@ -154,6 +163,7 @@ export async function getBrokerSummary(
   if (params.flow) q.set("flow", params.flow);
   q.set("net", String(params.net ?? false));
   if (params.limit) q.set("limit", String(params.limit));
+  if (params.level_limit) q.set("level_limit", String(params.level_limit));
   const res = await fetch(
     `${API_BASE}/api/broker-summary/${encodeURIComponent(ticker)}?${q.toString()}`
   );

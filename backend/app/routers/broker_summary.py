@@ -16,7 +16,8 @@ async def broker_summary(
     end_date: Optional[str] = None,
     flow: str = "all",
     net: bool = False,
-    limit: int = 20,
+    limit: int = 50,
+    level_limit: int = 10,
 ):
     data = await IdxEdgeProvider().fetch_broker_summary(
         ticker.upper(),
@@ -25,7 +26,7 @@ async def broker_summary(
         flow=flow,
         net=net,
         broker_limit=limit,
-        level_limit=5,
+        level_limit=level_limit,
     )
     payload = broker_summary_payload(data)
     if not payload:

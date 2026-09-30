@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { getBrokerSummary, type BrokerSummary } from "@/lib/chat";
 
 function fmtVal(v: number): string {
@@ -61,7 +61,8 @@ export function BrokerSummaryCard({ initial }: { initial: BrokerSummary }) {
         net: next.net ?? net,
         start_date: next.start ?? (startDate || undefined),
         end_date: next.end ?? (endDate || undefined),
-        limit: 20,
+        limit: 50,
+        level_limit: 10,
       });
       if (res) setData(res);
     } catch {
@@ -71,36 +72,42 @@ export function BrokerSummaryCard({ initial }: { initial: BrokerSummary }) {
     }
   };
 
+  // Ambil ulang data default (Net, limit besar) saat mount agar net seller lengkap.
+  useEffect(() => {
+    void reload({ flow: "all", net: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const { buyers, sellers, tops } = useMemo(() => {
     const list = data.brokers || [];
-    const avg = (v: number, q: number) =>
-      q ? Math.abs(v) / Math.abs(q) : null;
+    const levels = data.levels || [];
 
     const buyers: Row[] = net
-      ? list
-          .filter((x) => x.nval > 0)
-          .sort((a, b) => b.nval - a.nval)
-          .slice(0, 8)
-          .map((x) => ({ code: x.code, val: x.nval, vol: x.nvol, avg: avg(x.nval, x.nvol) }))
+      ? levels
+          .map((l) => ({
+            code: l.buy.code,
+            val: l.buy.val ?? 0,
+            vol: l.buy.vol ?? 0,
+            avg: l.buy.avg,
+          }))
+          .filter((x) => x.code)
       : [...list]
           .sort((a, b) => b.bval - a.bval)
-          .slice(0, 8)
+          .slice(0, 10)
           .map((x) => ({ code: x.code, val: x.bval, vol: x.bvol, avg: x.bavg }));
 
     const sellers: Row[] = net
-      ? list
-          .filter((x) => x.nval < 0)
-          .sort((a, b) => a.nval - b.nval)
-          .slice(0, 8)
-          .map((x) => ({
-            code: x.code,
-            val: Math.abs(x.nval),
-            vol: Math.abs(x.nvol),
-            avg: avg(x.nval, x.nvol),
+      ? levels
+          .map((l) => ({
+            code: l.sell.code,
+            val: l.sell.val ?? 0,
+            vol: l.sell.vol ?? 0,
+            avg: l.sell.avg,
           }))
+          .filter((x) => x.code)
       : [...list]
           .sort((a, b) => b.sval - a.sval)
-          .slice(0, 8)
+          .slice(0, 10)
           .map((x) => ({ code: x.code, val: x.sval, vol: x.svol, avg: x.savg }));
 
     const key = net
