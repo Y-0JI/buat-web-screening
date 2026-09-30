@@ -1,4 +1,4 @@
-import type { HistoryPoint } from "@/lib/chat";
+import type { BrokerSummary, HistoryPoint } from "@/lib/chat";
 
 export interface UITool {
   name: string;
@@ -19,5 +19,6 @@ export interface UIMessage {
   reasoning?: string;
   tools?: UITool[];
   charts?: UIChart[];
+  brokers?: BrokerSummary[];
   streaming?: boolean;
 }

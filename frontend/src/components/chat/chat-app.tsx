@@ -4,10 +4,12 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import {
   deleteThread,
   fetchModels,
+  getBrokerSummary,
   getHistory,
   getThread,
   listThreads,
   streamChat,
+  type BrokerSummary,
   type ChatEvent,
   type ModelInfo,
   type ThreadSummary,
@@ -101,15 +103,29 @@ export function ChatApp() {
             ? (m.tool_calls as { name: string; args?: Record<string, unknown>; ok?: boolean }[])
             : [];
           const charts: UIChart[] = [];
+          const brokers: BrokerSummary[] = [];
+          const brokerTickers = new Set<string>();
           if (m.role !== "user") {
             for (const c of calls) {
-              if (c.name !== "get_price_history" || c.ok === false) continue;
+              if (c.ok === false) continue;
               const ticker = String(c.args?.ticker || "");
-              const period = String(c.args?.period || "3mo");
               if (!ticker) continue;
+              if (c.name === "get_price_history") {
+                const period = String(c.args?.period || "3mo");
+                try {
+                  const series = await getHistory(ticker, period);
+                  if (series.length) charts.push({ ticker, period, series });
+                } catch {
+                  /* lewati */
+                }
+              } else if (c.name === "get_broker_summary") {
+                brokerTickers.add(ticker.toUpperCase());
+              }
+            }
+            for (const code of brokerTickers) {
               try {
-                const series = await getHistory(ticker, period);
-                if (series.length) charts.push({ ticker, period, series });
+                const res = await getBrokerSummary(code, { flow: "all", net: true, limit: 20 });
+                if (res) brokers.push(res);
               } catch {
                 /* lewati */
               }
@@ -122,6 +138,7 @@ export function ChatApp() {
             reasoning: m.reasoning || undefined,
             tools: calls.length ? calls.map((t) => ({ name: t.name, ok: t.ok })) : undefined,
             charts: charts.length ? charts : undefined,
+            brokers: brokers.length ? brokers : undefined,
           };
         })
       );
@@ -213,6 +230,22 @@ export function ChatApp() {
               ],
             }));
             break;
+          case "broker": {
+            const code = event.ticker;
+            void (async () => {
+              try {
+                const res = await getBrokerSummary(code, { flow: "all", net: true, limit: 20 });
+                if (!res) return;
+                patchAssistant(assistantId, (m) => {
+                  if ((m.brokers || []).some((b) => b.stock_code === code)) return m;
+                  return { ...m, brokers: [...(m.brokers || []), res] };
+                });
+              } catch {
+                /* lewati */
+              }
+            })();
+            break;
+          }
           case "done":
             patchAssistant(assistantId, (m) => ({
               ...m,

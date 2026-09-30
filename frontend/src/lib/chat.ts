@@ -50,6 +50,37 @@ export interface HistoryPoint {
   volume: number;
 }
 
+export interface BrokerRow {
+  code: string | null;
+  name?: string | null;
+  bval: number;
+  bvol: number;
+  bavg: number | null;
+  sval: number;
+  svol: number;
+  savg: number | null;
+  nval: number;
+  nvol: number;
+}
+
+export interface BrokerSummary {
+  stock_code: string | null;
+  flow: string | null;
+  net: boolean | null;
+  start_date: string | null;
+  end_date: string | null;
+  summary: {
+    buyer_count: number;
+    seller_count: number;
+    net_value: number;
+    net_volume: number;
+    avg_price: number | null;
+  };
+  top: { n: number; net_value: number; net_volume: number }[];
+  levels: unknown;
+  brokers: BrokerRow[];
+}
+
 export type ChatEvent =
   | { type: "thread"; id: number; title: string }
   | { type: "reasoning"; delta: string }
@@ -57,6 +88,7 @@ export type ChatEvent =
   | { type: "tool_start"; name: string; args: Record<string, unknown> }
   | { type: "tool_result"; name: string; ok: boolean; summary: string }
   | { type: "chart"; ticker: string; period: string; series: HistoryPoint[] }
+  | { type: "broker"; ticker: string }
   | { type: "done"; content: string; reasoning: string; tool_calls: unknown[] }
   | { type: "error"; message: string };
 
@@ -102,6 +134,31 @@ export async function getHistory(
   );
   const data = await jsonOrThrow(res);
   return data.data || [];
+}
+
+export interface BrokerParams {
+  start_date?: string;
+  end_date?: string;
+  flow?: string;
+  net?: boolean;
+  limit?: number;
+}
+
+export async function getBrokerSummary(
+  ticker: string,
+  params: BrokerParams = {}
+): Promise<BrokerSummary | null> {
+  const q = new URLSearchParams();
+  if (params.start_date) q.set("start_date", params.start_date);
+  if (params.end_date) q.set("end_date", params.end_date);
+  if (params.flow) q.set("flow", params.flow);
+  q.set("net", String(params.net ?? false));
+  if (params.limit) q.set("limit", String(params.limit));
+  const res = await fetch(
+    `${API_BASE}/api/broker-summary/${encodeURIComponent(ticker)}?${q.toString()}`
+  );
+  const data = await jsonOrThrow(res);
+  return data.success ? (data.data as BrokerSummary) : null;
 }
 
 export async function listThreads(): Promise<ThreadSummary[]> {
