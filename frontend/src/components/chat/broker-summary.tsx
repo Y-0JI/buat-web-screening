@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { getBrokerSummary, type BrokerRow, type BrokerSummary } from "@/lib/chat";
+import { getBrokerSummary, type BrokerSummary } from "@/lib/chat";
 
 function fmtVal(v: number): string {
   const a = Math.abs(v);
@@ -29,6 +29,13 @@ const INVESTORS = [
   { value: "F", label: "Foreign" },
   { value: "D", label: "Domestic" },
 ];
+
+interface Row {
+  code: string | null;
+  val: number;
+  vol: number;
+  avg: number | null;
+}
 
 export function BrokerSummaryCard({ initial }: { initial: BrokerSummary }) {
   const [data, setData] = useState<BrokerSummary>(initial);
@@ -64,14 +71,53 @@ export function BrokerSummaryCard({ initial }: { initial: BrokerSummary }) {
     }
   };
 
-  const buyers = useMemo(
-    () => [...data.brokers].sort((a, b) => b.bval - a.bval).slice(0, 8),
-    [data]
-  );
-  const sellers = useMemo(
-    () => [...data.brokers].sort((a, b) => b.sval - a.sval).slice(0, 8),
-    [data]
-  );
+  const { buyers, sellers, tops } = useMemo(() => {
+    const list = data.brokers || [];
+    const avg = (v: number, q: number) =>
+      q ? Math.abs(v) / Math.abs(q) : null;
+
+    const buyers: Row[] = net
+      ? list
+          .filter((x) => x.nval > 0)
+          .sort((a, b) => b.nval - a.nval)
+          .slice(0, 8)
+          .map((x) => ({ code: x.code, val: x.nval, vol: x.nvol, avg: avg(x.nval, x.nvol) }))
+      : [...list]
+          .sort((a, b) => b.bval - a.bval)
+          .slice(0, 8)
+          .map((x) => ({ code: x.code, val: x.bval, vol: x.bvol, avg: x.bavg }));
+
+    const sellers: Row[] = net
+      ? list
+          .filter((x) => x.nval < 0)
+          .sort((a, b) => a.nval - b.nval)
+          .slice(0, 8)
+          .map((x) => ({
+            code: x.code,
+            val: Math.abs(x.nval),
+            vol: Math.abs(x.nvol),
+            avg: avg(x.nval, x.nvol),
+          }))
+      : [...list]
+          .sort((a, b) => b.sval - a.sval)
+          .slice(0, 8)
+          .map((x) => ({ code: x.code, val: x.sval, vol: x.svol, avg: x.savg }));
+
+    const key = net
+      ? (x: { nval: number }) => Math.abs(x.nval)
+      : (x: { bval: number; sval: number }) => x.bval + x.sval;
+    const ranked = [...list].sort((a, b) => key(b) - key(a));
+    const tops = [1, 3, 5].map((n) => {
+      const chunk = ranked.slice(0, n);
+      return {
+        n,
+        net_value: chunk.reduce((s, x) => s + (x.bval - x.sval), 0),
+        net_volume: chunk.reduce((s, x) => s + (x.bvol - x.svol), 0),
+      };
+    });
+
+    return { buyers, sellers, tops };
+  }, [data, net]);
 
   const s = data.summary;
 
@@ -135,7 +181,7 @@ export function BrokerSummaryCard({ initial }: { initial: BrokerSummary }) {
 
       {/* Top 1/3/5 */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 mb-3">
-        {data.top.map((t) => (
+        {tops.map((t) => (
           <div key={t.n} className="rounded-lg border border-zinc-800 bg-zinc-950/40 px-3 py-2">
             <div className="text-[11px] text-zinc-500">Top {t.n}</div>
             <div
@@ -179,8 +225,8 @@ export function BrokerSummaryCard({ initial }: { initial: BrokerSummary }) {
 
       {/* Tabel dua sisi */}
       <div className="grid grid-cols-2 gap-3 text-[11px]">
-        <BrokerColumn title="Top Buyer" rows={buyers} side="buy" />
-        <BrokerColumn title="Top Seller" rows={sellers} side="sell" />
+        <BrokerColumn title="Top Buyer" rows={buyers} tone="buy" />
+        <BrokerColumn title="Top Seller" rows={sellers} tone="sell" />
       </div>
     </div>
   );
@@ -189,34 +235,29 @@ export function BrokerSummaryCard({ initial }: { initial: BrokerSummary }) {
 function BrokerColumn({
   title,
   rows,
-  side,
+  tone,
 }: {
   title: string;
-  rows: BrokerRow[];
-  side: "buy" | "sell";
+  rows: Row[];
+  tone: "buy" | "sell";
 }) {
   return (
     <div>
       <div className="flex justify-between text-zinc-500 mb-1">
         <span>{title}</span>
-        <span>{side === "buy" ? "val · lot · avg" : "val · lot · avg"}</span>
+        <span>val · lot · avg</span>
       </div>
       <div className="space-y-0.5">
-        {rows.map((b) => {
-          const val = side === "buy" ? b.bval : b.sval;
-          const vol = side === "buy" ? b.bvol : b.svol;
-          const avg = side === "buy" ? b.bavg : b.savg;
-          return (
-            <div key={`${side}-${b.code}`} className="flex justify-between gap-2">
-              <span className={`font-medium ${side === "buy" ? "text-emerald-400" : "text-red-400"}`}>
-                {b.code}
-              </span>
-              <span className="text-zinc-300 tabular-nums">
-                {fmtVal(val)} · {fmtVol(vol)} · {fmtRp(avg)}
-              </span>
-            </div>
-          );
-        })}
+        {rows.map((b) => (
+          <div key={`${tone}-${b.code}`} className="flex justify-between gap-2">
+            <span className={`font-medium ${tone === "buy" ? "text-emerald-400" : "text-red-400"}`}>
+              {b.code}
+            </span>
+            <span className="text-zinc-300 tabular-nums">
+              {fmtVal(b.val)} · {fmtVol(b.vol)} · {fmtRp(b.avg)}
+            </span>
+          </div>
+        ))}
       </div>
     </div>
   );

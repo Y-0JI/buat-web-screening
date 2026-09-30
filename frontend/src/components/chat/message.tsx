@@ -74,6 +74,12 @@ export function Message({ msg }: { msg: UIMessage }) {
   return (
     <div className="flex justify-start">
       <div className="max-w-[90%] px-4 py-3 rounded-2xl rounded-bl-md bg-zinc-800/80 text-zinc-100 text-sm">
+        {msg.charts?.map((c, i) => (
+          <PriceChart key={`${c.ticker}-${i}`} chart={c} />
+        ))}
+        {msg.brokers?.map((b, i) => (
+          <BrokerSummaryCard key={`broker-${b.stock_code}-${i}`} initial={b} />
+        ))}
         {msg.reasoning ? <Reasoning text={msg.reasoning} /> : null}
         {msg.tools ? <ToolChips tools={msg.tools} /> : null}
         {msg.content ? (
@@ -85,12 +91,6 @@ export function Message({ msg }: { msg: UIMessage }) {
             <span className="w-1.5 h-1.5 bg-zinc-500 rounded-full animate-bounce [animation-delay:0.3s]" />
           </div>
         ) : null}
-        {msg.charts?.map((c, i) => (
-          <PriceChart key={`${c.ticker}-${i}`} chart={c} />
-        ))}
-        {msg.brokers?.map((b, i) => (
-          <BrokerSummaryCard key={`broker-${b.stock_code}-${i}`} initial={b} />
-        ))}
       </div>
     </div>
   );
