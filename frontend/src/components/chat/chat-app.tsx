@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import {
   deleteThread,
   fetchModels,
+  getHistory,
   getThread,
   listThreads,
   streamChat,
@@ -14,7 +15,7 @@ import {
 import { Composer } from "./composer";
 import { Message } from "./message";
 import { Sidebar } from "./sidebar";
-import type { UIMessage } from "./types";
+import type { UIChart, UIMessage } from "./types";
 
 const SUGGESTIONS = [
   "Analisa BBCA sekarang",
@@ -93,20 +94,38 @@ export function ChatApp() {
       if (!detail) return;
       setActiveId(id);
       if (detail.model) changeModel(detail.model);
-      setMessages(
-        detail.messages.map((m) => ({
-          id: uid(),
-          role: m.role === "user" ? "user" : "assistant",
-          content: m.content,
-          reasoning: m.reasoning || undefined,
-          tools: Array.isArray(m.tool_calls)
-            ? (m.tool_calls as { name: string; ok?: boolean }[]).map((t) => ({
-                name: t.name,
-                ok: t.ok,
-              }))
-            : undefined,
-        }))
+
+      const loaded = await Promise.all(
+        detail.messages.map(async (m): Promise<UIMessage> => {
+          const calls = Array.isArray(m.tool_calls)
+            ? (m.tool_calls as { name: string; args?: Record<string, unknown>; ok?: boolean }[])
+            : [];
+          const charts: UIChart[] = [];
+          if (m.role !== "user") {
+            for (const c of calls) {
+              if (c.name !== "get_price_history" || c.ok === false) continue;
+              const ticker = String(c.args?.ticker || "");
+              const period = String(c.args?.period || "3mo");
+              if (!ticker) continue;
+              try {
+                const series = await getHistory(ticker, period);
+                if (series.length) charts.push({ ticker, period, series });
+              } catch {
+                /* lewati */
+              }
+            }
+          }
+          return {
+            id: uid(),
+            role: m.role === "user" ? "user" : "assistant",
+            content: m.content,
+            reasoning: m.reasoning || undefined,
+            tools: calls.length ? calls.map((t) => ({ name: t.name, ok: t.ok })) : undefined,
+            charts: charts.length ? charts : undefined,
+          };
+        })
       );
+      setMessages(loaded);
     } catch {
       setError("Gagal membuka percakapan.");
     }
@@ -184,6 +203,15 @@ export function ChatApp() {
               }
               return { ...m, tools };
             });
+            break;
+          case "chart":
+            patchAssistant(assistantId, (m) => ({
+              ...m,
+              charts: [
+                ...(m.charts || []),
+                { ticker: event.ticker, period: event.period, series: event.series },
+              ],
+            }));
             break;
           case "done":
             patchAssistant(assistantId, (m) => ({

@@ -23,6 +23,31 @@ logger = logging.getLogger(__name__)
 _QUOTA_WARN_RATIO = 0.9
 
 
+def history_series(rows: Optional[list[dict]]) -> list[dict]:
+    """Normalisasi `rows` /api/history → list OHLCV urut naik & tanggal unik.
+
+    lightweight-charts mewajibkan data urut naik berdasarkan waktu. IDX Edge
+    mengembalikan terbaru dulu, jadi di sini di-balik dan duplikat di-dedupe.
+    """
+    by_date: dict[str, dict] = {}
+    for r in rows or []:
+        date = r.get("date")
+        if not date:
+            continue
+        try:
+            by_date[date] = {
+                "date": date,
+                "open": float(r.get("open") or 0),
+                "high": float(r.get("high") or 0),
+                "low": float(r.get("low") or 0),
+                "close": float(r.get("close") or 0),
+                "volume": float(r.get("volume") or 0),
+            }
+        except (TypeError, ValueError):
+            continue
+    return [by_date[d] for d in sorted(by_date)]
+
+
 class IdxEdgeProvider:
     def __init__(self, client: Optional[httpx.AsyncClient] = None):
         self._client = client

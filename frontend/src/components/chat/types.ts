@@ -1,7 +1,15 @@
+import type { HistoryPoint } from "@/lib/chat";
+
 export interface UITool {
   name: string;
   ok?: boolean;
   running?: boolean;
+}
+
+export interface UIChart {
+  ticker: string;
+  period: string;
+  series: HistoryPoint[];
 }
 
 export interface UIMessage {
@@ -10,5 +18,6 @@ export interface UIMessage {
   content: string;
   reasoning?: string;
   tools?: UITool[];
+  charts?: UIChart[];
   streaming?: boolean;
 }

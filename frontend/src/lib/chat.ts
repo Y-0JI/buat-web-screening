@@ -41,12 +41,22 @@ export interface ThreadDetail extends ThreadSummary {
   messages: ChatMessageRow[];
 }
 
+export interface HistoryPoint {
+  date: string;
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+  volume: number;
+}
+
 export type ChatEvent =
   | { type: "thread"; id: number; title: string }
   | { type: "reasoning"; delta: string }
   | { type: "token"; delta: string }
   | { type: "tool_start"; name: string; args: Record<string, unknown> }
   | { type: "tool_result"; name: string; ok: boolean; summary: string }
+  | { type: "chart"; ticker: string; period: string; series: HistoryPoint[] }
   | { type: "done"; content: string; reasoning: string; tool_calls: unknown[] }
   | { type: "error"; message: string };
 
@@ -79,6 +89,17 @@ async function jsonOrThrow(res: Response) {
 
 export async function fetchModels(): Promise<ModelInfo[]> {
   const res = await fetch(`${API_BASE}/api/models`);
+  const data = await jsonOrThrow(res);
+  return data.data || [];
+}
+
+export async function getHistory(
+  ticker: string,
+  period = "3mo"
+): Promise<HistoryPoint[]> {
+  const res = await fetch(
+    `${API_BASE}/api/history/${encodeURIComponent(ticker)}?period=${encodeURIComponent(period)}`
+  );
   const data = await jsonOrThrow(res);
   return data.data || [];
 }
