@@ -1,4 +1,4 @@
-import type { BrokerSummary, HistoryPoint } from "@/lib/chat";
+import type { BrokerSummary, FundamentalData, HistoryPoint } from "@/lib/chat";
 
 export interface UITool {
   name: string;
@@ -20,5 +20,6 @@ export interface UIMessage {
   tools?: UITool[];
   charts?: UIChart[];
   brokers?: BrokerSummary[];
+  fundamentals?: FundamentalData[];
   streaming?: boolean;
 }

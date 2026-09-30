@@ -16,6 +16,7 @@ from app.utils.logging import configure_logging, LoggingMiddleware
 from app.utils.error_handler import register_exception_handlers
 from app.routers.broker_summary import router as broker_summary_router
 from app.routers.chat import router as chat_router
+from app.routers.fundamentals import router as fundamentals_router
 from app.routers.history import router as history_router
 from app.routers.models import router as models_router
 from app.routers.threads import router as threads_router
@@ -52,6 +53,7 @@ register_exception_handlers(app)
 app.include_router(chat_router)
 app.include_router(history_router)
 app.include_router(broker_summary_router)
+app.include_router(fundamentals_router)
 app.include_router(models_router)
 app.include_router(threads_router)
 

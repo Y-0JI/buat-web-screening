@@ -5,12 +5,14 @@ import {
   deleteThread,
   fetchModels,
   getBrokerSummary,
+  getFundamentals,
   getHistory,
   getThread,
   listThreads,
   streamChat,
   type BrokerSummary,
   type ChatEvent,
+  type FundamentalData,
   type ModelInfo,
   type ThreadSummary,
 } from "@/lib/chat";
@@ -104,7 +106,9 @@ export function ChatApp() {
             : [];
           const charts: UIChart[] = [];
           const brokers: BrokerSummary[] = [];
+          const fundamentals: FundamentalData[] = [];
           const brokerTickers = new Set<string>();
+          const fundamentalTickers = new Set<string>();
           if (m.role !== "user") {
             for (const c of calls) {
               if (c.ok === false) continue;
@@ -120,12 +124,22 @@ export function ChatApp() {
                 }
               } else if (c.name === "get_broker_summary") {
                 brokerTickers.add(ticker.toUpperCase());
+              } else if (c.name === "get_fundamentals") {
+                fundamentalTickers.add(ticker.toUpperCase());
               }
             }
             for (const code of brokerTickers) {
               try {
-                const res = await getBrokerSummary(code, { flow: "all", net: true, limit: 20 });
+                const res = await getBrokerSummary(code, { flow: "all", net: true, limit: 50, level_limit: 10 });
                 if (res) brokers.push(res);
+              } catch {
+                /* lewati */
+              }
+            }
+            for (const code of fundamentalTickers) {
+              try {
+                const res = await getFundamentals(code);
+                if (res) fundamentals.push(res);
               } catch {
                 /* lewati */
               }
@@ -139,6 +153,7 @@ export function ChatApp() {
             tools: calls.length ? calls.map((t) => ({ name: t.name, ok: t.ok })) : undefined,
             charts: charts.length ? charts : undefined,
             brokers: brokers.length ? brokers : undefined,
+            fundamentals: fundamentals.length ? fundamentals : undefined,
           };
         })
       );
@@ -234,7 +249,7 @@ export function ChatApp() {
             const code = event.ticker;
             void (async () => {
               try {
-                const res = await getBrokerSummary(code, { flow: "all", net: true, limit: 20 });
+                const res = await getBrokerSummary(code, { flow: "all", net: true, limit: 50, level_limit: 10 });
                 if (!res) return;
                 patchAssistant(assistantId, (m) => {
                   if ((m.brokers || []).some((b) => b.stock_code === code)) return m;
@@ -246,6 +261,12 @@ export function ChatApp() {
             })();
             break;
           }
+          case "fundamental":
+            patchAssistant(assistantId, (m) => {
+              if ((m.fundamentals || []).some((f) => f.ticker === event.data.ticker)) return m;
+              return { ...m, fundamentals: [...(m.fundamentals || []), event.data] };
+            });
+            break;
           case "done":
             patchAssistant(assistantId, (m) => ({
               ...m,

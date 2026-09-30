@@ -89,6 +89,56 @@ export interface BrokerSummary {
   brokers: BrokerRow[];
 }
 
+export interface FundamentalData {
+  ticker: string;
+  as_of: string | null;
+  shares: number | null;
+  market_cap: number | null;
+  valuation: {
+    market_cap: number | null;
+    pe: number | null;
+    pbv: number | null;
+    psr: number | null;
+    earnings_yield: number | null;
+  };
+  income: {
+    revenue: number | null;
+    gross_profit: number | null;
+    operating_profit: number | null;
+    net_income: number | null;
+  };
+  balance: {
+    total_assets: number | null;
+    total_liabilities: number | null;
+    total_equity: number | null;
+    cash: number | null;
+  };
+  cashflow: {
+    operating: number | null;
+    investing: number | null;
+    financing: number | null;
+    free_cash_flow: number | null;
+  };
+  per_share: { eps: number | null; book_value: number | null; revenue: number | null };
+  profitability: {
+    gross_margin: number | null;
+    operating_margin: number | null;
+    net_margin: number | null;
+  };
+  solvency: {
+    current_ratio: number | null;
+    debt_to_equity: number | null;
+    liabilities_to_equity: number | null;
+  };
+  growth: { revenue_yoy: number | null; net_income_yoy: number | null };
+  performance: {
+    period: string;
+    change_pct: number | null;
+    low: number | null;
+    high: number | null;
+  }[];
+}
+
 export type ChatEvent =
   | { type: "thread"; id: number; title: string }
   | { type: "reasoning"; delta: string }
@@ -97,6 +147,7 @@ export type ChatEvent =
   | { type: "tool_result"; name: string; ok: boolean; summary: string }
   | { type: "chart"; ticker: string; period: string; series: HistoryPoint[] }
   | { type: "broker"; ticker: string }
+  | { type: "fundamental"; ticker: string; data: FundamentalData }
   | { type: "done"; content: string; reasoning: string; tool_calls: unknown[] }
   | { type: "error"; message: string };
 
@@ -169,6 +220,16 @@ export async function getBrokerSummary(
   );
   const data = await jsonOrThrow(res);
   return data.success ? (data.data as BrokerSummary) : null;
+}
+
+export async function getFundamentals(
+  ticker: string
+): Promise<FundamentalData | null> {
+  const res = await fetch(
+    `${API_BASE}/api/fundamentals/${encodeURIComponent(ticker)}`
+  );
+  const data = await jsonOrThrow(res);
+  return data.success ? (data.data as FundamentalData) : null;
 }
 
 export async function listThreads(): Promise<ThreadSummary[]> {
