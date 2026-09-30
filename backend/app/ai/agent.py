@@ -15,6 +15,7 @@ from typing import Any, AsyncGenerator, Optional
 
 from app.ai.client import get_async_client
 from app.config import settings
+from app.fundamentals import build_fundamentals
 from app.providers.idx_edge_provider import (
     IdxEdgeProvider,
     broker_summary_payload,
@@ -49,6 +50,13 @@ async def _get_price_history(ticker: str, period: str = "3mo") -> dict:
     if not series:
         return {"error": f"Riwayat harga {ticker} tidak tersedia."}
     return {"ticker": ticker.upper(), "period": period, "series": series}
+
+
+async def _get_fundamentals(ticker: str) -> dict:
+    data = await build_fundamentals(ticker.upper())
+    if not data:
+        return {"error": f"Data fundamental {ticker} tidak tersedia."}
+    return data
 
 
 async def _get_screener() -> dict:
@@ -156,6 +164,16 @@ TOOL_SPECS: list[dict] = [
             "required": ["ticker"],
         },
         "fn": _get_price_history,
+    },
+    {
+        "name": "get_fundamentals",
+        "description": "Ringkasan fundamental satu saham: valuasi (PE/PBV/PSR/Earnings Yield), laba-rugi, neraca, arus kas, per-share, profitabilitas, solvabilitas, pertumbuhan, dan price performance.",
+        "parameters": {
+            "type": "object",
+            "properties": {"ticker": {"type": "string"}},
+            "required": ["ticker"],
+        },
+        "fn": _get_fundamentals,
     },
     {
         "name": "get_screener",
@@ -322,6 +340,7 @@ async def stream_agent(
     all_reasoning: list[str] = []
     all_tools: list[dict] = []
     broker_tickers: set[str] = set()
+    fundamental_tickers: set[str] = set()
     final_content = ""
 
     try:
@@ -408,6 +427,11 @@ async def stream_agent(
                     if code and code not in broker_tickers:
                         broker_tickers.add(code)
                         yield {"type": "broker", "ticker": code}
+                if r["name"] == "get_fundamentals" and ok and isinstance(result, dict):
+                    code = str(result.get("ticker") or "").upper()
+                    if code and code not in fundamental_tickers:
+                        fundamental_tickers.add(code)
+                        yield {"type": "fundamental", "ticker": code, "data": result}
                 msgs.append({
                     "role": "tool",
                     "tool_call_id": r["id"],

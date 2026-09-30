@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Markdown } from "./markdown";
 import { PriceChart } from "./chart";
 import { BrokerSummaryCard } from "./broker-summary";
+import { FundamentalsCard } from "./fundamentals";
 import type { UIMessage } from "./types";
 
 function ToolChips({ tools }: { tools: NonNullable<UIMessage["tools"]> }) {
@@ -79,6 +80,9 @@ export function Message({ msg }: { msg: UIMessage }) {
         ))}
         {msg.brokers?.map((b, i) => (
           <BrokerSummaryCard key={`broker-${b.stock_code}-${i}`} initial={b} />
+        ))}
+        {msg.fundamentals?.map((f, i) => (
+          <FundamentalsCard key={`fund-${f.ticker}-${i}`} data={f} />
         ))}
         {msg.reasoning ? <Reasoning text={msg.reasoning} /> : null}
         {msg.tools ? <ToolChips tools={msg.tools} /> : null}
