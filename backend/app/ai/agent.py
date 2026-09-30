@@ -15,12 +15,14 @@ from typing import Any, AsyncGenerator, Optional
 
 from app.ai.client import get_async_client
 from app.config import settings
-from app.providers.idx_edge_provider import IdxEdgeProvider
+from app.providers.idx_edge_provider import IdxEdgeProvider, history_series
 
 logger = logging.getLogger(__name__)
 
 MAX_TOOL_ROUNDS = 6
 TOOL_TIMEOUT = 60
+
+_PERIOD_LIMITS = {"1mo": 22, "3mo": 66, "6mo": 126, "1y": 252}
 
 
 def _edge_provider() -> IdxEdgeProvider:
@@ -34,6 +36,15 @@ async def _get_analysis(ticker: str) -> dict:
     if not data:
         return {"error": f"Analisa {ticker} tidak tersedia."}
     return data
+
+
+async def _get_price_history(ticker: str, period: str = "3mo") -> dict:
+    limit = _PERIOD_LIMITS.get(period, 66)
+    rows = await _edge_provider().fetch_history(ticker.upper(), limit=limit)
+    series = history_series(rows)
+    if not series:
+        return {"error": f"Riwayat harga {ticker} tidak tersedia."}
+    return {"ticker": ticker.upper(), "period": period, "series": series}
 
 
 async def _get_screener() -> dict:
@@ -117,6 +128,19 @@ TOOL_SPECS: list[dict] = [
             "required": ["ticker"],
         },
         "fn": _get_analysis,
+    },
+    {
+        "name": "get_price_history",
+        "description": "Riwayat harga OHLCV harian satu saham untuk menampilkan chart candlestick.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "ticker": {"type": "string", "description": "Kode saham IDX, mis. BBCA."},
+                "period": {"type": "string", "enum": ["1mo", "3mo", "6mo", "1y"], "description": "Rentang waktu. Default 3mo."},
+            },
+            "required": ["ticker"],
+        },
+        "fn": _get_price_history,
     },
     {
         "name": "get_screener",
@@ -348,6 +372,13 @@ async def stream_agent(
                 ok = not (isinstance(result, dict) and result.get("error"))
                 all_tools.append({"name": r["name"], "args": args, "ok": ok})
                 yield {"type": "tool_result", "name": r["name"], "ok": ok, "summary": _summarize(result)}
+                if r["name"] == "get_price_history" and ok and isinstance(result, dict):
+                    yield {
+                        "type": "chart",
+                        "ticker": result.get("ticker"),
+                        "period": result.get("period"),
+                        "series": result.get("series") or [],
+                    }
                 msgs.append({
                     "role": "tool",
                     "tool_call_id": r["id"],

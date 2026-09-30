@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { Markdown } from "./markdown";
+import { PriceChart } from "./chart";
 import type { UIMessage } from "./types";
 
 function ToolChips({ tools }: { tools: NonNullable<UIMessage["tools"]> }) {
@@ -83,6 +84,9 @@ export function Message({ msg }: { msg: UIMessage }) {
             <span className="w-1.5 h-1.5 bg-zinc-500 rounded-full animate-bounce [animation-delay:0.3s]" />
           </div>
         ) : null}
+        {msg.charts?.map((c, i) => (
+          <PriceChart key={`${c.ticker}-${i}`} chart={c} />
+        ))}
       </div>
     </div>
   );
