@@ -127,7 +127,6 @@ export interface StreamChatOptions {
   message: string;
   threadId?: number | null;
   model?: string;
-  mode?: string;
   signal?: AbortSignal;
   onEvent: (event: ChatEvent) => void;
 }
@@ -140,7 +139,6 @@ export async function streamChat(opts: StreamChatOptions): Promise<void> {
       message: opts.message,
       thread_id: opts.threadId ?? null,
       model: opts.model,
-      mode: opts.mode || "BSJP",
     }),
     signal: opts.signal,
   });

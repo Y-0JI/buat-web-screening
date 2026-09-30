@@ -27,7 +27,6 @@ class ChatRequest(BaseModel):
     message: str
     thread_id: Optional[int] = None
     model: Optional[str] = None
-    mode: str = "BSJP"
     context: Optional[dict] = None
 
 
@@ -78,7 +77,7 @@ async def chat_stream(
             yield _sse(thread_event)
         assistant = {"content": "", "reasoning": "", "tool_calls": []}
         async for event in stream_agent(
-            history, req.model or settings.ai_model, req.mode, req.context
+            history, req.model or settings.ai_model, req.context
         ):
             if event["type"] == "done":
                 assistant = event
@@ -118,7 +117,7 @@ async def chat(req: ChatRequest, x_device_id: Optional[str] = Header(default=Non
 
     content, reasoning, tools = "", "", []
     async for event in stream_agent(
-        history, req.model or settings.ai_model, req.mode, req.context
+        history, req.model or settings.ai_model, req.context
     ):
         if event["type"] == "done":
             content = event.get("content", "")
