@@ -1,7 +1,7 @@
 """Agen chat streaming — loop tool-calling di atas data IDX Edge PRO.
 
 Menyediakan:
-- `TOOLS`: definisi tool gaya OpenAI untuk 12 tool read.
+- `TOOLS`: definisi tool gaya OpenAI (semua read, dari IDX Edge PRO).
 - `run_tool(name, args)`: eksekusi tool (aman, tidak pernah raise).
 - `stream_agent(...)`: async generator event SSE (reasoning/token/tool/done/error).
 
@@ -16,12 +16,6 @@ from typing import Any, AsyncGenerator, Optional
 from app.ai.client import get_async_client
 from app.config import settings
 from app.providers.idx_edge_provider import IdxEdgeProvider
-from app.scoring.funnel import calculate_score
-from app.services import (
-    fundamentals_service,
-    news_service,
-    stock_service,
-)
 
 logger = logging.getLogger(__name__)
 
@@ -34,43 +28,6 @@ def _edge_provider() -> IdxEdgeProvider:
 
 
 # --------------------------------------------------------------- tool functions
-
-async def _company_name(ticker: str) -> str:
-    """Nama perusahaan dari IDX Edge PRO (cepat). Fallback: kode itu sendiri."""
-    code = ticker.upper()
-    results = await _edge_provider().search(code)
-    for r in results:
-        if (r.get("stock_code") or "").upper() == code:
-            return r.get("stock_name") or code
-    return code
-
-
-async def _get_stock_data(ticker: str, mode: str = "BSJP") -> dict:
-    df, is_simulated = await stock_service.get_price(ticker, fast_fail=True)
-    if df is None or df.empty:
-        return {"error": f"Data untuk {ticker} tidak tersedia."}
-    report = calculate_score(df, ticker, mode, is_simulated=is_simulated)
-    return {
-        "ticker": ticker.upper(),
-        "company_name": await _company_name(ticker),
-        "price": report.price,
-        "change_percent": report.change_percent,
-        "score": report.score,
-        "verdict": report.verdict.value,
-        "confidence": report.confidence,
-        "indicators": report.indicators.model_dump(),
-        "note": "Skor & verdict dari mesin internal (bukan rekomendasi).",
-    }
-
-
-async def _get_company_news(ticker: str, limit: int = 5) -> dict:
-    data = await news_service.get_news(ticker, limit=limit)
-    return {"items": [item.model_dump() for item in data.items]}
-
-
-async def _get_fundamentals(ticker: str) -> dict:
-    return await fundamentals_service.get_fundamentals(ticker)
-
 
 async def _get_analysis(ticker: str) -> dict:
     data = await _edge_provider().fetch_analysis(ticker.upper())
@@ -151,42 +108,6 @@ async def _search_stocks(q: str) -> dict:
 # --------------------------------------------------------------- tool registry
 
 TOOL_SPECS: list[dict] = [
-    {
-        "name": "get_stock_data",
-        "description": "Skor teknikal & verdict internal untuk satu saham IDX (harga, perubahan, skor, indikator).",
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "ticker": {"type": "string", "description": "Kode saham IDX, mis. BBCA."},
-                "mode": {"type": "string", "enum": ["BSJP", "BPJS"], "description": "Profil trading. Default BSJP."},
-            },
-            "required": ["ticker"],
-        },
-        "fn": _get_stock_data,
-    },
-    {
-        "name": "get_company_news",
-        "description": "Berita terbaru satu saham IDX.",
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "ticker": {"type": "string"},
-                "limit": {"type": "integer"},
-            },
-            "required": ["ticker"],
-        },
-        "fn": _get_company_news,
-    },
-    {
-        "name": "get_fundamentals",
-        "description": "Data fundamental (PE, PBV, ROE, market cap, dll) satu saham IDX.",
-        "parameters": {
-            "type": "object",
-            "properties": {"ticker": {"type": "string"}},
-            "required": ["ticker"],
-        },
-        "fn": _get_fundamentals,
-    },
     {
         "name": "get_analysis",
         "description": "Analisa teknikal & sinyal siap-pakai untuk satu saham (teks dari IDX Edge PRO).",
@@ -311,11 +232,11 @@ SYSTEM_PROMPT = (
     "Kamu adalah asisten riset saham IDX (Bursa Efek Indonesia). Jawab dalam "
     "Bahasa Indonesia yang santai tapi informatif. Gunakan tool yang tersedia "
     "untuk mengambil data NYATA sebelum menjawab pertanyaan tentang saham; jangan "
-    "mengarang angka. Pilih tool sesuai kebutuhan (skor teknikal, berita, "
-    "fundamental, analisa, screener, broker, seasonality, market cap, insider, "
-    "order flow, laporan keuangan, pencarian). Jika tool mengembalikan error, "
-    "sampaikan apa adanya. Jangan memberi rekomendasi beli/jual; akhiri analisis "
-    "dengan catatan singkat bahwa ini alat riset, bukan saran keuangan."
+    "mengarang angka. Pilih tool sesuai kebutuhan (analisa, screener, broker, "
+    "seasonality, market cap, insider, order flow, laporan keuangan, pencarian). "
+    "Jika tool mengembalikan error, sampaikan apa adanya. Jangan memberi "
+    "rekomendasi beli/jual; akhiri analisis dengan catatan singkat bahwa ini alat "
+    "riset, bukan saran keuangan."
 )
 
 
@@ -327,8 +248,8 @@ def _summarize(result: Any) -> str:
     return "ok"
 
 
-def _build_messages(history: list[dict], mode: str, context: Optional[dict]) -> list[dict]:
-    system = SYSTEM_PROMPT + f"\nProfil analisis aktif: {mode}."
+def _build_messages(history: list[dict], context: Optional[dict]) -> list[dict]:
+    system = SYSTEM_PROMPT
     if context and context.get("view"):
         system += f"\nKonteks: user sedang di halaman {context['view']}."
     msgs = [{"role": "system", "content": system}]
@@ -343,7 +264,6 @@ def _build_messages(history: list[dict], mode: str, context: Optional[dict]) -> 
 async def stream_agent(
     history: list[dict],
     model: str,
-    mode: str = "BSJP",
     context: Optional[dict] = None,
 ) -> AsyncGenerator[dict, None]:
     if not settings.ai_api_key:
@@ -351,7 +271,7 @@ async def stream_agent(
         return
 
     client = get_async_client()
-    msgs = _build_messages(history, mode, context)
+    msgs = _build_messages(history, context)
     all_reasoning: list[str] = []
     all_tools: list[dict] = []
     final_content = ""

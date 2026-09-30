@@ -9,7 +9,7 @@ import sys
 import httpx
 
 from app.config import settings
-from app.providers.idx_edge_provider import IdxEdgeProvider, rows_to_price_df
+from app.providers.idx_edge_provider import IdxEdgeProvider
 
 
 def _client(handler):
@@ -75,23 +75,6 @@ async def _test_disabled_returns_none():
         assert await p.health() is None
     finally:
         settings.idx_edge_api_key = old
-
-
-def test_rows_to_price_df():
-    rows = [
-        {"date": "2026-09-29", "open": 6100, "high": 6200, "low": 6050,
-         "close": 6150, "volume": 150000000, "f_buy": 1, "f_sell": 2},
-        {"date": "2026-09-28", "open": 6200, "high": 6250, "low": 6100,
-         "close": 6175, "volume": 120000000},
-    ]
-    df = rows_to_price_df(rows)
-    assert df is not None
-    assert list(df.columns) == ["Open", "High", "Low", "Close", "Volume"], list(df.columns)
-    assert df.index.is_monotonic_increasing
-    assert float(df["Close"].iloc[-1]) == 6150.0
-    assert float(df["Volume"].iloc[0]) == 120000000.0
-    assert rows_to_price_df([]) is None
-    assert rows_to_price_df(None) is None
 
 
 async def _test_fetch_history():
@@ -183,7 +166,6 @@ async def _test_broker_summary():
 
 def main():
     test_enabled_flag()
-    test_rows_to_price_df()
     asyncio.run(_test_search())
     asyncio.run(_test_search_error_returns_empty())
     asyncio.run(_test_disabled_returns_none())
