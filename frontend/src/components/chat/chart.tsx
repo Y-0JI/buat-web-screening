@@ -39,8 +39,16 @@ export function PriceChart({ chart }: { chart: UIChart }) {
       wickUpColor: "#22c55e",
       wickDownColor: "#ef4444",
     });
+
+    // lightweight-charts wajib urut naik & tanggal unik.
+    const byDate = new Map<string, (typeof chart.series)[number]>();
+    for (const p of chart.series) byDate.set(p.date, p);
+    const points = [...byDate.values()].sort((a, b) =>
+      a.date < b.date ? -1 : a.date > b.date ? 1 : 0
+    );
+
     candles.setData(
-      chart.series.map((p) => ({
+      points.map((p) => ({
         time: p.date,
         open: p.open,
         high: p.high,
@@ -55,7 +63,7 @@ export function PriceChart({ chart }: { chart: UIChart }) {
     });
     volume.priceScale().applyOptions({ scaleMargins: { top: 0.8, bottom: 0 } });
     volume.setData(
-      chart.series.map((p) => ({
+      points.map((p) => ({
         time: p.date,
         value: p.volume,
         color:
