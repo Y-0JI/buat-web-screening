@@ -88,7 +88,7 @@ export type ChatEvent =
   | { type: "tool_start"; name: string; args: Record<string, unknown> }
   | { type: "tool_result"; name: string; ok: boolean; summary: string }
   | { type: "chart"; ticker: string; period: string; series: HistoryPoint[] }
-  | { type: "broker"; data: BrokerSummary }
+  | { type: "broker"; ticker: string }
   | { type: "done"; content: string; reasoning: string; tool_calls: unknown[] }
   | { type: "error"; message: string };
 

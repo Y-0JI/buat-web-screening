@@ -104,6 +104,7 @@ export function ChatApp() {
             : [];
           const charts: UIChart[] = [];
           const brokers: BrokerSummary[] = [];
+          const brokerTickers = new Set<string>();
           if (m.role !== "user") {
             for (const c of calls) {
               if (c.ok === false) continue;
@@ -118,17 +119,15 @@ export function ChatApp() {
                   /* lewati */
                 }
               } else if (c.name === "get_broker_summary") {
-                try {
-                  const res = await getBrokerSummary(ticker, {
-                    start_date: c.args?.start_date as string | undefined,
-                    end_date: c.args?.end_date as string | undefined,
-                    flow: c.args?.flow as string | undefined,
-                    net: c.args?.net as boolean | undefined,
-                  });
-                  if (res) brokers.push(res);
-                } catch {
-                  /* lewati */
-                }
+                brokerTickers.add(ticker.toUpperCase());
+              }
+            }
+            for (const code of brokerTickers) {
+              try {
+                const res = await getBrokerSummary(code, { flow: "all", net: true, limit: 20 });
+                if (res) brokers.push(res);
+              } catch {
+                /* lewati */
               }
             }
           }
@@ -231,12 +230,22 @@ export function ChatApp() {
               ],
             }));
             break;
-          case "broker":
-            patchAssistant(assistantId, (m) => ({
-              ...m,
-              brokers: [...(m.brokers || []), event.data],
-            }));
+          case "broker": {
+            const code = event.ticker;
+            void (async () => {
+              try {
+                const res = await getBrokerSummary(code, { flow: "all", net: true, limit: 20 });
+                if (!res) return;
+                patchAssistant(assistantId, (m) => {
+                  if ((m.brokers || []).some((b) => b.stock_code === code)) return m;
+                  return { ...m, brokers: [...(m.brokers || []), res] };
+                });
+              } catch {
+                /* lewati */
+              }
+            })();
             break;
+          }
           case "done":
             patchAssistant(assistantId, (m) => ({
               ...m,

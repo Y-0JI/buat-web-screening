@@ -281,7 +281,9 @@ SYSTEM_PROMPT = (
     "seasonality, market cap, insider, order flow, laporan keuangan, pencarian). "
     "Jika tool mengembalikan error, sampaikan apa adanya. Jangan memberi "
     "rekomendasi beli/jual; akhiri analisis dengan catatan singkat bahwa ini alat "
-    "riset, bukan saran keuangan."
+    "riset, bukan saran keuangan. Untuk broker summary, panggil get_broker_summary "
+    "cukup SEKALI per saham (default semua investor) — jangan panggil berulang "
+    "untuk asing/domestik, karena filter bisa diubah user di kartu."
 )
 
 
@@ -319,6 +321,7 @@ async def stream_agent(
     msgs = _build_messages(history, context)
     all_reasoning: list[str] = []
     all_tools: list[dict] = []
+    broker_tickers: set[str] = set()
     final_content = ""
 
     try:
@@ -401,7 +404,10 @@ async def stream_agent(
                         "series": result.get("series") or [],
                     }
                 if r["name"] == "get_broker_summary" and ok and isinstance(result, dict):
-                    yield {"type": "broker", "data": result}
+                    code = str(result.get("stock_code") or "").upper()
+                    if code and code not in broker_tickers:
+                        broker_tickers.add(code)
+                        yield {"type": "broker", "ticker": code}
                 msgs.append({
                     "role": "tool",
                     "tool_call_id": r["id"],
