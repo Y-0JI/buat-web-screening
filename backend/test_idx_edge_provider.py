@@ -164,6 +164,103 @@ async def _test_broker_summary():
         settings.idx_edge_api_key = old
 
 
+def _test_fetch_history_clamps_limit():
+    old = _with_key()
+    seen = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen["url"] = str(request.url)
+        return httpx.Response(200, json={"rows": []})
+
+    p = IdxEdgeProvider(client=_client(handler))
+    try:
+        asyncio.run(p.fetch_history("BBCA", limit=1000))
+        assert "limit=500" in seen["url"], seen
+    finally:
+        settings.idx_edge_api_key = old
+
+
+def _test_ratelimit_header():
+    old = _with_key()
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200, json=[],
+            headers={"x-ratelimit-remaining": "777", "x-ratelimit-limit": "1000"},
+        )
+
+    p = IdxEdgeProvider(client=_client(handler))
+    try:
+        asyncio.run(p.search("BBCA"))
+        assert p.last_ratelimit_remaining == 777, p.last_ratelimit_remaining
+        assert p.quota_remaining() == 777, p.quota_remaining()
+    finally:
+        settings.idx_edge_api_key = old
+
+
+def _test_broker_accumulation():
+    old = _with_key()
+    seen = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen["url"] = str(request.url)
+        return httpx.Response(200, json={
+            "code": "BBCA", "series": [{"broker_code": "AK", "points": []}],
+            "top_buyers": [], "top_sellers": [],
+        })
+
+    p = IdxEdgeProvider(client=_client(handler))
+    try:
+        data = asyncio.run(p.fetch_broker_accumulation("BBCA"))
+        assert data["series"][0]["broker_code"] == "AK", data
+        assert "/api/broker-accumulation/BBCA" in seen["url"], seen
+    finally:
+        settings.idx_edge_api_key = old
+
+
+def _test_market_cap_all():
+    old = _with_key()
+    pages_seen = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        page = request.url.params.get("page")
+        pages_seen.append(page)
+        if page == "1":
+            return httpx.Response(200, json={
+                "total": 2, "page": 1, "per_page": 50, "total_pages": 2,
+                "data": [{"code": "AAA"}],
+            })
+        return httpx.Response(200, json={
+            "total": 2, "page": 2, "per_page": 50, "total_pages": 2,
+            "data": [{"code": "BBB"}],
+        })
+
+    p = IdxEdgeProvider(client=_client(handler))
+    try:
+        rows = asyncio.run(p.fetch_market_cap_all(max_pages=25))
+        assert [r["code"] for r in rows] == ["AAA", "BBB"], rows
+        assert pages_seen == ["1", "2"], pages_seen
+    finally:
+        settings.idx_edge_api_key = old
+
+
+def _test_calls_today_and_reset():
+    old = _with_key()
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json=[])
+
+    p = IdxEdgeProvider(client=_client(handler))
+    try:
+        asyncio.run(p.search("A"))
+        asyncio.run(p.search("B"))
+        assert p.calls_today == 2, p.calls_today
+        p.reset_quota()
+        assert p.calls_today == 0, p.calls_today
+    finally:
+        settings.idx_edge_api_key = old
+
+
 def main():
     test_enabled_flag()
     asyncio.run(_test_search())
@@ -174,6 +271,11 @@ def main():
     asyncio.run(_test_market_cap())
     asyncio.run(_test_screener())
     asyncio.run(_test_broker_summary())
+    _test_fetch_history_clamps_limit()
+    _test_ratelimit_header()
+    _test_broker_accumulation()
+    _test_market_cap_all()
+    _test_calls_today_and_reset()
     print("OK: test_idx_edge_provider (lengkap) lolos")
 
 

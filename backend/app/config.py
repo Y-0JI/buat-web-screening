@@ -19,6 +19,41 @@ class Settings(BaseSettings):
     idx_edge_timeout: int = 20
     idx_edge_daily_quota: int = 1000
 
+    # --- Deteksi akumulasi pemain besar (screening hemat kuota) ---
+    accumulation_enabled: bool = True
+    # Token wajib untuk POST /api/accumulation/scan; kosong = endpoint nonaktif.
+    accumulation_scan_token: str = ""
+    accumulation_lookback_days: int = 20
+    # Batas kandidat Tahap B (history) dan Tahap C (broker).
+    accumulation_history_limit: int = 150
+    accumulation_broker_limit: int = 40
+    # Tahap A: batas bawah market cap (turnover_ratio relatif, bukan likuiditas absolut).
+    accumulation_market_cap_min: float = 1e11
+    # Tahap B: likuiditas absolut minimum dari kolom `value` history.
+    accumulation_min_daily_value: float = 5e9
+    # Validasi limit history sebelum request (API menolak > 500 dengan 422).
+    accumulation_max_history_limit: int = 250
+    # Jumlah strata market cap untuk rotasi irisan universe antar-hari.
+    accumulation_rotation_strata: int = 3
+    # Buang saham yang sudah naik lebih dari ini dalam N hari (belum lari).
+    accumulation_max_runpct: float = 0.15
+    # Sisa kuota yang selalu disisakan untuk chat ad-hoc.
+    accumulation_quota_reserve: int = 50
+    # Daftar kode broker asing (opsional, dipisah koma).
+    accumulation_foreign_broker_codes: str = ""
+    # Bobot komponen skor (di satu tempat).
+    accumulation_weights: dict = {
+        "obv": 0.15,
+        "ad": 0.10,
+        "cmf": 0.10,
+        "absorption": 0.15,
+        "basing": 0.10,
+        "vwap": 0.10,
+        "foreign": 0.15,
+        "broker": 0.15,
+    }
+
+
     model_config = {"env_file": ".env", "extra": "ignore"}
 
     @field_validator("database_url")
