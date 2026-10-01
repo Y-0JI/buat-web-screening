@@ -139,6 +139,29 @@ export interface FundamentalData {
   }[];
 }
 
+export interface AccumulationCandidate {
+  ticker: string;
+  score: number | null;
+  depth: "broker" | "foreign" | "hv" | "none";
+  reasons: string | null;
+  cmf: number | null;
+  obv_slope: number | null;
+  ad_slope: number | null;
+  foreign_net: number | null;
+  foreign_ratio: number | null;
+  runup: number | null;
+}
+
+export interface AccumulationResult {
+  scan_date: string | null;
+  status: string | null;
+  stale: boolean;
+  stale_trading_days: number | null;
+  candidates: AccumulationCandidate[];
+  note?: string;
+  error?: string;
+}
+
 export type ChatEvent =
   | { type: "thread"; id: number; title: string }
   | { type: "reasoning"; delta: string }
@@ -148,8 +171,23 @@ export type ChatEvent =
   | { type: "chart"; ticker: string; period: string; series: HistoryPoint[] }
   | { type: "broker"; ticker: string }
   | { type: "fundamental"; ticker: string; data: FundamentalData }
+  | { type: "accumulation"; data: AccumulationResult }
   | { type: "done"; content: string; reasoning: string; tool_calls: unknown[] }
   | { type: "error"; message: string };
+
+export const ACCUMULATION_TOOL = "get_accumulation_candidates";
+
+/** Nama tool dari riwayat thread (untuk replay kartu). */
+export function toolCallNames(toolCalls: unknown): string[] {
+  if (!Array.isArray(toolCalls)) return [];
+  return toolCalls
+    .map((c) => (c && typeof c === "object" ? (c as { name?: string }).name : undefined))
+    .filter((n): n is string => typeof n === "string");
+}
+
+export function needsAccumulationCard(toolCalls: unknown): boolean {
+  return toolCallNames(toolCalls).includes(ACCUMULATION_TOOL);
+}
 
 const DEVICE_KEY = "idx_copilot_device_id";
 
@@ -230,6 +268,67 @@ export async function getFundamentals(
   );
   const data = await jsonOrThrow(res);
   return data.success ? (data.data as FundamentalData) : null;
+}
+
+/** True bila scan_date lebih tua dari `maxDays` hari bursa. */
+export function staleFromDate(scanDate: string | null, maxDays = 3): boolean {
+  if (!scanDate) return false;
+  const d = new Date(`${scanDate}T00:00:00`);
+  if (Number.isNaN(d.getTime())) return false;
+  const now = new Date();
+  let days = 0;
+  const cur = new Date(d);
+  while (cur < now) {
+    cur.setDate(cur.getDate() + 1);
+    const wd = cur.getDay();
+    if (wd !== 0 && wd !== 6) days++;
+  }
+  return days > maxDays;
+}
+
+export async function getAccumulationLatest(
+  limit = 20
+): Promise<AccumulationResult | null> {
+  const res = await fetch(`${API_BASE}/api/accumulation/latest?limit=${limit}`);
+  const data = await jsonOrThrow(res);
+  if (!data.success) return null;
+  const scan = data.data as {
+    scan_date: string | null;
+    status: string | null;
+    note?: string | null;
+    signals?: {
+      ticker: string;
+      score: number | null;
+      depth: AccumulationCandidate["depth"];
+      reasons: string | null;
+      foreign_net: number | null;
+      components?: { raw?: Record<string, unknown> };
+    }[];
+  };
+  const candidates: AccumulationCandidate[] = (scan.signals || []).map((s) => {
+    const raw = (s.components?.raw || {}) as Record<string, unknown>;
+    const foreign = (raw.foreign || {}) as Record<string, unknown>;
+    return {
+      ticker: s.ticker,
+      score: s.score,
+      depth: s.depth,
+      reasons: s.reasons,
+      cmf: (raw.cmf as number) ?? null,
+      obv_slope: (raw.obv_slope as number) ?? null,
+      ad_slope: (raw.ad_slope as number) ?? null,
+      foreign_net: s.foreign_net ?? null,
+      foreign_ratio: (foreign.ratio as number) ?? null,
+      runup: (raw.runup as number) ?? null,
+    };
+  });
+  return {
+    scan_date: scan.scan_date,
+    status: scan.status,
+    stale: staleFromDate(scan.scan_date),
+    stale_trading_days: null,
+    candidates,
+    note: scan.note || undefined,
+  };
 }
 
 export async function listThreads(): Promise<ThreadSummary[]> {

@@ -82,10 +82,38 @@ async def _test_tool_round():
     assert events[-1]["tool_calls"][0]["name"] == "search_stocks"
 
 
+async def _test_accumulation_event():
+    streams = [
+        [_chunk(tool_calls=[_tc(0, id="c1", name="get_accumulation_candidates",
+                                args='{"limit":5}')], finish="tool_calls")],
+        [_chunk(content="Ini kandidatnya"), _chunk(finish="stop")],
+    ]
+    agent.get_async_client = lambda: _FakeClient(streams)
+
+    async def fake_run(name, args):
+        return {
+            "scan_date": "2026-09-30", "status": "complete", "stale": False,
+            "candidates": [{"ticker": "EMAS", "depth": "broker", "score": 48.2}],
+            "note": "bukan saran investasi",
+        }
+
+    orig = agent.run_tool
+    agent.run_tool = fake_run
+    try:
+        events = [e async for e in agent.stream_agent(
+            [{"role": "user", "content": "saham yang diakumulasi"}], "m")]
+    finally:
+        agent.run_tool = orig
+    acc = [e for e in events if e["type"] == "accumulation"]
+    assert acc, [e["type"] for e in events]
+    assert acc[0]["data"]["candidates"][0]["ticker"] == "EMAS", acc[0]
+
+
 def main():
     asyncio.run(_test_simple_tokens())
     asyncio.run(_test_reasoning_streamed())
     asyncio.run(_test_tool_round())
+    asyncio.run(_test_accumulation_event())
     print("OK: test_agent_stream lolos")
 
 

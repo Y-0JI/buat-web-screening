@@ -11,6 +11,7 @@ Tidak ada action tool: UI chat-only, jadi agen hanya membaca & menganalisa.
 import asyncio
 import json
 import logging
+from datetime import date, timedelta
 from typing import Any, AsyncGenerator, Optional
 
 from app.ai.client import get_async_client
@@ -89,6 +90,67 @@ async def _get_broker_summary(
     if not payload:
         return {"error": f"Broker summary {ticker} tidak tersedia."}
     return payload
+
+
+_STALE_TRADING_DAYS = 3
+
+
+def _trading_days_since(date_str: Optional[str]) -> Optional[int]:
+    try:
+        d = date.fromisoformat(str(date_str))
+    except (TypeError, ValueError):
+        return None
+    today = date.today()
+    if d >= today:
+        return 0
+    days = 0
+    cur = d
+    while cur < today:
+        cur += timedelta(days=1)
+        if cur.weekday() < 5:
+            days += 1
+    return days
+
+
+async def _get_accumulation_candidates(limit: int = 10) -> dict:
+    """Baca hasil scan tersimpan (tanpa request jaringan)."""
+    from app.repositories import accumulation_repository as acc_repo
+
+    limit = max(1, min(int(limit or 10), 25))
+    scan = await acc_repo.get_latest_scan(limit=limit)
+    if not scan:
+        return {"error": "Belum ada hasil scan akumulasi."}
+    age = _trading_days_since(scan.get("scan_date"))
+    stale = age is not None and age > _STALE_TRADING_DAYS
+    candidates = []
+    for s in (scan.get("signals") or [])[:limit]:
+        raw = (s.get("components") or {}).get("raw") or {}
+        foreign = raw.get("foreign") or {}
+        candidates.append({
+            "ticker": s.get("ticker"),
+            "score": s.get("score"),
+            "depth": s.get("depth"),
+            "reasons": s.get("reasons"),
+            "cmf": raw.get("cmf"),
+            "obv_slope": raw.get("obv_slope"),
+            "ad_slope": raw.get("ad_slope"),
+            "foreign_net": s.get("foreign_net"),
+            "foreign_ratio": foreign.get("ratio"),
+            "runup": raw.get("runup"),
+        })
+    return {
+        "scan_date": scan.get("scan_date"),
+        "status": scan.get("status"),
+        "stale": stale,
+        "stale_trading_days": age,
+        "candidates": candidates,
+        "note": (
+            "Indikasi dari aliran harga/arus asing/broker besar; BUKAN label "
+            "institusi dan bukan saran investasi. depth=broker = ada konfirmasi "
+            "broker besar, depth=foreign = hanya arus asing, depth=hv = hanya "
+            "harga-volume."
+        ),
+    }
 
 
 async def _get_seasonality(ticker: str) -> dict:
@@ -198,6 +260,22 @@ TOOL_SPECS: list[dict] = [
         "fn": _get_broker_summary,
     },
     {
+        "name": "get_accumulation_candidates",
+        "description": (
+            "Daftar saham yang TERINDIKASI sedang diakumulasi pemain besar (dari scan "
+            "harian harga/arus asing/broker besar; hasil tersimpan, bukan hitung ulang). "
+            "Sebutkan keterbatasan: ini indikasi aliran, BUKAN label institusi maupun "
+            "saran investasi, dan jangan menyebut 'whale terkonfirmasi'."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "limit": {"type": "integer", "description": "1-25, default 10."}
+            },
+        },
+        "fn": _get_accumulation_candidates,
+    },
+    {
         "name": "get_seasonality",
         "description": "Seasonality win-rate bulanan satu saham.",
         "parameters": {
@@ -301,7 +379,11 @@ SYSTEM_PROMPT = (
     "rekomendasi beli/jual; akhiri analisis dengan catatan singkat bahwa ini alat "
     "riset, bukan saran keuangan. Untuk broker summary, panggil get_broker_summary "
     "cukup SEKALI per saham (default semua investor) — jangan panggil berulang "
-    "untuk asing/domestik, karena filter bisa diubah user di kartu."
+    "untuk asing/domestik, karena filter bisa diubah user di kartu. Untuk pertanyaan "
+    "saham yang sedang diakumulasi, panggil get_accumulation_candidates dan jelaskan "
+    "bahwa itu indikasi dari aliran harga/arus asing/broker besar — BUKAN bukti "
+    "institusi dan jangan menyebut 'whale terkonfirmasi'; sebutkan bila scan partial "
+    "atau data basi, dan tunjukkan sinyal yang bertentangan."
 )
 
 
@@ -432,6 +514,8 @@ async def stream_agent(
                     if code and code not in fundamental_tickers:
                         fundamental_tickers.add(code)
                         yield {"type": "fundamental", "ticker": code, "data": result}
+                if r["name"] == "get_accumulation_candidates" and ok and isinstance(result, dict):
+                    yield {"type": "accumulation", "data": result}
                 msgs.append({
                     "role": "tool",
                     "tool_call_id": r["id"],
