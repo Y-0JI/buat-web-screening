@@ -8,13 +8,15 @@ import os
 import sys
 from datetime import date
 
+from sqlalchemy import event, text
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import (
     AsyncSession,
     async_sessionmaker,
     create_async_engine,
 )
 
-from app.database.models import Base
+from app.database.models import AccumulationScan, AccumulationSignal, Base
 import app.repositories.accumulation_repository as repo
 
 DB = "/tmp/opencode/test_accum.db"
@@ -24,6 +26,13 @@ async def _fresh():
     if os.path.exists(DB):
         os.remove(DB)
     engine = create_async_engine(f"sqlite+aiosqlite:///{DB}")
+
+    @event.listens_for(engine.sync_engine, "connect")
+    def _fk(dbapi_connection, _record):
+        cur = dbapi_connection.cursor()
+        cur.execute("PRAGMA foreign_keys=ON")
+        cur.close()
+
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
     repo.async_session = async_sessionmaker(
@@ -119,11 +128,41 @@ async def _test_rotation():
         await engine.dispose()
 
 
+async def _test_fk_enforced_and_cascade():
+    engine = await _fresh()
+    try:
+        # FK aktif: signal dengan scan_id tidak ada harus ditolak.
+        async with repo.async_session() as s:
+            s.add(AccumulationSignal(scan_id=999, ticker="XX", score=1.0, depth="hv"))
+            raised = False
+            try:
+                await s.commit()
+            except IntegrityError:
+                raised = True
+                await s.rollback()
+        assert raised, "FK tidak ditegakkan (foreign_keys=OFF?)"
+
+        # ON DELETE CASCADE di level DB: hapus scan via SQL mentah -> signal ikut hilang.
+        r = await repo.save_scan(
+            date(2026, 9, 30), "complete",
+            signals=[{"ticker": "AAA", "score": 5.0}],
+        )
+        assert len(await repo.list_signals(r["id"])) == 1
+        async with engine.begin() as conn:
+            await conn.execute(
+                text("DELETE FROM accumulation_scans WHERE id=:i"), {"i": r["id"]}
+            )
+        assert await repo.list_signals(r["id"]) == [], "cascade SQL gagal"
+    finally:
+        await engine.dispose()
+
+
 def main():
     asyncio.run(_test_save_and_read())
     asyncio.run(_test_complete_not_overwritten())
     asyncio.run(_test_unique_scan_date())
     asyncio.run(_test_rotation())
+    asyncio.run(_test_fk_enforced_and_cascade())
     print("OK: test_accumulation_repository lolos")
 
 

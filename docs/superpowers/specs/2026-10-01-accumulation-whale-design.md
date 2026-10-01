@@ -129,10 +129,17 @@ Saham yang tidak sampai Tahap C **tidak** boleh dilabeli seperti terdeteksi whal
 
 ## 7. Skor Akumulasi
 
-- Skor 0–100 = jumlah berbobot komponen yang tersedia; bobot di `accumulation_weights`.
-- Hasil per saham: ticker, skor, rincian per komponen, alasan singkat, `depth`,
-  `scan_date`.
+- Skor 0–100 = jumlah berbobot komponen yang **tersedia**; bobot dinormalisasi
+  hanya atas komponen yang ada (bobot di `accumulation_weights`).
+- **Aturan plafon:** bila `depth != "broker"` (belum ada konfirmasi broker besar),
+  skor dibatasi `accumulation_score_cap_no_broker` (default **60**); `depth="broker"`
+  boleh sampai 100. Ditandai `capped=true` + alasan "skor dibatasi ...".
+- **Tidak dinilai** (`rated=false`, `score=null`) untuk data kotor/kurang, suspensi,
+  range nol, atau sudah lari — dengan alasan, bukan skor.
+- Hasil per saham: ticker, skor, `depth` (hv/foreign/broker), rincian komponen
+  **mentah** (`raw_signals`) + komponen ternormalisasi, alasan, `scan_date`.
 - Komponen mentah disimpan agar bisa **re-skor** tanpa memanggil API ulang.
+- Alasan tidak memakai kata "institusi": sebut "arus asing" / "broker besar".
 
 ## 8. Orkestrator Funnel
 
