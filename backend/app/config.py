@@ -33,6 +33,8 @@ class Settings(BaseSettings):
     accumulation_min_daily_value: float = 5e9
     # Validasi limit history sebelum request (API menolak > 500 dengan 422).
     accumulation_max_history_limit: int = 250
+    # Jumlah bar history yang diminta per kandidat di Tahap B (<= max_history_limit).
+    accumulation_history_bars: int = 80
     # Jumlah strata market cap untuk rotasi irisan universe antar-hari.
     accumulation_rotation_strata: int = 3
     # Buang saham yang sudah naik lebih dari ini dalam N hari (belum lari).

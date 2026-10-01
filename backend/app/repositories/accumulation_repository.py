@@ -7,13 +7,21 @@ disimpan/dibaca. Semua fungsi mengembalikan dict polos.
 from datetime import date
 from typing import Optional
 
-from sqlalchemy import desc, select
+from sqlalchemy import case, desc, select
 
 from app.database import async_session
 from app.database.models import (
     AccumulationRotation,
     AccumulationScan,
     AccumulationSignal,
+)
+
+# Tier kedalaman data: broker > foreign > hv. Sinyal terkonfirmasi broker tidak
+# boleh dikalahkan yang belum terkonfirmasi, apa pun skornya.
+_DEPTH_RANK = case(
+    (AccumulationSignal.depth == "broker", 0),
+    (AccumulationSignal.depth == "foreign", 1),
+    else_=2,
 )
 
 
@@ -144,7 +152,7 @@ async def get_latest_scan(limit: int = 50) -> Optional[dict]:
             await session.execute(
                 select(AccumulationSignal)
                 .where(AccumulationSignal.scan_id == scan.id)
-                .order_by(desc(AccumulationSignal.score))
+                .order_by(_DEPTH_RANK, desc(AccumulationSignal.score))
                 .limit(limit)
             )
         ).scalars().all()
@@ -157,7 +165,7 @@ async def list_signals(scan_id: int, limit: int = 50) -> list[dict]:
             await session.execute(
                 select(AccumulationSignal)
                 .where(AccumulationSignal.scan_id == scan_id)
-                .order_by(desc(AccumulationSignal.score))
+                .order_by(_DEPTH_RANK, desc(AccumulationSignal.score))
                 .limit(limit)
             )
         ).scalars().all()

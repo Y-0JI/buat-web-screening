@@ -140,6 +140,12 @@ Saham yang tidak sampai Tahap C **tidak** boleh dilabeli seperti terdeteksi whal
   **mentah** (`raw_signals`) + komponen ternormalisasi, alasan, `scan_date`.
 - Komponen mentah disimpan agar bisa **re-skor** tanpa memanggil API ulang.
 - Alasan tidak memakai kata "institusi": sebut "arus asing" / "broker besar".
+- **Bobot TIDAK dikalibrasi dari fixture**; kalibrasi dilakukan lewat **backtest**
+  (lihat §12). Nilai awal hanyalah tebakan berimbang.
+- **Urutan daftar hasil:** per tier kedalaman (`broker` > `foreign` > `hv`), baru
+  skor menurun. Sinyal yang belum terkonfirmasi broker **tidak boleh** mengalahkan
+  yang terkonfirmasi, apa pun skornya. Diterapkan di repository (query) dan
+  orkestrator.
 
 ## 8. Orkestrator Funnel
 
