@@ -198,6 +198,29 @@ def _test_ratelimit_header():
         settings.idx_edge_api_key = old
 
 
+def _test_ratelimit_min_tracking():
+    old = _with_key()
+    seq = iter(["900", "700", "800"])
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200, json=[], headers={"x-ratelimit-remaining": next(seq)},
+        )
+
+    p = IdxEdgeProvider(client=_client(handler))
+    try:
+        # Sebelum ada request: belum diketahui -> None (jangan menebak).
+        assert p.quota_remaining() is None, p.quota_remaining()
+        asyncio.run(p.search("A"))
+        asyncio.run(p.search("B"))
+        asyncio.run(p.search("C"))
+        assert p.last_ratelimit_remaining == 800, p.last_ratelimit_remaining
+        assert p.min_ratelimit_remaining == 700, p.min_ratelimit_remaining
+        assert p.quota_remaining() == 700, p.quota_remaining()
+    finally:
+        settings.idx_edge_api_key = old
+
+
 def _test_broker_accumulation():
     old = _with_key()
     seen = {}
@@ -273,6 +296,7 @@ def main():
     asyncio.run(_test_broker_summary())
     _test_fetch_history_clamps_limit()
     _test_ratelimit_header()
+    _test_ratelimit_min_tracking()
     _test_broker_accumulation()
     _test_market_cap_all()
     _test_calls_today_and_reset()

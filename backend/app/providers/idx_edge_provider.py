@@ -137,6 +137,10 @@ class IdxEdgeProvider:
         self._quota_day = date.today()
         # Sisa kuota dari header `x-ratelimit-remaining` (sumber kebenaran).
         self.last_ratelimit_remaining: Optional[int] = None
+        # Nilai TERKECIL yang terlihat hari ini. Request paralel bisa datang tidak
+        # berurutan, jadi yang dipakai untuk keputusan adalah minimum, bukan yang
+        # terakhir.
+        self.min_ratelimit_remaining: Optional[int] = None
 
     @property
     def enabled(self) -> bool:
@@ -150,18 +154,25 @@ class IdxEdgeProvider:
     def reset_quota(self) -> None:
         self._quota_day = date.today()
         self._calls_today = 0
+        self.last_ratelimit_remaining = None
+        self.min_ratelimit_remaining = None
 
-    def quota_remaining(self) -> int:
-        """Sisa kuota: header bila ada, jika tidak fallback ke penghitung lokal."""
-        if self.last_ratelimit_remaining is not None:
-            return max(0, self.last_ratelimit_remaining)
-        return max(0, settings.idx_edge_daily_quota - self.calls_today)
+    def quota_remaining(self) -> Optional[int]:
+        """Sisa kuota terpercaya, atau None bila belum diketahui (jangan menebak).
+
+        Sumber kebenaran = header `x-ratelimit-remaining` (minimum yang terlihat
+        hari ini). Bila belum ada request sama sekali, kembalikan None supaya
+        pemanggil bisa probe/berhenti, bukan mengarang angka.
+        """
+        return self.min_ratelimit_remaining
 
     def _roll_quota(self) -> None:
         today = date.today()
         if today != self._quota_day:
             self._quota_day = today
             self._calls_today = 0
+            self.last_ratelimit_remaining = None
+            self.min_ratelimit_remaining = None
 
     async def _get_json(
         self, path: str, params: Optional[dict] = None
@@ -197,7 +208,13 @@ class IdxEdgeProvider:
             remaining = resp.headers.get("x-ratelimit-remaining")
             if remaining is not None:
                 try:
-                    self.last_ratelimit_remaining = int(remaining)
+                    value = int(remaining)
+                    self.last_ratelimit_remaining = value
+                    if (
+                        self.min_ratelimit_remaining is None
+                        or value < self.min_ratelimit_remaining
+                    ):
+                        self.min_ratelimit_remaining = value
                 except ValueError:
                     pass
             if resp.status_code == 401:
