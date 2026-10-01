@@ -168,10 +168,12 @@ async def run_funnel(data_date: str, screener: Optional[dict]) -> dict:
         q = provider.quota_remaining()
         return q is not None and q <= reserve
 
-    # Kuota harus diketahui; bila belum, probe ringan (health tidak mengirim
-    # header kuota, jadi pakai market-cap). Jangan menebak.
+    # Kuota harus diketahui; bila belum, probe market-cap halaman 1 (health tidak
+    # mengirim header kuota). Respons probe dipakai ulang sebagai halaman 1 Tahap A
+    # sehingga tidak dihitung dua kali. Jangan menebak.
+    probe_page = None
     if provider.quota_remaining() is None:
-        await provider.fetch_market_cap(page=1, per_page=1)
+        probe_page = await provider.fetch_market_cap(page=1, per_page=50)
         if provider.quota_remaining() is None:
             return _partial("kuota tidak diketahui (probe gagal)")
     if quota_low():
@@ -184,7 +186,7 @@ async def run_funnel(data_date: str, screener: Optional[dict]) -> dict:
     ]
 
     # Tahap A — market-cap penuh + seed screener + rotasi per strata.
-    mc = await provider.fetch_market_cap_all(max_pages=25)
+    mc = await provider.fetch_market_cap_all(max_pages=25, first_page=probe_page)
     liquid = [
         r for r in mc
         if (r.get("market_cap") or 0) >= settings.accumulation_market_cap_min

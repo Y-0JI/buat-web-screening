@@ -265,11 +265,53 @@ def test_funnel_partial_quota():
         _restore(saved)
 
 
+def test_begin_scan_busy_single_flight():
+    saved = _apply_cfg()
+    try:
+        scan._in_progress = True
+        res = asyncio.run(scan.begin_scan())
+        assert res.get("busy") is True, res
+    finally:
+        scan._in_progress = False
+        _restore(saved)
+
+
+def test_funnel_skip_no_new_data():
+    saved = _apply_cfg()
+    handler = make_handler(quota=500)
+    engine = asyncio.run(_fresh(handler))
+    try:
+        async def run():
+            p1 = await scan.begin_scan(force=False)
+            await scan.continue_scan(p1)
+            first = await repo.get_latest_scan()
+            # data tidak berubah (tanggal sama) -> skip, tidak ada scan baru
+            p2 = await scan.begin_scan(force=False)
+            assert p2.get("skipped") is True, p2
+            assert p2.get("reason") == "scan complete sudah ada", p2
+            assert p2["scan_id"] == first["id"], (p2, first["id"])
+            same = await repo.get_scan_by_date(date.fromisoformat("2026-09-30"))
+            assert same["id"] == first["id"], same
+            # rotasi menyimpan stratum
+            from sqlalchemy import select
+            from app.database.models import AccumulationRotation
+            async with repo.async_session() as s:
+                rows = (await s.execute(select(AccumulationRotation))).scalars().all()
+            assert rows and all(r.stratum >= 0 for r in rows), rows
+        asyncio.run(run())
+        print("  [skip] data tidak berubah -> skip, scan_id sama, rotasi+stratum OK")
+    finally:
+        asyncio.run(engine.dispose())
+        _restore(saved)
+
+
 def main():
     test_endpoint_token_and_single_flight()
     test_get_reads_db_only()
+    test_begin_scan_busy_single_flight()
     test_funnel_complete_and_rotation()
     test_funnel_idempotent_skip()
+    test_funnel_skip_no_new_data()
     test_funnel_partial_quota()
     print("OK: test_accumulation_scan lolos")
 

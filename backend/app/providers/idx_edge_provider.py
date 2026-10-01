@@ -259,11 +259,21 @@ class IdxEdgeProvider:
         data = await self._get_json("/api/market-cap", params)
         return data if isinstance(data, dict) else None
 
-    async def fetch_market_cap_all(self, max_pages: int = 25) -> list[dict]:
-        """Ambil seluruh emiten dengan paginasi market-cap."""
+    async def fetch_market_cap_all(
+        self, max_pages: int = 25, first_page: Optional[dict] = None
+    ) -> list[dict]:
+        """Ambil seluruh emiten dengan paginasi market-cap.
+
+        `first_page` (mis. hasil probe kuota) dipakai ulang sebagai halaman 1 agar
+        tidak dihitung dua kali.
+        """
         rows: list[dict] = []
         page = 1
         total_pages = 1
+        if first_page:
+            rows.extend(first_page.get("data") or [])
+            total_pages = int(first_page.get("total_pages") or 1)
+            page = 2
         while page <= total_pages and page <= max_pages:
             data = await self.fetch_market_cap(page=page, per_page=50)
             if not data:
