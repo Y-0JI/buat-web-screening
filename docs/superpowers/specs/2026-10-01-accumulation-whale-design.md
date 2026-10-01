@@ -127,6 +127,13 @@ Kedalaman data: `hv` (hanya harga-volume) < `foreign` (+ asing) < `broker` (+ br
 Saham yang tidak sampai Tahap C **tidak** boleh dilabeli seperti terdeteksi whale;
 `depth` dan `reasons` harus menyatakan itu.
 
+Tier `broker` hanya bila broker **mengonfirmasi** (komponen broker ≥
+`accumulation_broker_confirm_min`); yang sudah dicek tapi tidak lolos tetap tier
+semula + penanda `broker_checked=True, broker_confirmed=False`.
+
+Catatan: tier `hv` **praktis tak terpakai** karena kolom arus asing
+(`f_buy`/`f_sell`/`n_foreign`) hampir selalu ada pada history saham IDX biasa.
+
 ## 7. Skor Akumulasi
 
 - Skor 0–100 = jumlah berbobot komponen yang **tersedia**; bobot dinormalisasi
@@ -216,12 +223,34 @@ tidak mengarang data.
 
 ## 12. Backtest
 
-- Skrip `backend/scripts/backtest_accumulation.py`.
-- Sinyal berskor tinggi pada tanggal historis → return 5/10/20 hari ke depan vs
-  rata-rata sampel pasar.
-- **Tanpa look-ahead**: hanya pakai data ≤ tanggal sinyal untuk skor; return masa
-  depan hanya untuk evaluasi.
-- Cache history agar tidak membebani kuota; laporkan apa adanya (termasuk tanpa edge).
+Skrip `backend/scripts/backtest_accumulation.py`. Dua backtest terpisah:
+
+1. **Harga-volume + arus asing** dari history 250 hari (banyak tanggal; ini yang
+   dinilai). 1 request history per saham.
+2. **Tier broker** dari window `broker-accumulation` (pendek) — wajib dilabeli
+   **"daya rendah/indikatif"**. Cek 1 request apakah rentang bisa diperpanjang
+   (`start_date` lebih awal). Laporkan jumlah tanggal sinyal efektif per saham + total.
+
+Aturan:
+- **Sampel acak berstrata** per kelompok market cap, **seed tetap**, filter
+  likuiditas/market cap sama dengan produksi. **Bukan** dari hasil scan / bucket
+  screener. Default S=120 (≈240 request; 1 history + 1 broker per saham).
+- **Titik masuk** = open hari bursa **berikutnya** setelah `as_of`; **keluar** =
+  close hari ke-N (5/10/20). ARA/ARB & ketidakmungkinan beli **tidak** dimodelkan.
+- **Tanpa look-ahead**: sinyal hanya dari data ≤ `as_of`; return maju dari history
+  yang sama.
+- **Baseline**: rata-rata semua sampel di tanggal sama + sinyal acak di strata sama.
+- **Metrik** per tier depth dan per kuantil skor: rata-rata, median, hit-rate, CI
+  bootstrap, n efektif (sinyal tidak tumpang tindih). Jangan klaim edge dari rata-rata.
+- **Biaya**: sebelum vs sesudah fee (beli 0.15%, jual 0.25%) + sensitivitas slippage
+  0.1/0.3/0.5% per sisi.
+- **Kalibrasi vs uji** dipisah per tanggal (60% awal / 40% akhir). Bobot tidak
+  diubah otomatis; rekomendasi saja.
+- **Cache disk + resume**; kegagalan satu ticker tidak menghentikan.
+- Hormati `quota_reserve`; jalankan hanya saat kuota segar (remaining ≥ ~900 dari
+  probe pertama).
+- **Keterbatasan** ditulis jujur: satu rezim pasar, survivorship/universe dari data
+  hari ini, tanpa IHSG, periode pendek.
 
 ## 13. Risiko
 
