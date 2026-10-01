@@ -17,6 +17,7 @@ const sample: AccumulationResult = {
     {
       ticker: "KEEN", score: 19, depth: "foreign", reasons: "sinyal lemah",
       cmf: -0.1, obv_slope: -0.01, ad_slope: 0.01, foreign_net: -1000, foreign_ratio: 0.3, runup: 0,
+      broker_checked: true, broker_confirmed: false,
     },
   ],
 };
@@ -30,6 +31,7 @@ describe("AccumulationCard (render)", () => {
     expect(html).toContain("scan tidak lengkap");
     expect(html).toContain("arus asing net jual");
     expect(html).toContain("CMF negatif");
+    expect(html).toContain("broker dicek, tidak mengonfirmasi");
     expect(html).toContain("Bukan label institusi");
   });
 

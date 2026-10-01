@@ -9,7 +9,11 @@
 
 [Unit]
 Description=IDX accumulation scan (trigger harian)
+# Backend harus berjalan. Bila backend dikelola systemd, aktifkan baris berikut
+# (ganti nama unit sesuai milik Anda):
+#Wants=idx-copilot-backend.service
 After=network-online.target
+#After=network-online.target idx-copilot-backend.service
 Wants=network-online.target
 
 [Service]

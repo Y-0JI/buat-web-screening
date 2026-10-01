@@ -60,6 +60,13 @@ function CandidateRow({ c }: { c: AccumulationCandidate }) {
         <span>· CMF {fmt(c.cmf)}</span>
         <span>· run {c.runup == null ? "-" : `${(c.runup * 100).toFixed(1)}%`}</span>
       </div>
+      {c.broker_checked && !c.broker_confirmed ? (
+        <div className="mt-1">
+          <span className="rounded border border-zinc-600 bg-zinc-800/60 px-1.5 py-0.5 text-[10px] text-zinc-400">
+            broker dicek, tidak mengonfirmasi
+          </span>
+        </div>
+      ) : null}
       {contra.length ? (
         <div className="mt-1 flex flex-wrap gap-1">
           {contra.map((t) => (

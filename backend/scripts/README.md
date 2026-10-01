@@ -6,15 +6,21 @@ menunggu scan selesai dan mencatat ringkasan: `scan_date`, `status`,
 
 ## Prasyarat
 
-1. Backend berjalan dan `ACCUMULATION_SCAN_TOKEN` diset di `.env` backend.
-2. Token yang sama diletakkan di file environment **di luar repo**, mis.
+1. **Backend harus berjalan** di `ACCUMULATION_API_URL` saat timer/cron jalan.
+   Bila server mati pukul 19:30, scan gagal. Solusi:
+   - kelola backend dengan systemd dan tambahkan ke unit scan:
+     `Wants=idx-copilot-backend.service` dan
+     `After=idx-copilot-backend.service` (lihat file `.service`), atau
+   - jadikan backend sebagai unit yang `Restart=always`.
+2. `ACCUMULATION_SCAN_TOKEN` diset di `.env` backend.
+3. Token yang sama diletakkan di file environment **di luar repo**, mis.
    `/etc/idx-accumulation.env` (jangan commit ke git):
 
    ```ini
    ACCUMULATION_SCAN_TOKEN=ganti-dengan-token-acak
    ACCUMULATION_API_URL=http://localhost:8000
-   ACCUMULATION_MAX_RETRIES=5
-   ACCUMULATION_RETRY_DELAY=900
+   ACCUMULATION_MAX_RETRIES=6
+   ACCUMULATION_RETRY_DELAY=1800
    ```
 
    Lindungi file: `chmod 600 /etc/idx-accumulation.env`.
@@ -56,8 +62,21 @@ jalankan pada `12:30` UTC.
 
 Bila respons `200` dengan alasan "data tidak berubah" (mis. data belum terbit /
 libur bursa) dan hari ini **bukan** Sabtu/Minggu, script mengulang hingga
-`ACCUMULATION_MAX_RETRIES` kali dengan jeda `ACCUMULATION_RETRY_DELAY` detik,
-lalu menyerah dengan log jelas (exit 2).
+`ACCUMULATION_MAX_RETRIES` kali (default **6**) dengan jeda
+`ACCUMULATION_RETRY_DELAY` detik (default **1800** = 30 menit), lalu menyerah
+dengan log jelas.
+
+## Exit code
+
+| Kode | Arti |
+|---|---|
+| 0 | Sukses, atau scan sedang berjalan (409) |
+| 1 | Error: token salah/kosong, koneksi gagal, HTTP tak terduga |
+| 2 | Tidak ada data baru setelah semua percobaan (libur bursa / data telat) |
+| 3 | Bukan hari bursa (Sabtu/Minggu) |
+
+Bedakan **2** (tidak ada data baru — wajar saat libur bursa) dari **1** (error
+nyata yang perlu ditindak).
 
 ## Catatan keamanan
 

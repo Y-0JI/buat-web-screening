@@ -153,6 +153,28 @@ def _load(name):
         return json.load(f)
 
 
+def test_broker_confirmation_threshold():
+    closes = [1000] * 20 + [1000 + 2 * i for i in range(20)]
+    vols = [1_000_000 + 20_000 * i for i in range(40)]
+    rows = mk(closes, vols, fbuy=[2_000_000] * 40, fsell=[1_000_000] * 40)
+    strong = {"series": [{"broker_code": "ZZ", "broker_name": "BIG",
+                          "points": [{"date": rows[i]["date"], "nval": 1e9, "nvol": 1e3,
+                                      "bavg": 1000.0, "savg": 1000.0} for i in range(20, 40)]}]}
+    r = acc.evaluate(rows, broker_payload=strong)
+    _print("broker_kuat", r)
+    assert r["broker_checked"] and r["broker_confirmed"], r
+    assert r["depth"] == "broker", r
+
+    weak = {"series": [{"broker_code": "YY", "broker_name": "SMALL",
+                        "points": [{"date": rows[i]["date"], "nval": 1.0, "nvol": 1,
+                                    "bavg": 1000.0, "savg": 1000.0} for i in (30, 31)]}]}
+    r2 = acc.evaluate(rows, broker_payload=weak)
+    _print("broker_lemah", r2)
+    assert r2["broker_checked"] and not r2["broker_confirmed"], r2
+    assert r2["depth"] in ("foreign", "hv"), r2
+    assert any("tidak mengonfirmasi" in x for x in r2["reasons"]), r2["reasons"]
+
+
 def test_real_fixture_with_broker():
     hist = _load("history_bbca.json")
     brok = _load("broker_accumulation_bbca.json")
@@ -191,6 +213,7 @@ def main():
     test_pattern_distribution()
     test_pattern_already_run()
     test_pattern_sideways()
+    test_broker_confirmation_threshold()
     test_real_fixture_with_broker()
     test_real_fixture_as_of()
     print("OK: test_accumulation_signals lolos")

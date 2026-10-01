@@ -213,6 +213,7 @@ def test_funnel_complete_and_rotation():
             # rekonsiliasi: setiap request (termasuk persiapan) tercatat.
             assert latest["requests_used"] == len(handler.calls), (
                 latest["requests_used"], len(handler.calls))
+            assert "Tahap B" in (latest["note"] or ""), latest["note"]
             rot = await repo.get_rotation_map()
             assert rot, "rotasi kosong"
             assert scan.scan_running() is False

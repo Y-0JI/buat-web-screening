@@ -150,6 +150,8 @@ export interface AccumulationCandidate {
   foreign_net: number | null;
   foreign_ratio: number | null;
   runup: number | null;
+  broker_checked?: boolean | null;
+  broker_confirmed?: boolean | null;
 }
 
 export interface AccumulationResult {
@@ -319,6 +321,8 @@ export async function getAccumulationLatest(
       foreign_net: s.foreign_net ?? null,
       foreign_ratio: (foreign.ratio as number) ?? null,
       runup: (raw.runup as number) ?? null,
+      broker_checked: (raw.broker_checked as boolean) ?? null,
+      broker_confirmed: (raw.broker_confirmed as boolean) ?? null,
     };
   });
   return {

@@ -43,6 +43,8 @@ class Settings(BaseSettings):
     accumulation_quota_reserve: int = 50
     # Plafon skor bila BELUM ada konfirmasi broker (depth hv/foreign).
     accumulation_score_cap_no_broker: float = 60.0
+    # Ambang komponen broker (0..1) agar tier "broker" = broker MENGAKONFIRMASI.
+    accumulation_broker_confirm_min: float = 0.5
     # Daftar kode broker asing (opsional, dipisah koma).
     accumulation_foreign_broker_codes: str = ""
     # Bobot komponen skor (di satu tempat).

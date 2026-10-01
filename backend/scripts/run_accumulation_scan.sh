@@ -8,19 +8,24 @@
 # Variabel lingkungan:
 #   ACCUMULATION_SCAN_TOKEN   (wajib) token header X-Scan-Token
 #   ACCUMULATION_API_URL      default http://localhost:8000
-#   ACCUMULATION_MAX_RETRIES  default 5   (saat skip "data tidak berubah")
-#   ACCUMULATION_RETRY_DELAY  default 900 (detik antar percobaan)
+#   ACCUMULATION_MAX_RETRIES  default 6    (saat skip "data tidak berubah")
+#   ACCUMULATION_RETRY_DELAY  default 1800 (detik antar percobaan; ~30 menit)
 #   ACCUMULATION_CURL_TIMEOUT default 120
 #   ACCUMULATION_FORCE        default false
 #
-# Keluar 0 bila sukses; non-nol saat gagal.
+# Backend HARUS berjalan di $ACCUMULATION_API_URL (lihat README: unit backend /
+# After=). Keluar:
+#   0 sukses atau scan sedang berjalan
+#   1 error (token/koneksi/HTTP)
+#   2 tidak ada data baru setelah semua percobaan (libur bursa / data telat)
+#   3 bukan hari bursa (weekend)
 
 set -uo pipefail
 
 API_URL="${ACCUMULATION_API_URL:-http://localhost:8000}"
 TOKEN="${ACCUMULATION_SCAN_TOKEN:-}"
-MAX_RETRIES="${ACCUMULATION_MAX_RETRIES:-5}"
-RETRY_DELAY="${ACCUMULATION_RETRY_DELAY:-900}"
+MAX_RETRIES="${ACCUMULATION_MAX_RETRIES:-6}"
+RETRY_DELAY="${ACCUMULATION_RETRY_DELAY:-1800}"
 CURL_TIMEOUT="${ACCUMULATION_CURL_TIMEOUT:-120}"
 FORCE="${ACCUMULATION_FORCE:-false}"
 
@@ -39,7 +44,7 @@ command -v python3 >/dev/null 2>&1 || die "python3 tidak ditemukan"
 dow="$(date '+%u')"
 if [ "$dow" -ge 6 ]; then
   log "SKIP: bukan hari bursa (weekend)"
-  exit 0
+  exit 3
 fi
 
 json_get() { # $1 = ekspresi key, mis. "['data']['status']"

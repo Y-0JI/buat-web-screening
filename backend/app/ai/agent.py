@@ -137,6 +137,8 @@ async def _get_accumulation_candidates(limit: int = 10) -> dict:
             "foreign_net": s.get("foreign_net"),
             "foreign_ratio": foreign.get("ratio"),
             "runup": raw.get("runup"),
+            "broker_checked": raw.get("broker_checked"),
+            "broker_confirmed": raw.get("broker_confirmed"),
         })
     return {
         "scan_date": scan.get("scan_date"),

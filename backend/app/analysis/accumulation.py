@@ -317,7 +317,8 @@ def broker_signals(payload: Optional[dict], current_close: Optional[float],
 
 # ---------------------------------------------------------------------- score
 
-def _reasons(comp: dict, raw: dict, depth: str, capped: bool) -> list[str]:
+def _reasons(comp: dict, raw: dict, depth: str, capped: bool,
+             broker_checked: bool, broker_confirmed: bool) -> list[str]:
     r: list[str] = []
     if comp.get("obv", 0) > 0.6:
         r.append("OBV naik (tekanan beli)")
@@ -334,12 +335,14 @@ def _reasons(comp: dict, raw: dict, depth: str, capped: bool) -> list[str]:
     f = raw.get("foreign") or {}
     if f.get("net", 0) > 0 and f.get("ratio", 0) >= 0.5:
         r.append(f"arus asing beli bersih {f.get('pos_days')}/{f.get('days')} hari")
-    b = raw.get("broker")
-    if b:
+    if broker_confirmed:
         r.append("broker besar net beli konsisten beberapa hari")
+        b = raw.get("broker") or {}
         pv = b.get("price_vs_buyer_avg")
         if pv is not None and abs(pv) <= 0.15:
             r.append("harga masih dekat rata-rata harga pembeli")
+    elif broker_checked:
+        r.append("broker dicek, tidak mengonfirmasi")
     if capped and depth != "broker":
         r.append("skor dibatasi karena belum ada konfirmasi broker besar")
     if not r:
@@ -356,6 +359,7 @@ def evaluate(
     min_bars: int = MIN_BARS,
     lookback: int = LOOKBACK,
     max_runup: float = 0.15,
+    broker_confirm_min: float = 0.5,
 ) -> dict:
     """Nilai satu saham. Return dict: rated/score/depth/components/raw_signals/reasons."""
     prep = prepare(history_rows, as_of=as_of, min_bars=min_bars)
@@ -398,7 +402,7 @@ def evaluate(
         b.get("f_buy") is not None or b.get("f_sell") is not None or b.get("n_foreign") is not None
         for b in bars[-lookback:]
     )
-    depth = "broker" if bsignals else ("foreign" if has_foreign else "hv")
+    broker_checked = bsignals is not None
 
     comp = {
         "obv": 0.5 + 0.5 * math.tanh(obv_s * 3),
@@ -409,6 +413,7 @@ def evaluate(
         "vwap": vwap_pos if vwap_pos is not None else 0.5,
         "foreign": fconf["ratio"] * (1.0 if fconf["net"] > 0 else 0.0),
     }
+    broker_confirmed = False
     if bsignals:
         pv = bsignals["price_vs_buyer_avg"]
         prox = 0.5 if pv is None else _clamp01(1 - abs(pv) / 0.15)
@@ -417,27 +422,37 @@ def evaluate(
             + 0.4 * bsignals["persistence"]
             + 0.2 * prox
         )
+        broker_confirmed = comp["broker"] >= broker_confirm_min
+
+    # Tier "broker" hanya bila broker MENGAKONFIRMASI (komponen lolos ambang),
+    # bukan sekadar "sempat dicek".
+    depth = "broker" if broker_confirmed else ("foreign" if has_foreign else "hv")
 
     w = weights or DEFAULT_WEIGHTS
     used = {k: w.get(k, 0.0) for k in comp if w.get(k, 0.0) > 0}
     total_w = sum(used.values())
     raw_score = 50.0 if total_w <= 0 else sum(comp[k] * used[k] for k in used) / total_w * 100.0
     capped = raw_score if depth == "broker" else min(raw_score, cap_no_broker)
+    is_capped = raw_score > capped + 1e-9
 
     raw_signals = {
         "obv_slope": obv_s, "ad_slope": ad_s, "cmf": cmf_v,
         "absorption_ratio": absorp, "basing": base_s,
         "vwap": vw, "vwap_pos": vwap_pos, "foreign": fconf,
         "broker": bsignals, "total_value": total_value,
+        "broker_checked": broker_checked, "broker_confirmed": broker_confirmed,
         "close": close, "runup": ru, "split_adjusted": adjusted,
     }
     return {
         "rated": True,
         "depth": depth,
+        "broker_checked": broker_checked,
+        "broker_confirmed": broker_confirmed,
         "score": round(capped, 1),
         "raw_score": round(raw_score, 1),
-        "capped": raw_score > capped + 1e-9,
+        "capped": is_capped,
         "components": {k: round(v, 4) for k, v in comp.items()},
         "raw_signals": raw_signals,
-        "reasons": _reasons(comp, raw_signals, depth, raw_score > capped + 1e-9) + issues,
+        "reasons": _reasons(comp, raw_signals, depth, is_capped,
+                            broker_checked, broker_confirmed) + issues,
     }

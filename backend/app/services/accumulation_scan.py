@@ -104,6 +104,8 @@ def _signal(ticker: str, res: dict) -> dict:
         "close": raw.get("close"),
         "foreign_net": foreign.get("net"),
         "broker_net": broker_net,
+        "broker_checked": bool(raw.get("broker_checked")),
+        "broker_confirmed": bool(raw.get("broker_confirmed")),
     }
 
 
@@ -202,6 +204,8 @@ async def run_funnel(data_date: str, screener: Optional[dict]) -> dict:
     # Tahap B — history untuk kandidat (konkurensi terbatas).
     sem = asyncio.Semaphore(5)
     checked: list[dict] = []
+    bconf = settings.accumulation_broker_confirm_min
+    reasons_count = {"not_rated": 0, "runup": 0, "thin": 0, "failed": 0}
 
     async def hv(item: dict) -> Optional[dict]:
         async with sem:
@@ -211,29 +215,48 @@ async def run_funnel(data_date: str, screener: Optional[dict]) -> dict:
             rows = await provider.fetch_history(ticker, limit=hist_bars)
             checked.append(item)
             if not rows:
+                reasons_count["failed"] += 1
                 return {"ticker": ticker, "failed": True}
             prep = A.prepare(rows, as_of=data_date, min_bars=mb)
             if not prep["ok"]:
-                return {"ticker": ticker, "not_rated": prep["reason"]}
+                reason = prep["reason"] or "tidak dinilai"
+                if str(reason).startswith("sudah naik"):
+                    reasons_count["runup"] += 1
+                else:
+                    reasons_count["not_rated"] += 1
+                return {"ticker": ticker, "not_rated": reason}
             window = prep["bars"][-lb:]
             avg_value = sum(b["value"] for b in window) / max(1, len(window))
             if avg_value < settings.accumulation_min_daily_value:
+                reasons_count["thin"] += 1
                 return {"ticker": ticker, "thin": True}
             res = A.evaluate(
                 rows, as_of=data_date, weights=weights, cap_no_broker=cap,
                 min_bars=mb, lookback=lb, max_runup=settings.accumulation_max_runpct,
+                broker_confirm_min=bconf,
             )
             if not res["rated"]:
-                return {"ticker": ticker, "not_rated": (res["reasons"] or ["tidak dinilai"])[0]}
+                reason = (res["reasons"] or ["tidak dinilai"])[0]
+                if str(reason).startswith("sudah naik"):
+                    reasons_count["runup"] += 1
+                else:
+                    reasons_count["not_rated"] += 1
+                return {"ticker": ticker, "not_rated": reason}
             return {"ticker": ticker, "stratum": item["stratum"], "res": res, "rows": rows}
 
     raw = await asyncio.gather(*(hv(c) for c in candidates))
     stage_b = [r for r in raw if r and r.get("res")]
     stage_b.sort(key=lambda x: x["res"]["score"], reverse=True)
+    note.append(
+        f"Tahap B: {len(stage_b)} lolos dari {len(candidates)} "
+        f"(tidak dinilai {reasons_count['not_rated']}, sudah lari {reasons_count['runup']}, "
+        f"likuiditas tipis {reasons_count['thin']}, gagal data {reasons_count['failed']})"
+    )
 
     # Tahap C — broker untuk top kandidat.
     final: dict[str, dict] = {x["ticker"]: x for x in stage_b}
     stage_c = 0
+    broker_confirmed = 0
     for x in stage_b[:settings.accumulation_broker_limit]:
         if quota_low():
             status = "partial"
@@ -244,10 +267,14 @@ async def run_funnel(data_date: str, screener: Optional[dict]) -> dict:
             x["rows"], broker_payload=brok, as_of=data_date, weights=weights,
             cap_no_broker=cap, min_bars=mb, lookback=lb,
             max_runup=settings.accumulation_max_runpct,
+            broker_confirm_min=bconf,
         )
         if res2["rated"]:
             final[x["ticker"]] = {"ticker": x["ticker"], "stratum": x["stratum"], "res": res2}
             stage_c += 1
+            if res2.get("broker_confirmed"):
+                broker_confirmed += 1
+    note.append(f"Tahap C: {stage_c} dicek broker, {broker_confirmed} mengonfirmasi")
 
     signals = [_signal(t, item["res"]) for t, item in final.items()]
     signals.sort(
