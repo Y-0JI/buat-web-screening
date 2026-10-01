@@ -1,0 +1,16 @@
+# /etc/systemd/system/accumulation-scan.timer
+#
+# Hari bursa saja (Senin-Jumat), malam WIB setelah pasar tutup.
+# Persistent=true: bila mesin mati saat jadwal, timer dijalankan saat hidup lagi.
+
+[Unit]
+Description=Jadwal scan akumulasi IDX (malam WIB, hari bursa)
+
+[Timer]
+OnCalendar=Mon..Fri 19:30 Asia/Jakarta
+Persistent=true
+Unit=accumulation-scan.service
+AccuracySec=1min
+
+[Install]
+WantedBy=timers.target

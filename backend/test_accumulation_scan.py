@@ -210,6 +210,9 @@ def test_funnel_complete_and_rotation():
             depths = [s["depth"] for s in latest["signals"]]
             assert depths == sorted(depths, key=lambda d: {"broker": 0, "foreign": 1, "hv": 2}.get(d, 3)), depths
             assert latest["requests_used"] > 0, latest
+            # rekonsiliasi: setiap request (termasuk persiapan) tercatat.
+            assert latest["requests_used"] == len(handler.calls), (
+                latest["requests_used"], len(handler.calls))
             rot = await repo.get_rotation_map()
             assert rot, "rotasi kosong"
             assert scan.scan_running() is False

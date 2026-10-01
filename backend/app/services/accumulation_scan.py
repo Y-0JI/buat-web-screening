@@ -132,6 +132,9 @@ async def prepare_scan(force: bool = False) -> dict:
     return {
         "ok": True, "scan_id": created["id"], "scan_date": data_date,
         "screener": screener,
+        # request yang dipakai tahap persiapan (probe market-cap + screener) agar
+        # ikut dihitung di requests_used total.
+        "prep_requests": provider.calls_today,
     }
 
 
@@ -274,6 +277,9 @@ async def continue_scan(prep: dict, force: bool = False) -> None:
     try:
         data_date = prep["scan_date"]
         result = await run_funnel(data_date, prep.get("screener"))
+        # Total request = persiapan + funnel (retry/probe apa pun yang lewat
+        # provider sudah ikut terhitung di provider masing-masing).
+        result["requests_used"] = result.get("requests_used", 0) + prep.get("prep_requests", 0)
         saved = await repo.save_scan(
             date.fromisoformat(data_date), result["status"],
             universe_count=result["universe_count"],
