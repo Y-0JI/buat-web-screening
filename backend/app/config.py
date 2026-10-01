@@ -17,7 +17,10 @@ class Settings(BaseSettings):
     idx_edge_api_key: str = ""
     idx_edge_base_url: str = "https://stock.arjum.com"
     idx_edge_timeout: int = 20
-    idx_edge_daily_quota: int = 1000
+    # Header `x-ratelimit-limit` terkonfirmasi 21000 (2026-10-01); header = sumber kebenaran.
+    idx_edge_daily_quota: int = 21000
+    # Jumlah minimum sinyal efektif (tak tumpang-tindih) untuk putusan edge backtest.
+    accumulation_backtest_min_effective_n: int = 30
 
     # --- Deteksi akumulasi pemain besar (screening hemat kuota) ---
     accumulation_enabled: bool = True
@@ -40,7 +43,7 @@ class Settings(BaseSettings):
     # Buang saham yang sudah naik lebih dari ini dalam N hari (belum lari).
     accumulation_max_runpct: float = 0.15
     # Sisa kuota yang selalu disisakan untuk chat ad-hoc.
-    accumulation_quota_reserve: int = 50
+    accumulation_quota_reserve: int = 500
     # Plafon skor bila BELUM ada konfirmasi broker (depth hv/foreign).
     accumulation_score_cap_no_broker: float = 60.0
     # Ambang komponen broker (0..1) agar tier "broker" = broker MENGAKONFIRMASI.

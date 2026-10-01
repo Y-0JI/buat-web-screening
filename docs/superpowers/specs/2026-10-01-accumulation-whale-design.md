@@ -246,6 +246,25 @@ Aturan:
   0.1/0.3/0.5% per sisi.
 - **Kalibrasi vs uji** dipisah per tanggal (60% awal / 40% akhir). Bobot tidak
   diubah otomatis; rekomendasi saja.
+
+### Kriteria edge (ditulis SEBELUM run, dinilai pada periode uji)
+
+Dinilai per horizon (5/10/20) pada return **bersih** (fee + tiap sensitivitas
+slippage 0.1/0.3/0.5% per sisi):
+
+1. Return bersih kuantil skor teratas (**Q5**) > **baseline** (rata-rata semua
+   sampel di tanggal yang sama) pada periode uji.
+2. CI bootstrap 95% atas **selisih rerata Q5 − baseline TIDAK mencakup nol**.
+3. **Kira-kira monoton**: Spearman(indeks kuantil, rerata kuantil) ≥ 0.7 pada
+   periode uji.
+4. **n efektif** (sinyal tak tumpang-tindih dalam horizon) ≥
+   `accumulation_backtest_min_effective_n` (default 30).
+
+Putusan `edge=true` bila keempatnya terpenuhi pada suatu horizon; jika tidak,
+laporkan apa adanya, termasuk bila tanpa edge.
+
+Kalibrasi = 60% tanggal sinyal paling awal; periode uji dimulai **20 hari bursa
+setelah tanggal cut** (embargo) agar tidak ada kebocoran jendela.
 - **Cache disk + resume**; kegagalan satu ticker tidak menghentikan.
 - Hormati `quota_reserve`; jalankan hanya saat kuota segar (remaining ≥ ~900 dari
   probe pertama).

@@ -267,6 +267,43 @@ def _test_market_cap_all():
         settings.idx_edge_api_key = old
 
 
+def _test_ratelimit_limit_header():
+    old = _with_key()
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200, json=[],
+            headers={"x-ratelimit-remaining": "19900", "x-ratelimit-limit": "20000"},
+        )
+
+    p = IdxEdgeProvider(client=_client(handler))
+    try:
+        assert p.ratelimit_limit is None, p.ratelimit_limit
+        asyncio.run(p.search("BBCA"))
+        assert p.ratelimit_limit == 20000, p.ratelimit_limit
+        assert p.quota_remaining() == 19900, p.quota_remaining()
+        p.reset_quota()
+        assert p.ratelimit_limit is None, p.ratelimit_limit
+    finally:
+        settings.idx_edge_api_key = old
+
+
+def _test_ratelimit_limit_bad_header_ignored():
+    old = _with_key()
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200, json=[], headers={"x-ratelimit-limit": "bukan-angka"},
+        )
+
+    p = IdxEdgeProvider(client=_client(handler))
+    try:
+        asyncio.run(p.search("BBCA"))
+        assert p.ratelimit_limit is None, p.ratelimit_limit
+    finally:
+        settings.idx_edge_api_key = old
+
+
 def _test_calls_today_and_reset():
     old = _with_key()
 

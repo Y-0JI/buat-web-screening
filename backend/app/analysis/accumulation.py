@@ -138,6 +138,28 @@ def prepare(rows: list[dict], as_of: Optional[str] = None, min_bars: int = MIN_B
     return {"ok": True, "reason": None, "bars": bars, "issues": issues}
 
 
+def split_zones(rows: list[dict]) -> list[str]:
+    """Tanggal aksi korporasi (split) pada deret MENTAH.
+
+    Aturan deteksi SAMA dengan `adjust_splits`: lompatan close (<0.7 atau >1.4)
+    DISERTAI lonjakan volume (>1.5x) dibanding bar sebelumnya. Return tanggal
+    bar tempat lompatan terjadi, urut naik.
+    """
+    prep = prepare(rows)
+    bars = prep["bars"]
+    zones: list[str] = []
+    for i in range(1, len(bars)):
+        p0, p1 = bars[i - 1]["close"], bars[i]["close"]
+        if p0 <= 0 or p1 <= 0:
+            continue
+        r = p1 / p0
+        v0, v1 = bars[i - 1]["volume"], bars[i]["volume"]
+        vr = (v1 / v0) if v0 > 0 else 0.0
+        if (r < 0.7 or r > 1.4) and vr > 1.5:
+            zones.append(bars[i]["date"])
+    return zones
+
+
 def adjust_splits(bars: list[dict]) -> tuple[list[dict], bool]:
     """Sesuaikan lompatan harga karena aksi korporasi (split) agar tidak jadi sinyal palsu.
 

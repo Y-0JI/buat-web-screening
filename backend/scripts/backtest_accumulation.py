@@ -23,7 +23,7 @@ import math
 import os
 import random
 import statistics
-from datetime import date
+from datetime import date, timedelta
 from typing import Any, Callable, Optional
 
 from app.analysis import accumulation as A
@@ -70,6 +70,53 @@ def stratified_sample(universe: list[dict], n: int, strata: int = 3, seed: int =
 
 # ------------------------------------------------------------ forward return
 
+def add_business_days(d: date, n: int) -> date:
+    cur = d
+    step = 1 if n >= 0 else -1
+    left = abs(n)
+    while left:
+        cur += timedelta(days=step)
+        if cur.weekday() < 5:
+            left -= 1
+    return cur
+
+
+def split_calib_test(
+    dates: list[str], ratio: float = 0.6, embargo_days: int = 20
+) -> dict:
+    """Bagi tanggal sinyal -> kalibrasi / embargo / uji (hari bursa).
+
+    Kalibrasi = 60% tanggal sinyal paling awal. Periode uji dimulai `embargo_days`
+    HARI BURSA setelah tanggal cut, agar tidak ada kebocoran jendela.
+    """
+    ordered = sorted(dates)
+    cut_idx = int(len(ordered) * ratio)
+    cut_date = ordered[cut_idx] if ordered else None
+    embargo_start = (
+        add_business_days(date.fromisoformat(cut_date), embargo_days).isoformat()
+        if cut_date
+        else None
+    )
+    calib = [d for d in ordered if cut_date is None or d < cut_date]
+    test = [
+        d for d in ordered
+        if embargo_start is not None and d >= embargo_start
+    ]
+    embargo = [
+        d for d in ordered
+        if cut_date is not None and embargo_start is not None
+        and not (d < cut_date) and d < embargo_start
+    ]
+    return {
+        "cut_date": cut_date,
+        "embargo_start": embargo_start,
+        "test_start": embargo_start,
+        "n_calib_dates": len(calib),
+        "n_embargo_dates": len(embargo),
+        "n_test_dates": len(test),
+    }
+
+
 def forward_return(bars: list[dict], idx: int, horizon: int, entry: str = "open") -> Optional[float]:
     """Return dari OPEN hari berikutnya (idx+1) ke CLOSE `horizon` hari sesudah masuk."""
     if idx + 1 >= len(bars):
@@ -88,6 +135,14 @@ def net_return(gross: float, slip: float, fee_buy: float = FEE_BUY, fee_sell: fl
     return (1 + gross) * ((1 - slip) * (1 - fee_sell)) / ((1 + slip) * (1 + fee_buy)) - 1
 
 
+def quota_ok_for_universe(remaining: Optional[int], n_tickers: int,
+                          reserve: int, overhead: int = 50) -> tuple[bool, int]:
+    """Perlu = 2 request/ticker (history + broker) + overhead tetap + reserve."""
+    need = 2 * n_tickers + overhead + reserve
+    ok = remaining is not None and remaining >= need
+    return ok, need
+
+
 # ------------------------------------------------------------- reconstruction
 
 def reconstruct_records(
@@ -103,16 +158,35 @@ def reconstruct_records(
     cap_no_broker: float = A.SCORE_CAP_NO_BROKER,
     broker_confirm_min: float = 0.5,
 ) -> list[dict]:
-    """Banyak tanggal as_of untuk satu saham. Return tidak memakai data > as_of."""
+    """Banyak tanggal as_of untuk satu saham. Return tidak memakai data > as_of.
+
+    Seri forward return DISESUAIKAN split; setiap tanggal yang, bersama jendela
+    sinyal atau jendela return-nya, melewati aksi korporasi -> window dibuang,
+    bukan dinilai.
+    """
     prep = A.prepare(history_rows)
     if not prep["ok"] or len(prep["bars"]) < min_bars:
         return []
     bars = prep["bars"]
+    adj, _adjusted = A.adjust_splits(bars)
+    adj_by_date = {b["date"]: i for i, b in enumerate(adj)}
+    zones = set(A.split_zones(history_rows))
     maxh = max(horizons)
+
+    def _span_has_zone(i: int) -> bool:
+        # Hanya JENDELA RETURN yang tidak boleh melewati split; sinyal sudah
+        # dihitung pada seri yang disesuaikan split (evaluate).
+        lo = i + 1
+        hi = min(len(bars), i + 2 + maxh)
+        return any(bars[k]["date"] in zones for k in range(lo, hi))
+
     recs: list[dict] = []
     i = min_bars - 1
     while i + 1 + maxh < len(bars):
         as_of = bars[i]["date"]
+        if _span_has_zone(i):
+            i += step
+            continue
         res = A.evaluate(
             history_rows, broker_payload=broker_payload, as_of=as_of,
             weights=weights, cap_no_broker=cap_no_broker, min_bars=min_bars,
@@ -125,7 +199,8 @@ def reconstruct_records(
             "broker_confirmed": res.get("broker_confirmed"),
         }
         for h in horizons:
-            rec[f"ret_{h}"] = forward_return(bars, i, h)
+            ai = adj_by_date[as_of]
+            rec[f"ret_{h}"] = forward_return(adj, ai, h)
         recs.append(rec)
         i += step
     return recs
@@ -156,12 +231,46 @@ def _metrics(values: list[float]) -> dict:
     }
 
 
-def score_quintiles(records: list[dict]) -> dict[str, list[dict]]:
-    rated = [r for r in records if r.get("rated") and r.get("score") is not None]
+def _rankdata(values: list[float]) -> list[float]:
+    order = sorted(range(len(values)), key=lambda i: values[i])
+    ranks = [0.0] * len(values)
+    i = 0
+    while i < len(order):
+        j = i
+        while j + 1 < len(order) and values[order[j + 1]] == values[order[i]]:
+            j += 1
+        avg = (i + j) / 2 + 1
+        for k in range(i, j + 1):
+            ranks[order[k]] = avg
+        i = j + 1
+    return ranks
+
+
+def spearman_rho(x: list[float], y: list[float]) -> Optional[float]:
+    if len(x) != len(y) or len(x) < 3:
+        return None
+    n = len(x)
+    if len(set(x)) == 1 or len(set(y)) == 1:
+        return None
+    rx, ry = _rankdata(x), _rankdata(y)
+    d2 = sum((a - b) ** 2 for a, b in zip(rx, ry))
+    denom = n * (n * n - 1)
+    if denom == 0:
+        return None
+    return 1 - 6 * d2 / denom
+
+
+def score_cuts(scores: list[float]) -> list[float]:
+    ordered = sorted(scores)
+    return [ordered[int(len(ordered) * q)] for q in (0.2, 0.4, 0.6, 0.8)]
+
+
+def score_quintiles(records: list[dict], cuts: Optional[list[float]] = None) -> dict[str, list[dict]]:
+    rated = [r for r in records if r.get("rated", True) and r.get("score") is not None]
     if not rated:
         return {}
-    scores = sorted(r["score"] for r in rated)
-    cuts = [scores[int(len(scores) * q)] for q in (0.2, 0.4, 0.6, 0.8)]
+    if cuts is None:
+        cuts = score_cuts([r["score"] for r in rated])
     buckets: dict[str, list[dict]] = {f"Q{i+1}": [] for i in range(5)}
     for r in rated:
         s = r["score"]
@@ -170,6 +279,177 @@ def score_quintiles(records: list[dict]) -> dict[str, list[dict]]:
             idx += 1
         buckets[f"Q{idx+1}"].append(r)
     return buckets
+
+
+def mean_diff_bootstrap_ci(
+    a: list[float], b: list[float], iters: int = 1000, seed: int = 7, alpha: float = 0.05
+) -> tuple[float, float, float]:
+    if not a or not b:
+        return (0.0, 0.0, 0.0)
+    diff = statistics.mean(a) - statistics.mean(b) if a and b else 0.0
+    rnd = random.Random(seed)
+    na, nb = len(a), len(b)
+    boots = sorted(
+        (statistics.mean(rnd.choices(a, k=na)) - statistics.mean(rnd.choices(b, k=nb)))
+        for _ in range(iters)
+    )
+    return (diff, boots[int(alpha / 2 * iters)],
+            boots[min(len(boots) - 1, int((1 - alpha / 2) * iters))])
+
+
+def eval_group(values: list[float], baseline: list[float], n_effective: int,
+               slip_levels=SLIP_SENSITIVITY, min_effective: int = 30) -> dict:
+    out: dict[str, Any] = {"n": len(values), "n_effective": n_effective}
+    if not values or not baseline:
+        out.update({"gross": _metrics([]), "net": {}, "baseline": _metrics([]),
+                    "mean_diff": None, "mean_diff_ci95": (None, None),
+                    "n_ok": False, "edge": False})
+        return out
+    gross = _metrics(values)
+    net: dict[str, dict] = {}
+    for slip in slip_levels:
+        net[f"slip_{slip}"] = _metrics([net_return(v, slip) for v in values])
+    diff, lo, hi = mean_diff_bootstrap_ci(values, baseline)
+    out.update({
+        "gross": gross, "net": net, "baseline": _metrics(baseline),
+        "mean_diff": diff, "mean_diff_ci95": (lo, hi),
+        "n_ok": n_effective >= min_effective,
+    })
+    out["edge"] = out["n_ok"] and lo is not None and hi is not None and lo > 0
+    return out
+
+
+def _gross_values(entries: list) -> list[float]:
+    """Normalisasi entri kuantil mentah: dict berisi `ret` atau angka mentah."""
+    values: list[float] = []
+    for entry in entries or []:
+        if isinstance(entry, dict):
+            value = entry.get("ret")
+        elif isinstance(entry, (int, float)) and not isinstance(entry, bool):
+            value = float(entry)
+        else:
+            value = None
+        if isinstance(value, (int, float)) and not isinstance(value, bool):
+            values.append(float(value))
+    return values
+
+
+def edge_verdict(
+    quintiles: dict[str, list],
+    baseline: list,
+    n_effective: int,
+    slip_levels=SLIP_SENSITIVITY,
+    min_effective: int = 30,
+    min_spearman: float = 0.7,
+) -> dict:
+    per_slip: dict[float, dict] = {}
+    for slip in slip_levels:
+        q5 = [net_return(v, slip) for v in _gross_values(quintiles.get("Q5", []))]
+        bnet = [net_return(v, slip) for v in _gross_values(baseline)]
+        diff, lo, hi = mean_diff_bootstrap_ci(q5, bnet)
+        n_ok = n_effective >= min_effective and len(q5) > 0
+        per_slip[slip] = {
+            "q5_minus_base": diff, "q5_minus_base_ci95": (lo, hi),
+            "ci_ok": lo is not None and lo > 0, "n_ok": n_ok,
+            "edge": bool(n_ok and lo is not None and lo > 0),
+        }
+    qret, qid = [], []
+    for i in range(1, 6):
+        qs = [net_return(v, slip_levels[0]) for v in _gross_values(quintiles.get(f"Q{i}", []))]
+        if qs:
+            qret.append(statistics.mean(qs))
+            qid.append(float(i))
+    rho = spearman_rho(qid, qret)
+    verdict = {
+        "spearman": rho,
+        "monotone_ok": rho is not None and rho >= min_spearman,
+        "per_slip": per_slip,
+        "overall": False,
+    }
+    verdict["overall"] = bool(
+        verdict["monotone_ok"] and verdict["per_slip"][slip_levels[0]]["edge"]
+    )
+    return verdict
+
+
+def random_baseline(records: list[dict], horizon: int, seed: int = 42) -> list[dict]:
+    """Satu draw acak per (as_of, stratum) dengan seed tetap (baseline acak)."""
+    pool: dict[tuple, list[float]] = {}
+    for r in records:
+        value = r.get(f"ret_{horizon}")
+        if value is not None:
+            pool.setdefault((r.get("as_of"), r.get("stratum")), []).append(value)
+    rnd = random.Random(seed)
+    draws = []
+    for key in sorted(pool, key=lambda k: (str(k[0]), str(k[1]))):
+        draws.append({"as_of": key[0], "stratum": key[1], "ret": rnd.choice(pool[key])})
+    return draws
+
+
+def verdict_for_broker_window(records: list[dict], window: dict,
+                              horizon: int = 5,
+                              slip_levels=SLIP_SENSITIVITY,
+                              min_effective: int = 30,
+                              min_spearman: float = 0.7) -> dict:
+    """Putusan khusus tier broker dalam window broker-accumulation (daya rendah)."""
+    start, end = window.get("start"), window.get("end")
+    in_window = [r for r in records
+                 if r.get("rated")
+                 and r.get(f"ret_{horizon}") is not None
+                 and r.get("depth") == "broker"
+                 and (start is None or r.get("as_of", "") >= start)
+                 and (end is None or r.get("as_of", "") <= end)]
+    baseline = [r[f"ret_{horizon}"] for r in records
+                if r.get(f"ret_{horizon}") is not None
+                and (start is None or r.get("as_of", "") >= start)
+                and (end is None or r.get("as_of", "") <= end)]
+    cuts = score_cuts([r["score"] for r in in_window if r.get("score") is not None]) if in_window else None
+    qb = {k: [{**r, "ret": r[f"ret_{horizon}"]} for r in v]
+          for k, v in score_quintiles(in_window, cuts=cuts).items()}
+    n_eff = effective_n(in_window, horizon)
+    verdict = edge_verdict(qb, baseline, n_eff,
+                           slip_levels=slip_levels, min_effective=min_effective,
+                           min_spearman=min_spearman)
+    n_dates = len({r["as_of"] for r in in_window})
+    return {
+        "window": window,
+        "n_records": len(in_window),
+        "n_signal_dates": n_dates,
+        "n_effective": n_eff,
+        "verdict": verdict,
+        "power_notes": [f"daya rendah/indikatif: window broker-accumulation pendek "
+                        f"({start}..{end}), n_signal_dates={n_dates}, n_records={len(in_window)}"],
+        "caveats": ["tier broker hanya dari window broker-accumulation"],
+    }
+
+
+def verdict_for_horizon(records: list[dict], horizon: int,
+                        slip_levels=SLIP_SENSITIVITY,
+                        min_effective: int = 30,
+                        min_spearman: float = 0.7,
+                        embargo_days: int = 20) -> dict:
+    rated = [r for r in records
+             if r.get("rated") and r.get(f"ret_{horizon}") is not None]
+    recs = [{**r, "ret": r[f"ret_{horizon}"]} for r in rated]
+    dates = sorted({r["as_of"] for r in recs})
+    split = split_calib_test(dates, embargo_days=embargo_days)
+    calib = [r for r in recs if split["cut_date"] is not None and r["as_of"] < split["cut_date"]]
+    test = [r for r in recs
+            if split["embargo_start"] is not None and r["as_of"] >= split["embargo_start"]]
+    cuts = score_cuts([r["score"] for r in calib]) if calib else None
+    qb = {k: [{**r, "ret": r["ret"]} for r in v]
+          for k, v in score_quintiles(test, cuts=cuts).items()}
+    baseline = [r["ret"] for r in recs
+                if split["embargo_start"] is not None and r["as_of"] >= split["embargo_start"]]
+    verdict = edge_verdict(qb, baseline, effective_n(test, horizon),
+                           slip_levels=slip_levels, min_effective=min_effective,
+                           min_spearman=min_spearman)
+    return {
+        "horizon": horizon, "n_rated": len(recs),
+        "n_calib": len(calib), "n_test": len(test),
+        "n_effective": effective_n(test, horizon),
+        "split": split, "verdict": verdict,
+    }
 
 
 def effective_n(records: list[dict], horizon: int) -> int:
@@ -278,6 +558,12 @@ async def run_backtest(
     calib = [r for r in records if cut is None or r["as_of"] < cut]
     test = [r for r in records if cut is not None and r["as_of"] >= cut]
 
+    min_eff = settings.accumulation_backtest_min_effective_n
+    verdicts = {
+        h: verdict_for_horizon(records, h, min_effective=min_eff)
+        for h in horizons
+    }
+
     return {
         "n_sample": len(sample),
         "n_records": len(records),
@@ -285,12 +571,14 @@ async def run_backtest(
         "cut_date": cut,
         "calibration": build_report(calib, horizons),
         "test": build_report(test, horizons),
+        "verdicts": verdicts,
         "limitations": [
             "Satu rezim pasar (periode pendek).",
             "Universe/survivorship dari data hari ini (market-cap sekarang).",
-            "Tanpa IHSG; baseline = rata-rata sampel di tanggal sama.",
+            "Tanpa IHSG; baseline = rata-rata semua sampel di tanggal yang sama.",
             "ARA/ARB & ketidakmungkinan beli tidak dimodelkan.",
             "Sinyal berurutan berkorelasi -> pakai n efektif, jangan klaim signifikansi.",
+            "Tier broker hanya dari window broker-accumulation (pendek) -> daya rendah/indikatif.",
             "Bobot tidak dikalibrasi otomatis; rekomendasi saja.",
         ],
     }
@@ -316,27 +604,56 @@ async def _cli() -> int:
     from app.providers.idx_edge_provider import IdxEdgeProvider
 
     ap = argparse.ArgumentParser(description="Backtest sinyal akumulasi (kuota segar wajib)")
-    ap.add_argument("--samples", type=int, default=DEFAULT_SAMPLES)
+    ap.add_argument("--samples", type=int, default=0,
+                    help="0 = seluruh universe lolos filter produksi")
     ap.add_argument("--seed", type=int, default=42)
     ap.add_argument("--step", type=int, default=DEFAULT_STEP)
     ap.add_argument("--cache", default=DEFAULT_CACHE)
+    ap.add_argument("--max-requests", type=int, default=2500)
+    ap.add_argument("--dry-run", action="store_true", help="hanya cetak rencana kuota")
     args = ap.parse_args()
 
     provider = IdxEdgeProvider()
     await provider.fetch_market_cap(page=1, per_page=1)  # probe pertama
     remaining = provider.quota_remaining()
-    if remaining is None or remaining < MIN_FRESH_QUOTA:
-        print(f"ABORT: sisa kuota {remaining} < {MIN_FRESH_QUOTA}. Jalankan setelah kuota reset.")
-        return 2
+    limit = provider.ratelimit_limit
+    reserve = settings.accumulation_quota_reserve
 
     universe = [
         r for r in await provider.fetch_market_cap_all()
         if (r.get("market_cap") or 0) >= settings.accumulation_market_cap_min
     ]
+    n = len(universe) if args.samples <= 0 else min(args.samples, len(universe))
+    ok, need = quota_ok_for_universe(remaining, n, reserve)
+    rate = settings.rate_limit_per_minute or 60
+    est_min = round(need / rate, 1)
+
+    print(json.dumps({
+        "ratelimit_limit": limit,
+        "remaining": remaining,
+        "universe": len(universe),
+        "samples": n,
+        "reserve": reserve,
+        "need": need,
+        "rate_per_minute": rate,
+        "est_minutes": est_min,
+        "max_requests": args.max_requests,
+        "gate_ok": ok and need <= args.max_requests,
+    }, indent=1))
+
+    if need > args.max_requests:
+        print(f"ABORT: need {need} > max_requests {args.max_requests}")
+        return 3
+    if not ok:
+        print(f"ABORT: remaining {remaining} < need {need}")
+        return 2
+    if args.dry_run:
+        return 0
+
     print("cek rentang broker:", json.dumps(await check_broker_range(provider)))
 
     report = await run_backtest(
-        provider, universe, n_samples=args.samples, seed=args.seed,
+        provider, universe, n_samples=n, seed=args.seed,
         cache_dir=args.cache, step=args.step,
     )
     print(json.dumps(report, indent=1, ensure_ascii=False, default=str))

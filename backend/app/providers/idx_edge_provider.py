@@ -137,6 +137,8 @@ class IdxEdgeProvider:
         self._quota_day = date.today()
         # Sisa kuota dari header `x-ratelimit-remaining` (sumber kebenaran).
         self.last_ratelimit_remaining: Optional[int] = None
+        # Batas kuota harian dari header `x-ratelimit-limit` terakhir terlihat.
+        self.last_ratelimit_limit: Optional[int] = None
         # Nilai TERKECIL yang terlihat hari ini. Request paralel bisa datang tidak
         # berurutan, jadi yang dipakai untuk keputusan adalah minimum, bukan yang
         # terakhir.
@@ -155,6 +157,7 @@ class IdxEdgeProvider:
         self._quota_day = date.today()
         self._calls_today = 0
         self.last_ratelimit_remaining = None
+        self.last_ratelimit_limit = None
         self.min_ratelimit_remaining = None
 
     def quota_remaining(self) -> Optional[int]:
@@ -166,12 +169,18 @@ class IdxEdgeProvider:
         """
         return self.min_ratelimit_remaining
 
+    @property
+    def ratelimit_limit(self) -> Optional[int]:
+        """Batas kuota harian dari header `x-ratelimit-limit` terakhir terlihat."""
+        return self.last_ratelimit_limit
+
     def _roll_quota(self) -> None:
         today = date.today()
         if today != self._quota_day:
             self._quota_day = today
             self._calls_today = 0
             self.last_ratelimit_remaining = None
+            self.last_ratelimit_limit = None
             self.min_ratelimit_remaining = None
 
     async def _get_json(
@@ -215,6 +224,12 @@ class IdxEdgeProvider:
                         or value < self.min_ratelimit_remaining
                     ):
                         self.min_ratelimit_remaining = value
+                except ValueError:
+                    pass
+            limit = resp.headers.get("x-ratelimit-limit")
+            if limit is not None:
+                try:
+                    self.last_ratelimit_limit = int(limit)
                 except ValueError:
                     pass
             if resp.status_code == 401:
