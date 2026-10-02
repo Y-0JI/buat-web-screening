@@ -1,4 +1,9 @@
-import type { BrokerSummary, FundamentalData, HistoryPoint } from "@/lib/chat";
+import type {
+  AccumulationResult,
+  BrokerSummary,
+  FundamentalData,
+  HistoryPoint,
+} from "@/lib/chat";
 
 export interface UITool {
   name: string;
@@ -21,5 +26,6 @@ export interface UIMessage {
   charts?: UIChart[];
   brokers?: BrokerSummary[];
   fundamentals?: FundamentalData[];
+  accumulations?: AccumulationResult[];
   streaming?: boolean;
 }

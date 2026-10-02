@@ -1,0 +1,22 @@
+# /etc/systemd/system/accumulation-scan.service
+#
+# Ganti /opt/idx-copilot/backend dengan path repo sebenarnya.
+# Token & konfigurasi diletakkan di /etc/idx-accumulation.env (di LUAR repo):
+#   ACCUMULATION_SCAN_TOKEN=xxxx
+#   ACCUMULATION_API_URL=http://localhost:8000
+#   ACCUMULATION_MAX_RETRIES=5
+#   ACCUMULATION_RETRY_DELAY=900
+
+[Unit]
+Description=IDX accumulation scan (trigger harian)
+# Backend harus berjalan. Bila backend dikelola systemd, aktifkan baris berikut
+# (ganti nama unit sesuai milik Anda):
+#Wants=idx-copilot-backend.service
+After=network-online.target
+#After=network-online.target idx-copilot-backend.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+EnvironmentFile=/etc/idx-accumulation.env
+ExecStart=/opt/idx-copilot/backend/scripts/run_accumulation_scan.sh

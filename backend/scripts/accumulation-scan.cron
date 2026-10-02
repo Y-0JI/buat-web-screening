@@ -1,0 +1,11 @@
+# /etc/cron.d/accumulation-scan
+#
+# Alternatif systemd timer. Hari bursa saja (Senin-Jumat), 19:30 WIB.
+# CRON_TZ didukung cronie/vixie; bila tidak, jalankan pada 12:30 UTC.
+# cron tidak punya "Persistent": pakai systemd timer bila butuh menjalankan
+# jadwal yang terlewat saat mesin mati.
+
+SHELL=/bin/bash
+PATH=/usr/bin:/bin
+CRON_TZ=Asia/Jakarta
+30 19 * * 1-5 root set -a; . /etc/idx-accumulation.env; set +a; /opt/idx-copilot/backend/scripts/run_accumulation_scan.sh >> /var/log/accumulation-scan.log 2>&1

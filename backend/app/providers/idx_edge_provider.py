@@ -22,6 +22,10 @@ logger = logging.getLogger(__name__)
 
 _QUOTA_WARN_RATIO = 0.9
 
+# API IDX Edge PRO menolak limit > 500 (HTTP 422), dan request gagal tetap
+# memakan kuota — jadi limit divalidasi (clamp) sebelum dikirim.
+_HISTORY_MAX_LIMIT = 500
+
 
 def history_series(rows: Optional[list[dict]]) -> list[dict]:
     """Normalisasi `rows` /api/history → list OHLCV urut naik & tanggal unik.
@@ -131,16 +135,58 @@ class IdxEdgeProvider:
         self._client = client
         self._calls_today = 0
         self._quota_day = date.today()
+        # Sisa kuota dari header `x-ratelimit-remaining` (sumber kebenaran).
+        self.last_ratelimit_remaining: Optional[int] = None
+        # Batas kuota harian dari header `x-ratelimit-limit` terakhir terlihat.
+        self.last_ratelimit_limit: Optional[int] = None
+        # Nilai TERKECIL yang terlihat hari ini. Request paralel bisa datang tidak
+        # berurutan, jadi yang dipakai untuk keputusan adalah minimum, bukan yang
+        # terakhir.
+        self.min_ratelimit_remaining: Optional[int] = None
 
     @property
     def enabled(self) -> bool:
         return bool(settings.idx_edge_api_key)
+
+    @property
+    def calls_today(self) -> int:
+        self._roll_quota()
+        return self._calls_today
+
+    def reset_quota(self) -> None:
+        self._quota_day = date.today()
+        self._calls_today = 0
+        self.last_ratelimit_remaining = None
+        self.last_ratelimit_limit = None
+        self.min_ratelimit_remaining = None
+
+    def quota_remaining(self) -> Optional[int]:
+        """Sisa kuota terpercaya, atau None bila belum diketahui (jangan menebak).
+
+        Sumber kebenaran = header `x-ratelimit-remaining` (minimum yang terlihat
+        hari ini). Bila belum ada request sama sekali, kembalikan None supaya
+        pemanggil bisa probe/berhenti, bukan mengarang angka.
+        """
+        return self.min_ratelimit_remaining
+
+    @property
+    def ratelimit_limit(self) -> Optional[int]:
+        """Batas kuota harian dari header `x-ratelimit-limit` terakhir terlihat."""
+        return self.last_ratelimit_limit
+
+    def _budget(self) -> int:
+        """Budget lokal: header `x-ratelimit-limit` (sumber kebenaran) bila ada,
+        jika tidak fallback ke `idx_edge_daily_quota`."""
+        return self.last_ratelimit_limit or settings.idx_edge_daily_quota
 
     def _roll_quota(self) -> None:
         today = date.today()
         if today != self._quota_day:
             self._quota_day = today
             self._calls_today = 0
+            self.last_ratelimit_remaining = None
+            self.last_ratelimit_limit = None
+            self.min_ratelimit_remaining = None
 
     async def _get_json(
         self, path: str, params: Optional[dict] = None
@@ -148,7 +194,7 @@ class IdxEdgeProvider:
         if not self.enabled:
             return None
         self._roll_quota()
-        budget = settings.idx_edge_daily_quota
+        budget = self._budget()
         if self._calls_today >= budget:
             logger.warning("Kuota IDX Edge PRO harian habis — request dilewati: %s", path)
             return None
@@ -173,6 +219,24 @@ class IdxEdgeProvider:
                 async with httpx.AsyncClient(timeout=settings.idx_edge_timeout) as client:
                     resp = await client.get(url, params=params, headers=headers)
             self._calls_today += 1
+            remaining = resp.headers.get("x-ratelimit-remaining")
+            if remaining is not None:
+                try:
+                    value = int(remaining)
+                    self.last_ratelimit_remaining = value
+                    if (
+                        self.min_ratelimit_remaining is None
+                        or value < self.min_ratelimit_remaining
+                    ):
+                        self.min_ratelimit_remaining = value
+                except ValueError:
+                    pass
+            limit = resp.headers.get("x-ratelimit-limit")
+            if limit is not None:
+                try:
+                    self.last_ratelimit_limit = int(limit)
+                except ValueError:
+                    pass
             if resp.status_code == 401:
                 logger.error("IDX Edge PRO: API key tidak valid/absen (401) di %s", path)
                 return None
@@ -196,8 +260,11 @@ class IdxEdgeProvider:
     async def fetch_history(
         self, code: str, frame: str = "daily", limit: int = 160
     ) -> Optional[list[dict]]:
+        # Validasi sebelum request: limit > 500 ditolak API (422) tapi tetap
+        # memakan kuota.
+        safe_limit = max(1, min(int(limit), _HISTORY_MAX_LIMIT))
         data = await self._get_json(
-            f"/api/history/{code}", {"frame": frame, "limit": limit}
+            f"/api/history/{code}", {"frame": frame, "limit": safe_limit}
         )
         if isinstance(data, dict):
             return data.get("rows") or []
@@ -211,6 +278,30 @@ class IdxEdgeProvider:
             params["codes"] = ",".join(codes)
         data = await self._get_json("/api/market-cap", params)
         return data if isinstance(data, dict) else None
+
+    async def fetch_market_cap_all(
+        self, max_pages: int = 25, first_page: Optional[dict] = None
+    ) -> list[dict]:
+        """Ambil seluruh emiten dengan paginasi market-cap.
+
+        `first_page` (mis. hasil probe kuota) dipakai ulang sebagai halaman 1 agar
+        tidak dihitung dua kali.
+        """
+        rows: list[dict] = []
+        page = 1
+        total_pages = 1
+        if first_page:
+            rows.extend(first_page.get("data") or [])
+            total_pages = int(first_page.get("total_pages") or 1)
+            page = 2
+        while page <= total_pages and page <= max_pages:
+            data = await self.fetch_market_cap(page=page, per_page=50)
+            if not data:
+                break
+            rows.extend(data.get("data") or [])
+            total_pages = int(data.get("total_pages") or 1)
+            page += 1
+        return rows
 
     async def fetch_screener(self) -> Optional[dict]:
         data = await self._get_json("/api/screener/latest")
@@ -238,6 +329,22 @@ class IdxEdgeProvider:
         if level_limit:
             params["level_limit"] = level_limit
         data = await self._get_json(f"/api/broker-summary/{code}", params)
+        return data if isinstance(data, dict) else None
+
+    async def fetch_broker_accumulation(
+        self,
+        code: str,
+        start_date: Optional[str] = None,
+        end_date: Optional[str] = None,
+    ) -> Optional[dict]:
+        params: dict = {}
+        if start_date:
+            params["start_date"] = start_date
+        if end_date:
+            params["end_date"] = end_date
+        data = await self._get_json(
+            f"/api/broker-accumulation/{code}", params or None
+        )
         return data if isinstance(data, dict) else None
 
     async def fetch_analysis(self, code: str) -> Optional[dict]:

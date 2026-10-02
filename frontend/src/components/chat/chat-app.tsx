@@ -4,12 +4,15 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import {
   deleteThread,
   fetchModels,
+  getAccumulationLatest,
   getBrokerSummary,
   getFundamentals,
   getHistory,
   getThread,
   listThreads,
+  needsAccumulationCard,
   streamChat,
+  type AccumulationResult,
   type BrokerSummary,
   type ChatEvent,
   type FundamentalData,
@@ -107,6 +110,7 @@ export function ChatApp() {
           const charts: UIChart[] = [];
           const brokers: BrokerSummary[] = [];
           const fundamentals: FundamentalData[] = [];
+          const accumulations: AccumulationResult[] = [];
           const brokerTickers = new Set<string>();
           const fundamentalTickers = new Set<string>();
           if (m.role !== "user") {
@@ -144,6 +148,14 @@ export function ChatApp() {
                 /* lewati */
               }
             }
+            if (needsAccumulationCard(calls)) {
+              try {
+                const res = await getAccumulationLatest();
+                if (res) accumulations.push(res);
+              } catch {
+                /* lewati */
+              }
+            }
           }
           return {
             id: uid(),
@@ -154,6 +166,7 @@ export function ChatApp() {
             charts: charts.length ? charts : undefined,
             brokers: brokers.length ? brokers : undefined,
             fundamentals: fundamentals.length ? fundamentals : undefined,
+            accumulations: accumulations.length ? accumulations : undefined,
           };
         })
       );
@@ -266,6 +279,12 @@ export function ChatApp() {
               if ((m.fundamentals || []).some((f) => f.ticker === event.data.ticker)) return m;
               return { ...m, fundamentals: [...(m.fundamentals || []), event.data] };
             });
+            break;
+          case "accumulation":
+            patchAssistant(assistantId, (m) => ({
+              ...m,
+              accumulations: [...(m.accumulations || []), event.data],
+            }));
             break;
           case "done":
             patchAssistant(assistantId, (m) => ({

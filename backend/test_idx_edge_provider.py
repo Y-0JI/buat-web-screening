@@ -164,6 +164,182 @@ async def _test_broker_summary():
         settings.idx_edge_api_key = old
 
 
+def _test_fetch_history_clamps_limit():
+    old = _with_key()
+    seen = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen["url"] = str(request.url)
+        return httpx.Response(200, json={"rows": []})
+
+    p = IdxEdgeProvider(client=_client(handler))
+    try:
+        asyncio.run(p.fetch_history("BBCA", limit=1000))
+        assert "limit=500" in seen["url"], seen
+    finally:
+        settings.idx_edge_api_key = old
+
+
+def _test_ratelimit_header():
+    old = _with_key()
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200, json=[],
+            headers={"x-ratelimit-remaining": "777", "x-ratelimit-limit": "1000"},
+        )
+
+    p = IdxEdgeProvider(client=_client(handler))
+    try:
+        asyncio.run(p.search("BBCA"))
+        assert p.last_ratelimit_remaining == 777, p.last_ratelimit_remaining
+        assert p.quota_remaining() == 777, p.quota_remaining()
+    finally:
+        settings.idx_edge_api_key = old
+
+
+def _test_ratelimit_min_tracking():
+    old = _with_key()
+    seq = iter(["900", "700", "800"])
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200, json=[], headers={"x-ratelimit-remaining": next(seq)},
+        )
+
+    p = IdxEdgeProvider(client=_client(handler))
+    try:
+        # Sebelum ada request: belum diketahui -> None (jangan menebak).
+        assert p.quota_remaining() is None, p.quota_remaining()
+        asyncio.run(p.search("A"))
+        asyncio.run(p.search("B"))
+        asyncio.run(p.search("C"))
+        assert p.last_ratelimit_remaining == 800, p.last_ratelimit_remaining
+        assert p.min_ratelimit_remaining == 700, p.min_ratelimit_remaining
+        assert p.quota_remaining() == 700, p.quota_remaining()
+    finally:
+        settings.idx_edge_api_key = old
+
+
+def _test_broker_accumulation():
+    old = _with_key()
+    seen = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen["url"] = str(request.url)
+        return httpx.Response(200, json={
+            "code": "BBCA", "series": [{"broker_code": "AK", "points": []}],
+            "top_buyers": [], "top_sellers": [],
+        })
+
+    p = IdxEdgeProvider(client=_client(handler))
+    try:
+        data = asyncio.run(p.fetch_broker_accumulation("BBCA"))
+        assert data["series"][0]["broker_code"] == "AK", data
+        assert "/api/broker-accumulation/BBCA" in seen["url"], seen
+    finally:
+        settings.idx_edge_api_key = old
+
+
+def _test_market_cap_all():
+    old = _with_key()
+    pages_seen = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        page = request.url.params.get("page")
+        pages_seen.append(page)
+        if page == "1":
+            return httpx.Response(200, json={
+                "total": 2, "page": 1, "per_page": 50, "total_pages": 2,
+                "data": [{"code": "AAA"}],
+            })
+        return httpx.Response(200, json={
+            "total": 2, "page": 2, "per_page": 50, "total_pages": 2,
+            "data": [{"code": "BBB"}],
+        })
+
+    p = IdxEdgeProvider(client=_client(handler))
+    try:
+        rows = asyncio.run(p.fetch_market_cap_all(max_pages=25))
+        assert [r["code"] for r in rows] == ["AAA", "BBB"], rows
+        assert pages_seen == ["1", "2"], pages_seen
+    finally:
+        settings.idx_edge_api_key = old
+
+
+def _test_ratelimit_limit_header():
+    old = _with_key()
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200, json=[],
+            headers={"x-ratelimit-remaining": "19900", "x-ratelimit-limit": "20000"},
+        )
+
+    p = IdxEdgeProvider(client=_client(handler))
+    try:
+        assert p.ratelimit_limit is None, p.ratelimit_limit
+        asyncio.run(p.search("BBCA"))
+        assert p.ratelimit_limit == 20000, p.ratelimit_limit
+        assert p.quota_remaining() == 19900, p.quota_remaining()
+        p.reset_quota()
+        assert p.ratelimit_limit is None, p.ratelimit_limit
+    finally:
+        settings.idx_edge_api_key = old
+
+
+def _test_ratelimit_limit_bad_header_ignored():
+    old = _with_key()
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200, json=[], headers={"x-ratelimit-limit": "bukan-angka"},
+        )
+
+    p = IdxEdgeProvider(client=_client(handler))
+    try:
+        asyncio.run(p.search("BBCA"))
+        assert p.ratelimit_limit is None, p.ratelimit_limit
+    finally:
+        settings.idx_edge_api_key = old
+
+
+def _test_calls_today_and_reset():
+    old = _with_key()
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json=[])
+
+    p = IdxEdgeProvider(client=_client(handler))
+    try:
+        asyncio.run(p.search("A"))
+        asyncio.run(p.search("B"))
+        assert p.calls_today == 2, p.calls_today
+        p.reset_quota()
+        assert p.calls_today == 0, p.calls_today
+    finally:
+        settings.idx_edge_api_key = old
+
+
+def _test_local_budget_follows_header_limit():
+    old = _with_key()
+    old_q = settings.idx_edge_daily_quota
+    settings.idx_edge_daily_quota = 2
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json=[], headers={
+            "x-ratelimit-remaining": "19000", "x-ratelimit-limit": "21000"})
+
+    p = IdxEdgeProvider(client=_client(handler))
+    try:
+        for _ in range(5):
+            asyncio.run(p.search("A"))
+        assert p.calls_today == 5, p.calls_today
+    finally:
+        settings.idx_edge_api_key = old
+        settings.idx_edge_daily_quota = old_q
+
+
 def main():
     test_enabled_flag()
     asyncio.run(_test_search())
@@ -174,6 +350,13 @@ def main():
     asyncio.run(_test_market_cap())
     asyncio.run(_test_screener())
     asyncio.run(_test_broker_summary())
+    _test_fetch_history_clamps_limit()
+    _test_ratelimit_header()
+    _test_ratelimit_min_tracking()
+    _test_broker_accumulation()
+    _test_market_cap_all()
+    _test_calls_today_and_reset()
+    _test_local_budget_follows_header_limit()
     print("OK: test_idx_edge_provider (lengkap) lolos")
 
 

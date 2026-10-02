@@ -5,6 +5,7 @@ import { Markdown } from "./markdown";
 import { PriceChart } from "./chart";
 import { BrokerSummaryCard } from "./broker-summary";
 import { FundamentalsCard } from "./fundamentals";
+import { AccumulationCard } from "./accumulation";
 import type { UIMessage } from "./types";
 
 function ToolChips({ tools }: { tools: NonNullable<UIMessage["tools"]> }) {
@@ -83,6 +84,9 @@ export function Message({ msg }: { msg: UIMessage }) {
         ))}
         {msg.fundamentals?.map((f, i) => (
           <FundamentalsCard key={`fund-${f.ticker}-${i}`} data={f} />
+        ))}
+        {msg.accumulations?.map((a, i) => (
+          <AccumulationCard key={`acc-${a.scan_date}-${i}`} data={a} />
         ))}
         {msg.reasoning ? <Reasoning text={msg.reasoning} /> : null}
         {msg.tools ? <ToolChips tools={msg.tools} /> : null}

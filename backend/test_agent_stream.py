@@ -82,10 +82,85 @@ async def _test_tool_round():
     assert events[-1]["tool_calls"][0]["name"] == "search_stocks"
 
 
+async def _test_accumulation_event():
+    streams = [
+        [_chunk(tool_calls=[_tc(0, id="c1", name="get_accumulation_candidates",
+                                args='{"limit":5}')], finish="tool_calls")],
+        [_chunk(content="Ini kandidatnya"), _chunk(finish="stop")],
+    ]
+    agent.get_async_client = lambda: _FakeClient(streams)
+
+    async def fake_run(name, args):
+        return {
+            "scan_date": "2026-09-30", "status": "complete", "stale": False,
+            "candidates": [{"ticker": "EMAS", "depth": "broker", "score": 48.2}],
+            "note": "bukan saran investasi",
+        }
+
+    orig = agent.run_tool
+    agent.run_tool = fake_run
+    try:
+        events = [e async for e in agent.stream_agent(
+            [{"role": "user", "content": "saham yang diakumulasi"}], "m")]
+    finally:
+        agent.run_tool = orig
+    acc = [e for e in events if e["type"] == "accumulation"]
+    assert acc, [e["type"] for e in events]
+    assert acc[0]["data"]["candidates"][0]["ticker"] == "EMAS", acc[0]
+
+
+FORBIDDEN_PROMPT_SUBJECTS = ["sedang diakumulasi", "terindikasi"]
+# "whale terkonfirmasi" dilarang KECUALI sebagai kutipan dalam larangan eksplisit.
+FORBIDDEN_PROMPT_PHRASES = [
+    "dijamin",
+    "pasti naik",
+]
+
+
+def test_accumulation_no_bare_whale_claim():
+    import re
+
+    text = " ".join(_accum_text_surfaces().values())
+    occurrences = list(re.finditer(r"whale terkonfirmasi", text, flags=re.IGNORECASE))
+    assert occurrences, "kontrol: contoh frasa harus ada agar test bermakna"
+    for m in occurrences:
+        segment_start = max(text.rfind(".", 0, m.start()), text.rfind(";", 0, m.start()))
+        clause = text[segment_start + 1:m.end()].lower()
+        assert "jangan" in clause, ("whale tanpa larangan eksplisit", clause.strip())
+
+
+def _accum_text_surfaces():
+    spec = next(s for s in agent.TOOL_SPECS if s["name"] == "get_accumulation_candidates")
+    return {
+        "tool_description": spec["description"],
+        "system_prompt": agent.SYSTEM_PROMPT,
+    }
+
+
+def test_accumulation_prompt_disclaimer():
+    surfaces = _accum_text_surfaces()
+    for name, text in surfaces.items():
+        low = text.lower()
+        assert "deskriptif" in low, (name, text)
+        assert "belum terbukti prediktif" in low, (name, text)
+        assert "bukan rekomendasi" in low, (name, text)
+
+
+def test_accumulation_prompt_no_forbidden_phrases():
+    for name, text in _accum_text_surfaces().items():
+        low = text.lower()
+        for phrase in FORBIDDEN_PROMPT_SUBJECTS + FORBIDDEN_PROMPT_PHRASES:
+            assert phrase not in low, (name, phrase, text)
+    test_accumulation_no_bare_whale_claim()
+
+
 def main():
     asyncio.run(_test_simple_tokens())
     asyncio.run(_test_reasoning_streamed())
     asyncio.run(_test_tool_round())
+    asyncio.run(_test_accumulation_event())
+    test_accumulation_prompt_disclaimer()
+    test_accumulation_prompt_no_forbidden_phrases()
     print("OK: test_agent_stream lolos")
 
 

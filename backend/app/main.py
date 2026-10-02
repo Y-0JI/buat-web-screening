@@ -15,6 +15,7 @@ from app.config import settings
 from app.utils.logging import configure_logging, LoggingMiddleware
 from app.utils.error_handler import register_exception_handlers
 from app.routers.broker_summary import router as broker_summary_router
+from app.routers.accumulation import router as accumulation_router
 from app.routers.chat import router as chat_router
 from app.routers.fundamentals import router as fundamentals_router
 from app.routers.history import router as history_router
@@ -56,6 +57,7 @@ app.include_router(broker_summary_router)
 app.include_router(fundamentals_router)
 app.include_router(models_router)
 app.include_router(threads_router)
+app.include_router(accumulation_router)
 
 
 @app.get("/health")
