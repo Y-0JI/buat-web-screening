@@ -48,7 +48,24 @@ export interface HistoryPoint {
   low: number;
   close: number;
   volume: number;
+  value?: number | null;
+  freq?: number | null;
+  change?: number | null;
+  change_pct?: number | null;
 }
+
+export interface QuoteData {
+  ticker: string;
+  name: string | null;
+  last_price: number | null;
+  lot: number | null;
+  value: number | null;
+  freq: number | null;
+  market_state: string | null;
+  market_label: string | null;
+}
+
+export const FALLBACK_TICKER = "BBCA";
 
 export interface BrokerRow {
   code: string | null;
@@ -233,6 +250,14 @@ export async function getHistory(
   );
   const data = await jsonOrThrow(res);
   return data.data || [];
+}
+
+export async function getQuote(ticker: string): Promise<QuoteData | null> {
+  const res = await fetch(
+    `${API_BASE}/api/quote/${encodeURIComponent(ticker)}`
+  );
+  const data = await jsonOrThrow(res);
+  return data.success ? (data.data as QuoteData) : null;
 }
 
 export interface BrokerParams {

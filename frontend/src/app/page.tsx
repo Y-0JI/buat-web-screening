@@ -1,5 +1,5 @@
-import { ChatApp } from "@/components/chat/chat-app";
+import { DashboardShell } from "@/components/dashboard/dashboard-shell";
 
 export default function Home() {
-  return <ChatApp />;
+  return <DashboardShell />;
 }
