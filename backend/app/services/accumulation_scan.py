@@ -274,7 +274,7 @@ async def run_funnel(data_date: str, screener: Optional[dict]) -> dict:
             stage_c += 1
             if res2.get("broker_confirmed"):
                 broker_confirmed += 1
-    note.append(f"Tahap C: {stage_c} dicek broker, {broker_confirmed} mengonfirmasi")
+    note.append(f"Tahap C: {stage_c} dicek dengan data broker, {broker_confirmed} di atas ambang komponen broker")
 
     signals = [_signal(t, item["res"]) for t, item in final.items()]
     signals.sort(

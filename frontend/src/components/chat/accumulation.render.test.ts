@@ -22,6 +22,35 @@ const sample: AccumulationResult = {
   ],
 };
 
+const REQUIRED_PHRASES = [
+  "Screening akumulasi (deskriptif)",
+  "Hasil screening deskriptif",
+  "Belum terbukti prediktif",
+  "Bukan label institusi",
+  "bukan saran investasi",
+];
+
+const FORBIDDEN_PHRASES = [
+  "sedang diakumulasi",
+  "terindikasi",
+  "whale terkonfirmasi",
+  "dijamin",
+  "pasti naik",
+  "Indikasi akumulasi",
+];
+
+const FORBIDDEN_HTML = [
+  "sedang diakumulasi",
+  "terindikasi",
+  "whale terkonfirmasi",
+  "dijamin",
+  "pasti naik",
+  "Indikasi akumulasi",
+  "ada konfirmasi broker besar",
+  "hanya arus asing",
+  "hanya harga-volume",
+];
+
 describe("AccumulationCard (render)", () => {
   test("menampilkan tier, badge, sinyal bertentangan, dan catatan", () => {
     const html = renderToStaticMarkup(createElement(AccumulationCard, { data: sample }));
@@ -33,6 +62,14 @@ describe("AccumulationCard (render)", () => {
     expect(html).toContain("CMF negatif");
     expect(html).toContain("broker dicek, tidak mengonfirmasi");
     expect(html).toContain("Bukan label institusi");
+    expect(html).toContain("Belum terbukti prediktif");
+    expect(html).toContain("Hasil screening deskriptif");
+    expect(html).toContain("Screening akumulasi (deskriptif)");
+    expect(html).toContain("dihitung dari data broker");
+    expect(html).toContain("dihitung dari data arus asing");
+    for (const phrase of FORBIDDEN_HTML) {
+      expect(html).not.toContain(phrase);
+    }
   });
 
   test("kasus kosong + data basi", () => {

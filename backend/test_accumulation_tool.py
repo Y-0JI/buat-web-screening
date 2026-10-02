@@ -65,7 +65,11 @@ async def _test_reads_db_no_network():
         assert r["stale"] is False, r
         assert r["candidates"][0]["ticker"] == "EMAS", r
         assert r["candidates"][0]["depth"] == "broker", r
-        assert "bukan saran investasi" in r["note"].lower(), r["note"]
+        note = r["note"].lower()
+        assert "bukan saran investasi" in note, r["note"]
+        assert "deskriptif" in note, r["note"]
+        assert "belum terbukti prediktif" in note, r["note"]
+        assert "sedang diakumulasi" not in note, r["note"]
     finally:
         agent.IdxEdgeProvider = orig
         await engine.dispose()

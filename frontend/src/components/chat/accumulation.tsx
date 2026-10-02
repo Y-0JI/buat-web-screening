@@ -7,19 +7,19 @@ const DEPTHS = [
     key: "broker",
     label: "Broker besar",
     badge: "bg-emerald-500/15 text-emerald-300 border-emerald-500/30",
-    desc: "ada konfirmasi broker besar",
+    desc: "dihitung dari data broker",
   },
   {
     key: "foreign",
     label: "Arus asing",
     badge: "bg-sky-500/15 text-sky-300 border-sky-500/30",
-    desc: "hanya arus asing",
+    desc: "dihitung dari data arus asing",
   },
   {
     key: "hv",
     label: "Harga-volume",
     badge: "bg-zinc-500/15 text-zinc-300 border-zinc-500/30",
-    desc: "hanya harga-volume",
+    desc: "dihitung dari data harga-volume",
   },
 ] as const;
 
@@ -102,7 +102,7 @@ export function AccumulationCard({ data }: { data: AccumulationResult }) {
     <div className="my-2 rounded-xl border border-zinc-800 bg-zinc-900/40 p-3">
       <div className="flex flex-wrap items-center gap-2">
         <span className="text-[12px] font-medium text-zinc-200">
-          Indikasi akumulasi
+          Screening akumulasi (deskriptif)
         </span>
         {data.scan_date ? (
           <span className="text-[11px] text-zinc-500">data {data.scan_date}</span>
@@ -146,9 +146,9 @@ export function AccumulationCard({ data }: { data: AccumulationResult }) {
       )}
 
       <p className="mt-2 text-[10px] leading-relaxed text-zinc-500">
-        Indikasi dari aliran harga/arus asing/broker besar. Bukan label institusi,
-        bukan saran investasi. Kedalaman data: broker &gt; arus asing &gt;
-        harga-volume.
+        Hasil screening deskriptif dari aliran harga/arus asing/broker besar.
+        Belum terbukti prediktif. Bukan label institusi, bukan saran investasi.
+        Kedalaman data: broker &gt; arus asing &gt; harga-volume.
       </p>
     </div>
   );

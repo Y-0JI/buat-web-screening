@@ -147,10 +147,11 @@ async def _get_accumulation_candidates(limit: int = 10) -> dict:
         "stale_trading_days": age,
         "candidates": candidates,
         "note": (
-            "Indikasi dari aliran harga/arus asing/broker besar; BUKAN label "
-            "institusi dan bukan saran investasi. depth=broker = ada konfirmasi "
-            "broker besar, depth=foreign = hanya arus asing, depth=hv = hanya "
-            "harga-volume."
+            "Hasil screening deskriptif dari aliran harga/arus asing/broker besar; "
+            "belum terbukti prediktif (hasil backtest tidak menunjukkan edge). BUKAN "
+            "label institusi, bukan saran investasi, bukan rekomendasi. "
+            "depth=broker = dihitung dengan data broker, depth=foreign = hanya "
+            "arus asing, depth=hv = hanya harga-volume."
         ),
     }
 
@@ -264,10 +265,12 @@ TOOL_SPECS: list[dict] = [
     {
         "name": "get_accumulation_candidates",
         "description": (
-            "Daftar saham yang TERINDIKASI sedang diakumulasi pemain besar (dari scan "
-            "harian harga/arus asing/broker besar; hasil tersimpan, bukan hitung ulang). "
-            "Sebutkan keterbatasan: ini indikasi aliran, BUKAN label institusi maupun "
-            "saran investasi, dan jangan menyebut 'whale terkonfirmasi'."
+            "Daftar saham HASIL SCREENING DESKRIPTIF aliran harga/arus asing/broker "
+            "besar (dari scan harian; hasil tersimpan, bukan hitung ulang). Hasil ini "
+            "BELUM TERBUKTI PREDIKTIF (hasil backtest tidak menunjukkan edge); BUKAN "
+            "label institusi, BUKAN saran investasi, BUKAN rekomendasi. Jangan "
+            "menyatakan/menyiratkan prediksi, prospek, peluang kenaikan, atau "
+            "'whale terkonfirmasi'."
         ),
         "parameters": {
             "type": "object",
@@ -382,9 +385,11 @@ SYSTEM_PROMPT = (
     "riset, bukan saran keuangan. Untuk broker summary, panggil get_broker_summary "
     "cukup SEKALI per saham (default semua investor) — jangan panggil berulang "
     "untuk asing/domestik, karena filter bisa diubah user di kartu. Untuk pertanyaan "
-    "saham yang sedang diakumulasi, panggil get_accumulation_candidates dan jelaskan "
-    "bahwa itu indikasi dari aliran harga/arus asing/broker besar — BUKAN bukti "
-    "institusi dan jangan menyebut 'whale terkonfirmasi'; sebutkan bila scan partial "
+    "daftar saham dari tool get_accumulation_candidates, panggil tool itu dan jelaskan "
+    "bahwa itu HASIL SCREENING DESKRIPTIF dari aliran harga/arus asing/broker besar "
+    "yang BELUM TERBUKTI PREDIKTIF — BUKAN prediksi, BUKAN bukti institusi, BUKAN "
+    "saran investasi, BUKAN rekomendasi; jangan menyatakan/menyiratkan prospek, "
+    "peluang kenaikan, atau 'whale terkonfirmasi'; sebutkan bila scan partial "
     "atau data basi, dan tunjukkan sinyal yang bertentangan."
 )
 
