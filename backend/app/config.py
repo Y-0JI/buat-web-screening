@@ -63,7 +63,7 @@ class Settings(BaseSettings):
     }
 
 
-    model_config = {"env_file": ".env", "extra": "ignore"}
+    model_config = {"env_file": BASE_DIR / ".env", "extra": "ignore"}
 
     @field_validator("database_url")
     @classmethod
