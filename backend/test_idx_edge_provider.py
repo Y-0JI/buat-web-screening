@@ -321,6 +321,25 @@ def _test_calls_today_and_reset():
         settings.idx_edge_api_key = old
 
 
+def _test_local_budget_follows_header_limit():
+    old = _with_key()
+    old_q = settings.idx_edge_daily_quota
+    settings.idx_edge_daily_quota = 2
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json=[], headers={
+            "x-ratelimit-remaining": "19000", "x-ratelimit-limit": "21000"})
+
+    p = IdxEdgeProvider(client=_client(handler))
+    try:
+        for _ in range(5):
+            asyncio.run(p.search("A"))
+        assert p.calls_today == 5, p.calls_today
+    finally:
+        settings.idx_edge_api_key = old
+        settings.idx_edge_daily_quota = old_q
+
+
 def main():
     test_enabled_flag()
     asyncio.run(_test_search())
@@ -337,6 +356,7 @@ def main():
     _test_broker_accumulation()
     _test_market_cap_all()
     _test_calls_today_and_reset()
+    _test_local_budget_follows_header_limit()
     print("OK: test_idx_edge_provider (lengkap) lolos")
 
 

@@ -174,6 +174,11 @@ class IdxEdgeProvider:
         """Batas kuota harian dari header `x-ratelimit-limit` terakhir terlihat."""
         return self.last_ratelimit_limit
 
+    def _budget(self) -> int:
+        """Budget lokal: header `x-ratelimit-limit` (sumber kebenaran) bila ada,
+        jika tidak fallback ke `idx_edge_daily_quota`."""
+        return self.last_ratelimit_limit or settings.idx_edge_daily_quota
+
     def _roll_quota(self) -> None:
         today = date.today()
         if today != self._quota_day:
@@ -189,7 +194,7 @@ class IdxEdgeProvider:
         if not self.enabled:
             return None
         self._roll_quota()
-        budget = settings.idx_edge_daily_quota
+        budget = self._budget()
         if self._calls_today >= budget:
             logger.warning("Kuota IDX Edge PRO harian habis — request dilewati: %s", path)
             return None
