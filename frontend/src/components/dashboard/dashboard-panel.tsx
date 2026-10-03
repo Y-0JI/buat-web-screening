@@ -8,7 +8,7 @@ import {
   type HistoryPoint,
   type QuoteData,
 } from "@/lib/chat";
-import { ChartSettings, DEFAULT_ACTIVE, DEFAULT_OVERLAY, OVERLAY_KEY, type ChartType, type IndicatorId, type OverlayParams } from "./chart-settings";
+import { ChartSettings, DEFAULT_ACTIVE, DEFAULT_OVERLAY, OVERLAY_KEY, normalizeOverlay, type ChartType, type IndicatorId, type OverlayParams } from "./chart-settings";
 import { DashboardChart } from "./dashboard-chart";
 import { ACTIVE_PERIODS, PERIODS, StockPanel, type Period } from "./stock-panel";
 
@@ -42,15 +42,7 @@ function loadOverlay(): OverlayParams {
   try {
     const raw = localStorage.getItem(OVERLAY_KEY);
     if (!raw) return DEFAULT_OVERLAY;
-    const parsed = JSON.parse(raw);
-    if (typeof parsed !== "object" || parsed === null) return DEFAULT_OVERLAY;
-    const num = (v: unknown, fb: number) =>
-      typeof v === "number" && Number.isFinite(v) && v > 0 ? v : fb;
-    return {
-      ma: num(parsed.ma, DEFAULT_OVERLAY.ma),
-      ema: num(parsed.ema, DEFAULT_OVERLAY.ema),
-      boll: num(parsed.boll, DEFAULT_OVERLAY.boll),
-    };
+    return normalizeOverlay(JSON.parse(raw));
   } catch {
     return DEFAULT_OVERLAY;
   }
@@ -205,7 +197,7 @@ export function DashboardPanel({ onOpenAi }: { onOpenAi?: () => void }) {
             active={active}
             onToggle={toggle}
             params={params}
-            onParam={(id, value) => setParams((p) => ({ ...p, [id]: value }))}
+            onSaveParams={(p) => setParams(normalizeOverlay(p))}
             chartType={chartType}
             onChartType={setChartType}
           />

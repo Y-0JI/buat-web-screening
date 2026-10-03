@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import {
   CandlestickSeries,
   ColorType,
@@ -21,6 +21,7 @@ import {
   type LinePoint,
 } from "@/lib/indicators";
 import type { ChartType, IndicatorId, OverlayParams } from "./chart-settings";
+import { fmtRp } from "@/lib/format";
 
 const BASE_HEIGHT = 300;
 const PANEL_HEIGHT = 90;
@@ -36,6 +37,12 @@ interface Props {
   params: OverlayParams;
 }
 
+interface LegendRow {
+  label: string;
+  color: string;
+  values: { color: string; value: number }[];
+}
+
 function histColor(up: boolean): string {
   return up ? "rgba(34,197,94,0.45)" : "rgba(239,68,68,0.45)";
 }
@@ -43,16 +50,58 @@ function histColor(up: boolean): string {
 export function DashboardChart({ ticker, period, series, chartType, active, params }: Props) {
   const ref = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-
+  const points = useMemo(() => {
     const byDate = new Map<string, HistoryPoint>();
     for (const p of series) byDate.set(p.date, p);
-    const points = [...byDate.values()].sort((a, b) =>
+    return [...byDate.values()].sort((a, b) =>
       a.date < b.date ? -1 : a.date > b.date ? 1 : 0
     );
-    if (!points.length) return;
+  }, [series]);
+
+  const legend = useMemo<LegendRow[]>(() => {
+    if (!points.length) return [];
+    const rows: LegendRow[] = [];
+    const lastOf = (data: LinePoint[]): number | null =>
+      data.length ? data[data.length - 1].value : null;
+    if (active.includes("ma")) {
+      for (const line of params.ma) {
+        if (!line.on) continue;
+        const v = lastOf(ma(points, line.period));
+        if (v != null)
+          rows.push({ label: `MA (${line.period})`, color: line.color, values: [{ color: line.color, value: v }] });
+      }
+    }
+    if (active.includes("ema")) {
+      for (const line of params.ema) {
+        if (!line.on) continue;
+        const v = lastOf(ema(points, line.period));
+        if (v != null)
+          rows.push({ label: `EMA (${line.period})`, color: line.color, values: [{ color: line.color, value: v }] });
+      }
+    }
+    if (active.includes("boll")) {
+      const bb = bollinger(points, params.boll.length, params.boll.mult);
+      const mid = lastOf(bb.middle);
+      const up = lastOf(bb.upper);
+      const lo = lastOf(bb.lower);
+      if (mid != null && up != null && lo != null) {
+        rows.push({
+          label: `BOLL (${params.boll.length}, ${params.boll.mult})`,
+          color: params.boll.colorMid,
+          values: [
+            { color: params.boll.colorMid, value: mid },
+            { color: params.boll.colorBand, value: up },
+            { color: params.boll.colorBand, value: lo },
+          ],
+        });
+      }
+    }
+    return rows;
+  }, [points, active, params]);
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || !points.length) return;
 
     const activeSet = new Set(active);
     const panels = PANEL_ORDER.filter((id) => activeSet.has(id));
@@ -116,13 +165,21 @@ export function DashboardChart({ ticker, period, series, chartType, active, para
         .setData(data);
     };
 
-    if (activeSet.has("ma")) overlay("#22d3ee", ma(points, params.ma));
-    if (activeSet.has("ema")) overlay("#f59e0b", ema(points, params.ema));
+    if (activeSet.has("ma")) {
+      for (const line of params.ma) {
+        if (line.on) overlay(line.color, ma(points, line.period));
+      }
+    }
+    if (activeSet.has("ema")) {
+      for (const line of params.ema) {
+        if (line.on) overlay(line.color, ema(points, line.period));
+      }
+    }
     if (activeSet.has("boll")) {
-      const bb = bollinger(points, params.boll, 2);
-      overlay("#71717a", bb.upper, true);
-      overlay("#a1a1aa", bb.middle);
-      overlay("#71717a", bb.lower, true);
+      const bb = bollinger(points, params.boll.length, params.boll.mult);
+      overlay(params.boll.colorBand, bb.upper, true);
+      overlay(params.boll.colorMid, bb.middle);
+      overlay(params.boll.colorBand, bb.lower, true);
     }
 
     panels.forEach((id, i) => {
@@ -203,10 +260,24 @@ export function DashboardChart({ ticker, period, series, chartType, active, para
       ro.disconnect();
       instance.remove();
     };
-  }, [series, chartType, active, params, ticker, period]);
+  }, [points, chartType, active, params, ticker, period]);
 
   return (
     <div className="w-full h-full">
+      {legend.length > 0 && (
+        <div className="flex gap-3 flex-wrap text-[11px] px-1 pb-1">
+          {legend.map((row) => (
+            <span key={row.label} className="flex items-center gap-1">
+              <span style={{ color: row.color }}>{row.label}</span>
+              {row.values.map((v, i) => (
+                <span key={i} style={{ color: v.color }}>
+                  {fmtRp(v.value)}
+                </span>
+              ))}
+            </span>
+          ))}
+        </div>
+      )}
       <div ref={ref} className="w-full" />
     </div>
   );
