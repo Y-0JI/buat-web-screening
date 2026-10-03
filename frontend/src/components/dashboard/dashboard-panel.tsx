@@ -8,7 +8,7 @@ import {
   type HistoryPoint,
   type QuoteData,
 } from "@/lib/chat";
-import { ChartSettings, DEFAULT_ACTIVE, type ChartType, type IndicatorId } from "./chart-settings";
+import { ChartSettings, DEFAULT_ACTIVE, DEFAULT_OVERLAY, OVERLAY_KEY, type ChartType, type IndicatorId, type OverlayParams } from "./chart-settings";
 import { DashboardChart } from "./dashboard-chart";
 import { ACTIVE_PERIODS, PERIODS, StockPanel, type Period } from "./stock-panel";
 
@@ -38,10 +38,22 @@ function loadChartType(): ChartType {
   }
 }
 
-function fmtDateAxis(d: string): string {
-  const dt = new Date(`${d}T00:00:00`);
-  if (Number.isNaN(dt.getTime())) return d;
-  return `${String(dt.getDate()).padStart(2, "0")} ${dt.toLocaleString("en-GB", { month: "short" })}`;
+function loadOverlay(): OverlayParams {
+  try {
+    const raw = localStorage.getItem(OVERLAY_KEY);
+    if (!raw) return DEFAULT_OVERLAY;
+    const parsed = JSON.parse(raw);
+    if (typeof parsed !== "object" || parsed === null) return DEFAULT_OVERLAY;
+    const num = (v: unknown, fb: number) =>
+      typeof v === "number" && Number.isFinite(v) && v > 0 ? v : fb;
+    return {
+      ma: num(parsed.ma, DEFAULT_OVERLAY.ma),
+      ema: num(parsed.ema, DEFAULT_OVERLAY.ema),
+      boll: num(parsed.boll, DEFAULT_OVERLAY.boll),
+    };
+  } catch {
+    return DEFAULT_OVERLAY;
+  }
 }
 
 export function DashboardPanel({ onOpenAi }: { onOpenAi?: () => void }) {
@@ -53,11 +65,13 @@ export function DashboardPanel({ onOpenAi }: { onOpenAi?: () => void }) {
   const [error, setError] = useState<string | null>(null);
   const [active, setActive] = useState<IndicatorId[]>(DEFAULT_ACTIVE);
   const [chartType, setChartType] = useState<ChartType>("candlestick");
+  const [params, setParams] = useState<OverlayParams>(DEFAULT_OVERLAY);
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
     setActive(loadActive());
     setChartType(loadChartType());
+    setParams(loadOverlay());
     setReady(true);
   }, []);
 
@@ -76,6 +90,14 @@ export function DashboardPanel({ onOpenAi }: { onOpenAi?: () => void }) {
       /* abaikan */
     }
   }, [chartType]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(OVERLAY_KEY, JSON.stringify(params));
+    } catch {
+      /* abaikan */
+    }
+  }, [params]);
 
   const load = useCallback(async (code: string, p: Period) => {
     setLoading(true);
@@ -112,9 +134,6 @@ export function DashboardPanel({ onOpenAi }: { onOpenAi?: () => void }) {
     );
 
   if (!ready) return null;
-
-  const first = series.length ? series[0].date : null;
-  const lastDate = series.length ? series[series.length - 1].date : null;
 
   return (
     <div className="h-full flex flex-col min-h-0 bg-zinc-950">
@@ -154,18 +173,12 @@ export function DashboardPanel({ onOpenAi }: { onOpenAi?: () => void }) {
             series={series}
             chartType={chartType}
             active={active}
+            params={params}
           />
         ) : null}
       </div>
 
-      {series.length > 0 && (
-        <div className="px-4 flex items-center justify-between text-[11px] text-zinc-500">
-          <span>{first ? fmtDateAxis(first) : ""}</span>
-          <span>{lastDate ? fmtDateAxis(lastDate) : ""}</span>
-        </div>
-      )}
-
-      <div className="px-4 pt-1 pb-2 flex items-center gap-1.5 flex-wrap">
+      <div className="px-4 pt-1 pb-1 flex items-center gap-1.5 flex-wrap">
         {PERIODS.map((p) => {
           const enabled = ACTIVE_PERIODS.includes(p);
           const on = period === p;
@@ -191,6 +204,8 @@ export function DashboardPanel({ onOpenAi }: { onOpenAi?: () => void }) {
           <ChartSettings
             active={active}
             onToggle={toggle}
+            params={params}
+            onParam={(id, value) => setParams((p) => ({ ...p, [id]: value }))}
             chartType={chartType}
             onChartType={setChartType}
           />

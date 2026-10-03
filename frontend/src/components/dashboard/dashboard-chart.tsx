@@ -20,7 +20,7 @@ import {
   valueSeries,
   type LinePoint,
 } from "@/lib/indicators";
-import type { ChartType, IndicatorId } from "./chart-settings";
+import type { ChartType, IndicatorId, OverlayParams } from "./chart-settings";
 
 const BASE_HEIGHT = 300;
 const PANEL_HEIGHT = 90;
@@ -33,13 +33,14 @@ interface Props {
   series: HistoryPoint[];
   chartType: ChartType;
   active: IndicatorId[];
+  params: OverlayParams;
 }
 
 function histColor(up: boolean): string {
   return up ? "rgba(34,197,94,0.45)" : "rgba(239,68,68,0.45)";
 }
 
-export function DashboardChart({ ticker, period, series, chartType, active }: Props) {
+export function DashboardChart({ ticker, period, series, chartType, active, params }: Props) {
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -115,10 +116,10 @@ export function DashboardChart({ ticker, period, series, chartType, active }: Pr
         .setData(data);
     };
 
-    if (activeSet.has("ma")) overlay("#22d3ee", ma(points, 20));
-    if (activeSet.has("ema")) overlay("#f59e0b", ema(points, 20));
+    if (activeSet.has("ma")) overlay("#22d3ee", ma(points, params.ma));
+    if (activeSet.has("ema")) overlay("#f59e0b", ema(points, params.ema));
     if (activeSet.has("boll")) {
-      const bb = bollinger(points, 20, 2);
+      const bb = bollinger(points, params.boll, 2);
       overlay("#71717a", bb.upper, true);
       overlay("#a1a1aa", bb.middle);
       overlay("#71717a", bb.lower, true);
@@ -202,7 +203,7 @@ export function DashboardChart({ ticker, period, series, chartType, active }: Pr
       ro.disconnect();
       instance.remove();
     };
-  }, [series, chartType, active, ticker, period]);
+  }, [series, chartType, active, params, ticker, period]);
 
   return (
     <div className="w-full h-full">
