@@ -121,15 +121,15 @@ interface Props {
   onChartType: (t: ChartType) => void;
 }
 
-function Check({ on }: { on: boolean }) {
+function Check({ on, dark }: { on: boolean; dark?: boolean }) {
   return (
     <span
-      className={`w-4 h-4 rounded-full border flex items-center justify-center shrink-0 transition-colors ${
-        on ? "border-emerald-500 bg-emerald-500" : "border-zinc-600"
+      className={`w-[18px] h-[18px] rounded-full border flex items-center justify-center shrink-0 transition-colors ${
+        on ? "border-[#2ebd85] bg-[#2ebd85]" : dark ? "border-gray-300" : "border-zinc-600"
       }`}
     >
       {on && (
-        <svg className="w-2.5 h-2.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3.5} d="M5 13l4 4L19 7" />
         </svg>
       )}
@@ -164,7 +164,7 @@ function NumField({
         const v = e.target.valueAsNumber;
         if (Number.isFinite(v)) onCommit(Math.min(max, Math.max(min, v)));
       }}
-      className="w-full rounded-lg border border-zinc-700 bg-zinc-800 px-2.5 py-1.5 text-sm text-zinc-100 focus:outline-none focus:border-blue-500"
+      className="w-full h-7 rounded border border-[#e9e9e9] bg-white px-2.5 text-sm text-gray-800 focus:outline-none focus:border-emerald-300"
     />
   );
 }
@@ -176,7 +176,7 @@ function ColorField({ value, onCommit, aria }: { value: string; onCommit: (v: st
       value={value}
       aria-label={aria}
       onChange={(e) => onCommit(e.target.value)}
-      className="w-7 h-7 shrink-0 rounded cursor-pointer bg-transparent border border-zinc-700 p-0.5"
+      className="w-[22px] h-[22px] shrink-0 rounded cursor-pointer bg-white border border-gray-200 p-0"
     />
   );
 }
@@ -310,35 +310,35 @@ export function ChartSettings({ active, onToggle, params, onSaveParams, chartTyp
           onClick={closeModal}
         >
           <div
-            className="w-full max-w-sm rounded-xl border border-zinc-700 bg-zinc-900 shadow-xl p-4"
+            className="w-[321px] rounded-lg bg-white shadow-2xl px-5 pt-4 pb-4"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="text-sm font-bold text-zinc-100">{MODAL_TITLE[modal]}</h3>
+            <div className="flex items-center justify-between mb-2.5">
+              <h3 className="text-[17px] font-bold text-gray-700">{MODAL_TITLE[modal]}</h3>
               <button
                 type="button"
                 onClick={closeModal}
-                className="p-1 rounded-lg text-zinc-500 hover:text-zinc-200 hover:bg-zinc-800"
+                className="p-1 text-gray-400 hover:text-gray-600"
                 aria-label="Tutup"
               >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                 </svg>
               </button>
             </div>
 
             {(modal === "ma" || modal === "ema") && (
-              <div className="space-y-2">
+              <div className="space-y-3">
                 {draft[modal].map((line, i) => (
                   <div key={i} className="flex items-center gap-2.5">
                     <button
                       type="button"
                       onClick={() => setLine(modal, i, { on: !line.on })}
-                      className="flex items-center gap-2 w-16 shrink-0"
+                      className="flex items-center gap-2 w-[86px] shrink-0"
                       aria-label={`${lineLabel(modal, i)} nyala/mati`}
                     >
-                      <Check on={line.on} />
-                      <span className="text-sm text-zinc-200">{lineLabel(modal, i)}</span>
+                      <Check on={line.on} dark />
+                      <span className="text-[15px] text-gray-700">{lineLabel(modal, i)}</span>
                     </button>
                     <NumField
                       value={line.period}
@@ -358,9 +358,9 @@ export function ChartSettings({ active, onToggle, params, onSaveParams, chartTyp
             )}
 
             {modal === "boll" && (
-              <div className="space-y-2">
+              <div className="space-y-3">
                 <div className="flex items-center gap-2.5">
-                  <span className="text-sm text-zinc-200 w-20 shrink-0">Length</span>
+                  <span className="text-[15px] text-gray-700 w-[86px] shrink-0">Length</span>
                   <NumField
                     value={draft.boll.length}
                     min={2}
@@ -375,7 +375,7 @@ export function ChartSettings({ active, onToggle, params, onSaveParams, chartTyp
                   />
                 </div>
                 <div className="flex items-center gap-2.5">
-                  <span className="text-sm text-zinc-200 w-20 shrink-0">Multiplier</span>
+                  <span className="text-[15px] text-gray-700 w-[86px] shrink-0">Multiplier</span>
                   <NumField
                     value={draft.boll.mult}
                     min={0.5}
@@ -393,18 +393,18 @@ export function ChartSettings({ active, onToggle, params, onSaveParams, chartTyp
               </div>
             )}
 
-            <div className="mt-4 flex gap-2">
+            <div className="mt-4 flex gap-2.5">
               <button
                 type="button"
                 onClick={resetModal}
-                className="flex-1 px-3 py-2 rounded-lg border border-zinc-600 text-sm font-semibold text-zinc-200 hover:bg-zinc-800 transition-colors"
+                className="flex-1 h-9 rounded border border-[#e2e2e2] bg-white text-[15px] font-bold text-gray-700 hover:bg-gray-50 transition-colors"
               >
                 Reset
               </button>
               <button
                 type="button"
                 onClick={saveModal}
-                className="flex-1 px-3 py-2 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-sm font-semibold text-white transition-colors"
+                className="flex-1 h-9 rounded bg-[#7dcea4] hover:bg-[#6fc496] text-[15px] font-bold text-white transition-colors"
               >
                 Save
               </button>
