@@ -121,11 +121,11 @@ interface Props {
   onChartType: (t: ChartType) => void;
 }
 
-function Check({ on, dark }: { on: boolean; dark?: boolean }) {
+function Check({ on }: { on: boolean }) {
   return (
     <span
       className={`w-[18px] h-[18px] rounded-full border flex items-center justify-center shrink-0 transition-colors ${
-        on ? "border-[#2ebd85] bg-[#2ebd85]" : dark ? "border-gray-300" : "border-zinc-600"
+        on ? "border-[#2ebd85] bg-[#2ebd85]" : "border-zinc-600"
       }`}
     >
       {on && (
@@ -164,7 +164,7 @@ function NumField({
         const v = e.target.valueAsNumber;
         if (Number.isFinite(v)) onCommit(Math.min(max, Math.max(min, v)));
       }}
-      className="w-full h-7 rounded border border-[#e9e9e9] bg-white px-2.5 text-sm text-gray-800 focus:outline-none focus:border-emerald-300"
+      className="w-full h-7 rounded border border-zinc-700 bg-zinc-800 px-2.5 text-sm text-zinc-100 focus:outline-none focus:border-emerald-500"
     />
   );
 }
@@ -176,7 +176,7 @@ function ColorField({ value, onCommit, aria }: { value: string; onCommit: (v: st
       value={value}
       aria-label={aria}
       onChange={(e) => onCommit(e.target.value)}
-      className="w-[22px] h-[22px] shrink-0 rounded cursor-pointer bg-white border border-gray-200 p-0"
+      className="w-[22px] h-[22px] shrink-0 rounded cursor-pointer bg-transparent border border-zinc-600 p-0"
     />
   );
 }
@@ -310,15 +310,15 @@ export function ChartSettings({ active, onToggle, params, onSaveParams, chartTyp
           onClick={closeModal}
         >
           <div
-            className="w-[321px] rounded-lg bg-white shadow-2xl px-5 pt-4 pb-4"
+            className="w-[321px] rounded-lg border border-zinc-700 bg-zinc-900 shadow-2xl px-5 pt-4 pb-4"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between mb-2.5">
-              <h3 className="text-[17px] font-bold text-gray-700">{MODAL_TITLE[modal]}</h3>
+              <h3 className="text-[17px] font-bold text-zinc-100">{MODAL_TITLE[modal]}</h3>
               <button
                 type="button"
                 onClick={closeModal}
-                className="p-1 text-gray-400 hover:text-gray-600"
+                className="p-1 rounded-lg text-zinc-500 hover:text-zinc-200 hover:bg-zinc-800"
                 aria-label="Tutup"
               >
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -337,8 +337,8 @@ export function ChartSettings({ active, onToggle, params, onSaveParams, chartTyp
                       className="flex items-center gap-2 w-[86px] shrink-0"
                       aria-label={`${lineLabel(modal, i)} nyala/mati`}
                     >
-                      <Check on={line.on} dark />
-                      <span className="text-[15px] text-gray-700">{lineLabel(modal, i)}</span>
+                      <Check on={line.on} />
+                      <span className="text-[15px] text-zinc-200">{lineLabel(modal, i)}</span>
                     </button>
                     <NumField
                       value={line.period}
@@ -360,7 +360,7 @@ export function ChartSettings({ active, onToggle, params, onSaveParams, chartTyp
             {modal === "boll" && (
               <div className="space-y-3">
                 <div className="flex items-center gap-2.5">
-                  <span className="text-[15px] text-gray-700 w-[86px] shrink-0">Length</span>
+                  <span className="text-[15px] text-zinc-200 w-[86px] shrink-0">Length</span>
                   <NumField
                     value={draft.boll.length}
                     min={2}
@@ -375,7 +375,7 @@ export function ChartSettings({ active, onToggle, params, onSaveParams, chartTyp
                   />
                 </div>
                 <div className="flex items-center gap-2.5">
-                  <span className="text-[15px] text-gray-700 w-[86px] shrink-0">Multiplier</span>
+                  <span className="text-[15px] text-zinc-200 w-[86px] shrink-0">Multiplier</span>
                   <NumField
                     value={draft.boll.mult}
                     min={0.5}
@@ -397,7 +397,7 @@ export function ChartSettings({ active, onToggle, params, onSaveParams, chartTyp
               <button
                 type="button"
                 onClick={resetModal}
-                className="flex-1 h-9 rounded border border-[#e2e2e2] bg-white text-[15px] font-bold text-gray-700 hover:bg-gray-50 transition-colors"
+                className="flex-1 h-9 rounded border border-zinc-600 text-[15px] font-bold text-zinc-200 hover:bg-zinc-800 transition-colors"
               >
                 Reset
               </button>
