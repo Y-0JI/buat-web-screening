@@ -34,13 +34,40 @@ def test_history_series_keeps_value_freq():
 
 
 def test_period_to_limit():
-    assert period_to_limit("1W") == 20  # API menolak limit < 20
+    assert period_to_limit("1W") == 20  # API menolak limit < 20; slice 5 di route
     assert period_to_limit("1M") == 22
     assert period_to_limit("3M") == 66
     assert period_to_limit("1Y") == 252
     assert period_to_limit("3mo") == 66
     ytd = period_to_limit("YTD")
     assert 20 <= ytd <= 500, ytd
+
+
+def _rows(n: int):
+    return [
+        {"date": f"2026-09-{i + 1:02d}", "open": 1, "high": 1, "low": 1,
+         "close": 1, "volume": 10}
+        for i in range(n)
+    ]
+
+
+def test_history_route_slices_short_windows():
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json={"rows": _rows(20)})
+
+    p, old = _provider(handler)
+    real_history = history_mod.IdxEdgeProvider
+    history_mod.IdxEdgeProvider = lambda: p  # noqa: E731
+    try:
+        app = FastAPI()
+        app.include_router(history_router)
+        client = TestClient(app)
+        assert len(client.get("/api/history/BBCA?period=1D").json()["data"]) == 1
+        assert len(client.get("/api/history/BBCA?period=1W").json()["data"]) == 5
+        assert len(client.get("/api/history/BBCA?period=1M").json()["data"]) == 20
+    finally:
+        history_mod.IdxEdgeProvider = real_history
+        settings.idx_edge_api_key = old
 
 
 def _provider(handler):

@@ -205,10 +205,7 @@ export function DashboardChart({ ticker, period, series, chartType, active }: Pr
   }, [series, chartType, active, ticker, period]);
 
   return (
-    <div className="w-full">
-      <div className="px-1 pb-1 text-[11px] text-zinc-500">
-        {ticker} · {period}
-      </div>
+    <div className="w-full h-full">
       <div ref={ref} className="w-full" />
     </div>
   );

@@ -10,8 +10,7 @@ import {
 } from "@/lib/chat";
 import { ChartSettings, DEFAULT_ACTIVE, type ChartType, type IndicatorId } from "./chart-settings";
 import { DashboardChart } from "./dashboard-chart";
-import { StockPanel, type Period } from "./stock-panel";
-import { TickerSearch } from "./ticker-search";
+import { ACTIVE_PERIODS, PERIODS, StockPanel, type Period } from "./stock-panel";
 
 const INDICATOR_KEY = "idx_chart_indicators";
 const CHART_TYPE_KEY = "idx_chart_type";
@@ -37,6 +36,12 @@ function loadChartType(): ChartType {
   } catch {
     return "candlestick";
   }
+}
+
+function fmtDateAxis(d: string): string {
+  const dt = new Date(`${d}T00:00:00`);
+  if (Number.isNaN(dt.getTime())) return d;
+  return `${String(dt.getDate()).padStart(2, "0")} ${dt.toLocaleString("en-GB", { month: "short" })}`;
 }
 
 export function DashboardPanel({ onOpenAi }: { onOpenAi?: () => void }) {
@@ -108,17 +113,17 @@ export function DashboardPanel({ onOpenAi }: { onOpenAi?: () => void }) {
 
   if (!ready) return null;
 
+  const first = series.length ? series[0].date : null;
+  const lastDate = series.length ? series[series.length - 1].date : null;
+
   return (
-    <div className="h-full flex flex-col min-h-0">
-      <div className="flex items-center justify-between gap-3 px-4 pt-4">
-        <TickerSearch value={ticker} loading={loading} onSubmit={(t) => setTicker(t)} />
-        <span className="text-[11px] text-zinc-600 hidden sm:block">
-          Data IDX Edge PRO · bukan saran keuangan
-        </span>
+    <div className="h-full flex flex-col min-h-0 bg-zinc-950">
+      <div className="flex items-center justify-between px-4 pt-2 md:hidden">
+        <span className="text-[11px] text-zinc-600">Data IDX Edge PRO</span>
         <button
           type="button"
           onClick={onOpenAi}
-          className="md:hidden p-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white transition-colors"
+          className="p-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white transition-colors"
           aria-label="Buka AI Copilot"
         >
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -127,19 +132,17 @@ export function DashboardPanel({ onOpenAi }: { onOpenAi?: () => void }) {
         </button>
       </div>
 
-      <div className="px-4 pt-2">
-        <StockPanel
-          ticker={ticker}
-          quote={quote}
-          series={series}
-          period={period}
-          onPeriod={setPeriod}
-          loading={loading}
-          error={error}
-        />
-      </div>
+      <StockPanel
+        ticker={ticker}
+        quote={quote}
+        series={series}
+        period={period}
+        loading={loading}
+        error={error}
+        onTicker={setTicker}
+      />
 
-      <div className="flex-1 min-h-0 overflow-y-auto px-4 py-2">
+      <div className="flex-1 min-h-0 px-4 pt-1 pb-0 relative">
         {loading && !series.length ? (
           <div className="h-64 flex items-center justify-center text-sm text-zinc-500">
             Memuat chart…
@@ -155,16 +158,43 @@ export function DashboardPanel({ onOpenAi }: { onOpenAi?: () => void }) {
         ) : null}
       </div>
 
-      <div className="flex items-center justify-end gap-2 px-4 py-2 border-t border-zinc-800">
-        <span className="text-[11px] text-zinc-600 mr-auto">
-          {active.length ? `${active.length} indikator aktif` : "Tanpa indikator"}
-        </span>
-        <ChartSettings
-          active={active}
-          onToggle={toggle}
-          chartType={chartType}
-          onChartType={setChartType}
-        />
+      {series.length > 0 && (
+        <div className="px-4 flex items-center justify-between text-[11px] text-zinc-500">
+          <span>{first ? fmtDateAxis(first) : ""}</span>
+          <span>{lastDate ? fmtDateAxis(lastDate) : ""}</span>
+        </div>
+      )}
+
+      <div className="px-4 pt-1 pb-2 flex items-center gap-1.5 flex-wrap">
+        {PERIODS.map((p) => {
+          const enabled = ACTIVE_PERIODS.includes(p);
+          const on = period === p;
+          return (
+            <button
+              key={p}
+              type="button"
+              disabled={!enabled || (loading && p === period)}
+              onClick={() => setPeriod(p)}
+              className={`px-2.5 py-1 rounded-full text-[11px] font-medium transition-colors ${
+                on
+                  ? "bg-emerald-500/15 text-emerald-400 border border-emerald-500/60"
+                  : enabled
+                    ? "text-zinc-400 border border-zinc-800 hover:text-zinc-200 hover:border-zinc-600"
+                    : "text-zinc-700 border border-zinc-800/60 cursor-not-allowed"
+              }`}
+            >
+              {p}
+            </button>
+          );
+        })}
+        <div className="ml-auto flex items-center gap-1">
+          <ChartSettings
+            active={active}
+            onToggle={toggle}
+            chartType={chartType}
+            onChartType={setChartType}
+          />
+        </div>
       </div>
     </div>
   );
