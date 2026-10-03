@@ -19,16 +19,17 @@ import {
   type ModelInfo,
   type ThreadSummary,
 } from "@/lib/chat";
-import { Composer } from "./composer";
-import { Message } from "./message";
-import { Sidebar } from "./sidebar";
-import type { UIChart, UIMessage } from "./types";
+import { Composer } from "../chat/composer";
+import { Message } from "../chat/message";
+import { Sidebar } from "../chat/sidebar";
+import type { UIChart, UIMessage } from "../chat/types";
+
+export type AiView = "normal" | "minimized" | "fullscreen";
 
 const SUGGESTIONS = [
   "Analisa BBCA sekarang",
   "Saham akumulasi broker hari ini",
   "Bandingkan BBCA vs BBRI",
-  "Seasonality IHSG bulan ini",
 ];
 
 const MODEL_KEY = "idx_copilot_model";
@@ -36,7 +37,12 @@ const MODEL_KEY = "idx_copilot_model";
 let seq = 0;
 const uid = () => `m${Date.now()}-${seq++}`;
 
-export function ChatApp() {
+interface Props {
+  view: AiView;
+  onView: (v: AiView) => void;
+}
+
+export function AiPanel({ view, onView }: Props) {
   const [models, setModels] = useState<ModelInfo[]>([]);
   const [model, setModel] = useState("coba9router");
   const [threads, setThreads] = useState<ThreadSummary[]>([]);
@@ -44,7 +50,7 @@ export function ChatApp() {
   const [messages, setMessages] = useState<UIMessage[]>([]);
   const [input, setInput] = useState("");
   const [streaming, setStreaming] = useState(false);
-  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [threadsOpen, setThreadsOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const abortRef = useRef<AbortController | null>(null);
@@ -89,13 +95,13 @@ export function ChatApp() {
     setActiveId(null);
     setMessages([]);
     setError(null);
-    setSidebarOpen(false);
+    setThreadsOpen(false);
   }, []);
 
   const selectThread = useCallback(async (id: number) => {
     abortRef.current?.abort();
     setStreaming(false);
-    setSidebarOpen(false);
+    setThreadsOpen(false);
     try {
       const detail = await getThread(id);
       if (!detail) return;
@@ -334,26 +340,95 @@ export function ChatApp() {
     setStreaming(false);
   }, []);
 
-  return (
-    <div className="flex h-screen bg-zinc-950 text-zinc-100">
-      {/* Sidebar desktop */}
-      <aside className="hidden md:flex w-64 shrink-0 flex-col border-r border-zinc-800 bg-zinc-900/40">
-        <div className="h-14 flex items-center px-4 border-b border-zinc-800">
-          <span className="text-sm font-semibold">Analisis Saham AI</span>
-        </div>
-        <Sidebar
-          threads={threads}
-          activeId={activeId}
-          onSelect={selectThread}
-          onNew={newChat}
-          onDelete={removeThread}
-        />
+  if (view === "minimized") {
+    return (
+      <aside className="hidden md:flex w-12 shrink-0 flex-col items-center gap-2 border-l border-zinc-800 bg-zinc-900/40 py-3">
+        <button
+          onClick={() => onView("normal")}
+          className="p-2 rounded-lg hover:bg-zinc-800 text-zinc-400 hover:text-zinc-100 transition-colors"
+          aria-label="Buka AI Copilot"
+          title="Buka AI Copilot"
+        >
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M12 3v3m0 12v3m9-9h-3M6 12H3m14.5-6.5l-2 2m-7 7l-2 2m11 0l-2-2m-7-7l-2-2M12 8a4 4 0 100 8 4 4 0 000-8z" />
+          </svg>
+        </button>
       </aside>
+    );
+  }
 
-      {/* Sidebar mobile */}
-      {sidebarOpen && (
-        <div className="fixed inset-0 z-40 md:hidden">
-          <div className="absolute inset-0 bg-black/60" onClick={() => setSidebarOpen(false)} />
+  const shell =
+    view === "fullscreen"
+      ? "fixed inset-0 z-50 bg-zinc-950 flex flex-col min-h-0"
+      : "hidden md:flex w-[400px] shrink-0 flex-col min-h-0 border-l border-zinc-800 bg-zinc-900/40 relative";
+
+  return (
+    <aside className={shell}>
+      <header className="h-12 shrink-0 flex items-center gap-1 px-2 border-b border-zinc-800">
+        <button
+          className="p-1.5 rounded-lg hover:bg-zinc-800 text-zinc-400 hover:text-zinc-100 transition-colors"
+          onClick={() => setThreadsOpen(true)}
+          aria-label="Riwayat percakapan"
+          title="Riwayat percakapan"
+        >
+          <svg className="w-[18px] h-[18px]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+          </svg>
+        </button>
+        <div className="flex-1 min-w-0 px-1">
+          <h2 className="text-xs font-semibold leading-tight truncate">AI Copilot</h2>
+          <p className="text-[10px] text-zinc-500 leading-tight truncate">IDX Edge PRO</p>
+        </div>
+        <button
+          className="p-1.5 rounded-lg hover:bg-zinc-800 text-zinc-400 hover:text-zinc-100 transition-colors"
+          onClick={newChat}
+          aria-label="Percakapan baru"
+          title="Percakapan baru"
+        >
+          <svg className="w-[18px] h-[18px]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+          </svg>
+        </button>
+        {view === "fullscreen" ? (
+          <button
+            className="p-1.5 rounded-lg hover:bg-zinc-800 text-zinc-400 hover:text-zinc-100 transition-colors"
+            onClick={() => onView("normal")}
+            aria-label="Keluar fullscreen"
+            title="Keluar fullscreen"
+          >
+            <svg className="w-[18px] h-[18px]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 9V4.5M9 9H4.5M9 9l-5 5m11-5v-4.5m0 4.5h4.5m-4.5 0l5 5M9 15v4.5M9 15H4.5m4.5 0l-5-5m11 5v4.5m0-4.5h4.5m-4.5 0l5-5" />
+            </svg>
+          </button>
+        ) : (
+          <>
+            <button
+              className="p-1.5 rounded-lg hover:bg-zinc-800 text-zinc-400 hover:text-zinc-100 transition-colors"
+              onClick={() => onView("minimized")}
+              aria-label="Minimize"
+              title="Minimize"
+            >
+              <svg className="w-[18px] h-[18px]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 12H4" />
+              </svg>
+            </button>
+            <button
+              className="p-1.5 rounded-lg hover:bg-zinc-800 text-zinc-400 hover:text-zinc-100 transition-colors"
+              onClick={() => onView("fullscreen")}
+              aria-label="Fullscreen"
+              title="Fullscreen"
+            >
+              <svg className="w-[18px] h-[18px]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5v-4m0 4h-4m4 0l-5-5" />
+              </svg>
+            </button>
+          </>
+        )}
+      </header>
+
+      {threadsOpen && (
+        <div className="absolute inset-0 z-40">
+          <div className="absolute inset-0 bg-black/60" onClick={() => setThreadsOpen(false)} />
           <div className="absolute left-0 top-0 h-full w-72 bg-zinc-900 border-r border-zinc-800">
             <Sidebar
               threads={threads}
@@ -366,74 +441,55 @@ export function ChatApp() {
         </div>
       )}
 
-      {/* Main */}
-      <main className="flex-1 flex flex-col min-w-0">
-        <header className="h-14 flex items-center gap-3 px-4 border-b border-zinc-800">
-          <button
-            className="md:hidden p-1.5 rounded-lg hover:bg-zinc-800 text-zinc-400"
-            onClick={() => setSidebarOpen(true)}
-            aria-label="Menu"
-          >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-            </svg>
-          </button>
-          <div>
-            <h1 className="text-sm font-semibold leading-tight">Analisis Saham AI</h1>
-            <p className="text-[11px] text-zinc-500 leading-tight">IDX Edge PRO · 9router</p>
-          </div>
-        </header>
+      <div className="flex-1 overflow-y-auto min-h-0">
+        <div className={`${view === "fullscreen" ? "max-w-3xl" : "max-w-full"} mx-auto px-3 py-4 space-y-3`}>
+          {error && (
+            <div className="rounded-lg border border-red-500/30 bg-red-500/10 text-red-300 text-xs px-3 py-2">
+              {error}
+            </div>
+          )}
 
-        <div className="flex-1 overflow-y-auto">
-          <div className="max-w-3xl mx-auto px-4 py-6 space-y-4">
-            {error && (
-              <div className="rounded-lg border border-red-500/30 bg-red-500/10 text-red-300 text-xs px-3 py-2">
-                {error}
+          {messages.length === 0 && (
+            <div className="pt-6 text-center">
+              <h3 className="text-sm font-semibold text-zinc-200">Ada yang bisa saya bantu?</h3>
+              <p className="text-xs text-zinc-500 mt-1">
+                Tanya soal saham IDX — saya ambilkan data & analisanya.
+              </p>
+              <div className="mt-4 grid grid-cols-1 gap-2">
+                {SUGGESTIONS.map((s) => (
+                  <button
+                    key={s}
+                    onClick={() => send(s)}
+                    className="text-left px-3 py-2.5 rounded-xl border border-zinc-800 bg-zinc-900/50 hover:bg-zinc-800/70 hover:border-zinc-700 text-xs text-zinc-300 transition-colors"
+                  >
+                    {s}
+                  </button>
+                ))}
               </div>
-            )}
+            </div>
+          )}
 
-            {messages.length === 0 && (
-              <div className="pt-10 text-center">
-                <h2 className="text-lg font-semibold text-zinc-200">Ada yang bisa saya bantu?</h2>
-                <p className="text-sm text-zinc-500 mt-1">
-                  Tanya soal saham IDX — saya ambilkan data & analisanya.
-                </p>
-                <div className="mt-6 grid grid-cols-1 sm:grid-cols-2 gap-2 max-w-xl mx-auto">
-                  {SUGGESTIONS.map((s) => (
-                    <button
-                      key={s}
-                      onClick={() => send(s)}
-                      className="text-left px-4 py-3 rounded-xl border border-zinc-800 bg-zinc-900/50 hover:bg-zinc-800/70 hover:border-zinc-700 text-sm text-zinc-300 transition-colors"
-                    >
-                      {s}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {messages.map((m) => (
-              <Message key={m.id} msg={m} />
-            ))}
-            <div ref={bottomRef} />
-          </div>
+          {messages.map((m) => (
+            <Message key={m.id} msg={m} />
+          ))}
+          <div ref={bottomRef} />
         </div>
+      </div>
 
-        <div className="border-t border-zinc-800">
-          <div className="max-w-3xl mx-auto px-4 py-3">
-            <Composer
-              value={input}
-              onChange={setInput}
-              onSend={() => send()}
-              onStop={stop}
-              streaming={streaming}
-              models={models}
-              model={model}
-              onModel={changeModel}
-            />
-          </div>
+      <div className="border-t border-zinc-800 shrink-0">
+        <div className={`${view === "fullscreen" ? "max-w-3xl" : "max-w-full"} mx-auto px-3 py-2.5`}>
+          <Composer
+            value={input}
+            onChange={setInput}
+            onSend={() => send()}
+            onStop={stop}
+            streaming={streaming}
+            models={models}
+            model={model}
+            onModel={changeModel}
+          />
         </div>
-      </main>
-    </div>
+      </div>
+    </aside>
   );
 }

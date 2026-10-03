@@ -46,10 +46,23 @@ def history_series(rows: Optional[list[dict]]) -> list[dict]:
                 "low": float(r.get("low") or 0),
                 "close": float(r.get("close") or 0),
                 "volume": float(r.get("volume") or 0),
+                "value": _opt_float(r.get("value")),
+                "freq": _opt_float(r.get("freq")),
+                "change": _opt_float(r.get("change")),
+                "change_pct": _opt_float(r.get("change_pct")),
             }
         except (TypeError, ValueError):
             continue
     return [by_date[d] for d in sorted(by_date)]
+
+
+def _opt_float(v: Any) -> Optional[float]:
+    if v is None:
+        return None
+    try:
+        return float(v)
+    except (TypeError, ValueError):
+        return None
 
 
 def _avg(val: float, vol: float) -> Optional[float]:
@@ -269,6 +282,11 @@ class IdxEdgeProvider:
         if isinstance(data, dict):
             return data.get("rows") or []
         return None
+
+    async def fetch_price(self, code: str) -> Optional[dict]:
+        """Ambil quote terakhir: `last_price, freq, lot, value, market_state`."""
+        data = await self._get_json(f"/api/price/{code}")
+        return data if isinstance(data, dict) else None
 
     async def fetch_market_cap(
         self, page: int = 1, per_page: int = 50, codes: Optional[list[str]] = None
