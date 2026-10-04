@@ -41,7 +41,7 @@ export function StockPanel({ ticker, quote, series, period, loading, error }: Pr
   }
 
   const down = (change ?? 0) < 0;
-  const chgColor = down ? "text-red-400" : "text-emerald-400";
+  const chgColor = down ? "text-red-500" : "text-emerald-500";
 
   const vol = last?.volume ?? null;
   const lot = quote?.lot ?? (vol != null ? vol / 100 : null);
@@ -56,20 +56,20 @@ export function StockPanel({ ticker, quote, series, period, loading, error }: Pr
           </svg>
         </div>
         <div className="min-w-0">
-          <div className="text-sm text-zinc-100 truncate">
+          <div className="text-sm text-text-primary truncate">
             <span className="font-bold">{ticker}</span>{" "}
-            <span className="text-zinc-400">
+            <span className="text-text-secondary">
               {quote?.name || (loading ? "Memuat…" : "")}
             </span>
           </div>
           {quote?.market_label && (
-            <div className="text-[11px] text-zinc-500">{quote.market_label}</div>
+            <div className="text-[11px] text-text-muted">{quote.market_label}</div>
           )}
         </div>
       </div>
 
       <div className="mt-1 flex items-baseline gap-2 flex-wrap">
-        <span className="text-[28px] leading-9 font-bold text-zinc-100">
+        <span className="text-[28px] leading-9 font-bold text-text-primary">
           {price != null ? fmtRp(price) : "-"}
         </span>
         {change != null && (
@@ -79,14 +79,14 @@ export function StockPanel({ ticker, quote, series, period, loading, error }: Pr
         )}
       </div>
 
-      <div className="mt-0.5 flex items-center gap-2.5 flex-wrap text-xs text-zinc-400">
+      <div className="mt-0.5 flex items-center gap-2.5 flex-wrap text-xs text-text-secondary">
         <span>{PERIOD_LABEL[period]}</span>
-        <span className="text-zinc-700">|</span>
+        <span className="text-text-muted">|</span>
         <span>
-          Lot <span className="text-zinc-100 font-bold">{fmtCompact(lot)}</span>
+          Lot <span className="text-text-primary font-bold">{fmtCompact(lot)}</span>
         </span>
         <span>
-          Val <span className="text-zinc-100 font-bold">{fmtCompact(val)}</span>
+          Val <span className="text-text-primary font-bold">{fmtCompact(val)}</span>
         </span>
       </div>
 
@@ -102,18 +102,18 @@ export function StockPanel({ ticker, quote, series, period, loading, error }: Pr
           ).map(([label, v]) => (
             <span key={label}>
               <span className="text-emerald-500">{label} </span>
-              <span className="text-zinc-100">{fmtRp(v)}</span>
+              <span className="text-text-primary">{fmtRp(v)}</span>
             </span>
           ))}
           <span>
             <span className="text-emerald-500">Vol </span>
-            <span className="text-zinc-100">{fmtCompact(last.volume)}</span>
+            <span className="text-text-primary">{fmtCompact(last.volume)}</span>
           </span>
         </div>
       )}
 
       {error && (
-        <div className="mt-2 rounded-lg border border-red-500/30 bg-red-500/10 text-red-300 text-xs px-3 py-2">
+        <div className="mt-2 rounded-lg border border-red-500/30 bg-red-500/10 text-red-500 text-xs px-3 py-2">
           {error}
         </div>
       )}

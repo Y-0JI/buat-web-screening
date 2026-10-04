@@ -342,10 +342,10 @@ export function AiPanel({ view, onView }: Props) {
 
   if (view === "minimized") {
     return (
-      <aside className="hidden md:flex w-12 shrink-0 flex-col items-center gap-2 border-l border-zinc-800 bg-zinc-900/40 py-3">
+      <aside className="hidden md:flex w-12 shrink-0 flex-col items-center gap-2 border-l border-border bg-surface-1/40 py-3">
         <button
           onClick={() => onView("normal")}
-          className="p-2 rounded-lg hover:bg-zinc-800 text-zinc-400 hover:text-zinc-100 transition-colors"
+          className="p-2 rounded-lg hover:bg-surface-2 text-text-secondary hover:text-text-primary transition-colors"
           aria-label="Buka AI Copilot"
           title="Buka AI Copilot"
         >
@@ -359,14 +359,14 @@ export function AiPanel({ view, onView }: Props) {
 
   const shell =
     view === "fullscreen"
-      ? "fixed inset-0 z-50 bg-zinc-950 flex flex-col min-h-0"
-      : "hidden md:flex w-[400px] shrink-0 flex-col min-h-0 border-l border-zinc-800 bg-zinc-900/40 relative";
+      ? "fixed inset-0 z-50 bg-surface-0 flex flex-col min-h-0"
+      : "hidden md:flex w-[400px] shrink-0 flex-col min-h-0 border-l border-border bg-surface-1/40 relative";
 
   return (
     <aside className={shell}>
-      <header className="h-12 shrink-0 flex items-center gap-1 px-2 border-b border-zinc-800">
+      <header className="h-12 shrink-0 flex items-center gap-1 px-2 border-b border-border">
         <button
-          className="p-1.5 rounded-lg hover:bg-zinc-800 text-zinc-400 hover:text-zinc-100 transition-colors"
+          className="p-1.5 rounded-lg hover:bg-surface-2 text-text-secondary hover:text-text-primary transition-colors"
           onClick={() => setThreadsOpen(true)}
           aria-label="Riwayat percakapan"
           title="Riwayat percakapan"
@@ -377,10 +377,10 @@ export function AiPanel({ view, onView }: Props) {
         </button>
         <div className="flex-1 min-w-0 px-1">
           <h2 className="text-xs font-semibold leading-tight truncate">AI Copilot</h2>
-          <p className="text-[10px] text-zinc-500 leading-tight truncate">IDX Edge PRO</p>
+          <p className="text-[10px] text-text-muted leading-tight truncate">IDX Edge PRO</p>
         </div>
         <button
-          className="p-1.5 rounded-lg hover:bg-zinc-800 text-zinc-400 hover:text-zinc-100 transition-colors"
+          className="p-1.5 rounded-lg hover:bg-surface-2 text-text-secondary hover:text-text-primary transition-colors"
           onClick={newChat}
           aria-label="Percakapan baru"
           title="Percakapan baru"
@@ -391,7 +391,7 @@ export function AiPanel({ view, onView }: Props) {
         </button>
         {view === "fullscreen" ? (
           <button
-            className="p-1.5 rounded-lg hover:bg-zinc-800 text-zinc-400 hover:text-zinc-100 transition-colors"
+            className="p-1.5 rounded-lg hover:bg-surface-2 text-text-secondary hover:text-text-primary transition-colors"
             onClick={() => onView("normal")}
             aria-label="Keluar fullscreen"
             title="Keluar fullscreen"
@@ -403,7 +403,7 @@ export function AiPanel({ view, onView }: Props) {
         ) : (
           <>
             <button
-              className="p-1.5 rounded-lg hover:bg-zinc-800 text-zinc-400 hover:text-zinc-100 transition-colors"
+              className="p-1.5 rounded-lg hover:bg-surface-2 text-text-secondary hover:text-text-primary transition-colors"
               onClick={() => onView("minimized")}
               aria-label="Minimize"
               title="Minimize"
@@ -413,7 +413,7 @@ export function AiPanel({ view, onView }: Props) {
               </svg>
             </button>
             <button
-              className="p-1.5 rounded-lg hover:bg-zinc-800 text-zinc-400 hover:text-zinc-100 transition-colors"
+              className="p-1.5 rounded-lg hover:bg-surface-2 text-text-secondary hover:text-text-primary transition-colors"
               onClick={() => onView("fullscreen")}
               aria-label="Fullscreen"
               title="Fullscreen"
@@ -429,7 +429,7 @@ export function AiPanel({ view, onView }: Props) {
       {threadsOpen && (
         <div className="absolute inset-0 z-40">
           <div className="absolute inset-0 bg-black/60" onClick={() => setThreadsOpen(false)} />
-          <div className="absolute left-0 top-0 h-full w-72 bg-zinc-900 border-r border-zinc-800">
+          <div className="absolute left-0 top-0 h-full w-72 bg-surface-1 border-r border-border">
             <Sidebar
               threads={threads}
               activeId={activeId}
@@ -444,15 +444,15 @@ export function AiPanel({ view, onView }: Props) {
       <div className="flex-1 overflow-y-auto min-h-0">
         <div className={`${view === "fullscreen" ? "max-w-3xl" : "max-w-full"} mx-auto px-3 py-4 space-y-3`}>
           {error && (
-            <div className="rounded-lg border border-red-500/30 bg-red-500/10 text-red-300 text-xs px-3 py-2">
+            <div className="rounded-lg border border-red-500/30 bg-red-500/10 text-red-500 text-xs px-3 py-2">
               {error}
             </div>
           )}
 
           {messages.length === 0 && (
             <div className="pt-6 text-center">
-              <h3 className="text-sm font-semibold text-zinc-200">Ada yang bisa saya bantu?</h3>
-              <p className="text-xs text-zinc-500 mt-1">
+              <h3 className="text-sm font-semibold text-text-primary">Ada yang bisa saya bantu?</h3>
+              <p className="text-xs text-text-muted mt-1">
                 Tanya soal saham IDX — saya ambilkan data & analisanya.
               </p>
               <div className="mt-4 grid grid-cols-1 gap-2">
@@ -460,7 +460,7 @@ export function AiPanel({ view, onView }: Props) {
                   <button
                     key={s}
                     onClick={() => send(s)}
-                    className="text-left px-3 py-2.5 rounded-xl border border-zinc-800 bg-zinc-900/50 hover:bg-zinc-800/70 hover:border-zinc-700 text-xs text-zinc-300 transition-colors"
+                    className="text-left px-3 py-2.5 rounded-xl border border-border bg-surface-1/50 hover:bg-surface-2/70 text-xs text-text-secondary transition-colors"
                   >
                     {s}
                   </button>
@@ -476,7 +476,7 @@ export function AiPanel({ view, onView }: Props) {
         </div>
       </div>
 
-      <div className="border-t border-zinc-800 shrink-0">
+      <div className="border-t border-border shrink-0">
         <div className={`${view === "fullscreen" ? "max-w-3xl" : "max-w-full"} mx-auto px-3 py-2.5`}>
           <Composer
             value={input}

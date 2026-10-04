@@ -129,12 +129,12 @@ export function BrokerSummaryCard({ initial }: { initial: BrokerSummary }) {
   const s = data.summary;
 
   return (
-    <div className="my-2 rounded-xl border border-zinc-800 bg-zinc-900/40 p-3 text-zinc-200">
+    <div className="my-2 rounded-xl border border-border bg-surface-1/40 p-3 text-text-primary">
       <div className="flex items-center justify-between mb-2">
         <div className="text-sm font-semibold">
-          Broker Summary <span className="text-zinc-400">{ticker}</span>
+          Broker Summary <span className="text-text-secondary">{ticker}</span>
         </div>
-        {loading && <span className="text-[11px] text-zinc-500">memuat…</span>}
+        {loading && <span className="text-[11px] text-text-muted">memuat…</span>}
       </div>
 
       {/* Kontrol */}
@@ -146,9 +146,9 @@ export function BrokerSummaryCard({ initial }: { initial: BrokerSummary }) {
             setStartDate(e.target.value);
             reload({ start: e.target.value });
           }}
-          className="bg-zinc-800 border border-zinc-700 rounded px-2 py-1 text-zinc-200"
+          className="bg-surface-2 border border-border rounded px-2 py-1 text-text-primary"
         />
-        <span className="text-zinc-500">s/d</span>
+        <span className="text-text-muted">s/d</span>
         <input
           type="date"
           value={endDate}
@@ -156,7 +156,7 @@ export function BrokerSummaryCard({ initial }: { initial: BrokerSummary }) {
             setEndDate(e.target.value);
             reload({ end: e.target.value });
           }}
-          className="bg-zinc-800 border border-zinc-700 rounded px-2 py-1 text-zinc-200"
+          className="bg-surface-2 border border-border rounded px-2 py-1 text-text-primary"
         />
         <select
           value={flow}
@@ -164,7 +164,7 @@ export function BrokerSummaryCard({ initial }: { initial: BrokerSummary }) {
             setFlow(e.target.value);
             reload({ flow: e.target.value });
           }}
-          className="bg-zinc-800 border border-zinc-700 rounded px-2 py-1 text-zinc-200"
+          className="bg-surface-2 border border-border rounded px-2 py-1 text-text-primary"
         >
           {INVESTORS.map((o) => (
             <option key={o.value} value={o.value}>
@@ -179,7 +179,7 @@ export function BrokerSummaryCard({ initial }: { initial: BrokerSummary }) {
             setNet(isNet);
             reload({ net: isNet });
           }}
-          className="bg-zinc-800 border border-zinc-700 rounded px-2 py-1 text-zinc-200"
+          className="bg-surface-2 border border-border rounded px-2 py-1 text-text-primary"
         >
           <option value="gross">Gross</option>
           <option value="net">Net</option>
@@ -189,43 +189,43 @@ export function BrokerSummaryCard({ initial }: { initial: BrokerSummary }) {
       {/* Top 1/3/5 */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 mb-3">
         {tops.map((t) => (
-          <div key={t.n} className="rounded-lg border border-zinc-800 bg-zinc-950/40 px-3 py-2">
-            <div className="text-[11px] text-zinc-500">Top {t.n}</div>
+          <div key={t.n} className="rounded-lg border border-border bg-surface-0/40 px-3 py-2">
+            <div className="text-[11px] text-text-muted">Top {t.n}</div>
             <div
               className={`text-sm font-semibold ${
-                t.net_value >= 0 ? "text-emerald-400" : "text-red-400"
+                t.net_value >= 0 ? "text-emerald-500" : "text-red-500"
               }`}
             >
               {fmtVal(t.net_value)}
             </div>
-            <div className="text-[11px] text-zinc-400">{fmtVol(t.net_volume)} vol</div>
+            <div className="text-[11px] text-text-secondary">{fmtVol(t.net_volume)} vol</div>
           </div>
         ))}
       </div>
 
       {/* Agregat */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-3 text-[11px]">
-        <div className="rounded-lg border border-zinc-800 px-3 py-2">
-          <div className="text-zinc-500">Broker</div>
+        <div className="rounded-lg border border-border px-3 py-2">
+          <div className="text-text-muted">Broker</div>
           <div>
-            <span className="text-emerald-400">{s.buyer_count}</span> /{" "}
-            <span className="text-red-400">{s.seller_count}</span>
+            <span className="text-emerald-500">{s.buyer_count}</span> /{" "}
+            <span className="text-red-500">{s.seller_count}</span>
           </div>
         </div>
-        <div className="rounded-lg border border-zinc-800 px-3 py-2">
-          <div className="text-zinc-500">Net Volume</div>
-          <div className={s.net_volume >= 0 ? "text-emerald-400" : "text-red-400"}>
+        <div className="rounded-lg border border-border px-3 py-2">
+          <div className="text-text-muted">Net Volume</div>
+          <div className={s.net_volume >= 0 ? "text-emerald-500" : "text-red-500"}>
             {fmtVol(s.net_volume)}
           </div>
         </div>
-        <div className="rounded-lg border border-zinc-800 px-3 py-2">
-          <div className="text-zinc-500">Net Value</div>
-          <div className={s.net_value >= 0 ? "text-emerald-400" : "text-red-400"}>
+        <div className="rounded-lg border border-border px-3 py-2">
+          <div className="text-text-muted">Net Value</div>
+          <div className={s.net_value >= 0 ? "text-emerald-500" : "text-red-500"}>
             {fmtVal(s.net_value)}
           </div>
         </div>
-        <div className="rounded-lg border border-zinc-800 px-3 py-2">
-          <div className="text-zinc-500">Average (Rp)</div>
+        <div className="rounded-lg border border-border px-3 py-2">
+          <div className="text-text-muted">Average (Rp)</div>
           <div>{fmtRp(s.avg_price)}</div>
         </div>
       </div>
@@ -250,17 +250,17 @@ function BrokerColumn({
 }) {
   return (
     <div>
-      <div className="flex justify-between text-zinc-500 mb-1">
+      <div className="flex justify-between text-text-muted mb-1">
         <span>{title}</span>
         <span>val · lot · avg</span>
       </div>
       <div className="space-y-0.5">
         {rows.map((b) => (
           <div key={`${tone}-${b.code}`} className="flex justify-between gap-2">
-            <span className={`font-medium ${tone === "buy" ? "text-emerald-400" : "text-red-400"}`}>
+            <span className={`font-medium ${tone === "buy" ? "text-emerald-500" : "text-red-500"}`}>
               {b.code}
             </span>
-            <span className="text-zinc-300 tabular-nums">
+            <span className="text-text-secondary tabular-nums">
               {fmtVal(b.val)} · {fmtVol(b.vol)} · {fmtRp(b.avg)}
             </span>
           </div>

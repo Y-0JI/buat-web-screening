@@ -21,6 +21,8 @@ import {
   type LinePoint,
 } from "@/lib/indicators";
 import type { ChartType, IndicatorId, OverlayParams } from "./chart-settings";
+import { CHART_CHROME } from "./chart-chrome";
+import { useTheme } from "../theme/theme-provider";
 import { fmtRp } from "@/lib/format";
 
 const BASE_HEIGHT = 300;
@@ -49,6 +51,8 @@ function histColor(up: boolean): string {
 
 export function DashboardChart({ ticker, period, series, chartType, active, params }: Props) {
   const ref = useRef<HTMLDivElement>(null);
+  const { theme } = useTheme();
+  const chrome = CHART_CHROME[theme];
 
   const points = useMemo(() => {
     const byDate = new Map<string, HistoryPoint>();
@@ -112,15 +116,15 @@ export function DashboardChart({ ticker, period, series, chartType, active, para
       height,
       layout: {
         background: { type: ColorType.Solid, color: "transparent" },
-        textColor: "#a1a1aa",
+        textColor: chrome.textColor,
         fontSize: 11,
       },
       grid: {
-        vertLines: { color: "rgba(63,63,70,0.35)" },
-        horzLines: { color: "rgba(63,63,70,0.35)" },
+        vertLines: { color: chrome.grid },
+        horzLines: { color: chrome.grid },
       },
-      rightPriceScale: { borderColor: "rgba(63,63,70,0.6)" },
-      timeScale: { borderColor: "rgba(63,63,70,0.6)" },
+      rightPriceScale: { borderColor: chrome.border },
+      timeScale: { borderColor: chrome.border },
     });
 
     if (chartType === "candlestick") {
@@ -260,7 +264,7 @@ export function DashboardChart({ ticker, period, series, chartType, active, para
       ro.disconnect();
       instance.remove();
     };
-  }, [points, chartType, active, params, ticker, period]);
+  }, [points, chartType, active, params, chrome, ticker, period]);
 
   return (
     <div className="w-full h-full">

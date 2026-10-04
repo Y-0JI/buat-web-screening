@@ -15,7 +15,7 @@ function Caps({ model }: { model: ModelInfo }) {
   if (model.capabilities.vision) tags.push("Vision");
   if (model.capabilities.tools) tags.push("Tools");
   return (
-    <span className="text-[10px] text-zinc-500">{tags.join(" · ")}</span>
+    <span className="text-[10px] text-text-muted">{tags.join(" · ")}</span>
   );
 }
 
@@ -50,21 +50,21 @@ export function ModelPicker({ models, value, onChange, align = "up" }: Props) {
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-zinc-800/80 hover:bg-zinc-700 text-zinc-200 text-xs font-medium transition-colors"
+        className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-surface-2/80 hover:bg-surface-3 text-text-primary text-xs font-medium transition-colors"
       >
         <span className="max-w-[160px] truncate">{current?.name || value || "Pilih model"}</span>
-        <svg className="w-3 h-3 text-zinc-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <svg className="w-3 h-3 text-text-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
         </svg>
       </button>
 
       {open && (
         <div
-          className={`absolute right-0 z-30 w-72 max-h-80 overflow-y-auto rounded-xl border border-zinc-700 bg-zinc-900 shadow-xl p-2 ${
+          className={`absolute right-0 z-30 w-72 max-h-80 overflow-y-auto rounded-xl border border-border bg-surface-1 shadow-xl p-2 ${
             align === "up" ? "bottom-full mb-2" : "top-full mt-2"
           }`}
         >
-          <div className="px-2 py-1 text-[10px] uppercase tracking-wide text-zinc-500">Combo</div>
+          <div className="px-2 py-1 text-[10px] uppercase tracking-wide text-text-muted">Combo</div>
           {combo.map((m) => (
             <button
               key={m.id}
@@ -72,14 +72,14 @@ export function ModelPicker({ models, value, onChange, align = "up" }: Props) {
                 onChange(m.id);
                 setOpen(false);
               }}
-              className={`w-full flex items-center justify-between gap-2 px-2 py-1.5 rounded-lg text-left hover:bg-zinc-800 ${
-                value === m.id ? "bg-zinc-800" : ""
+              className={`w-full flex items-center justify-between gap-2 px-2 py-1.5 rounded-lg text-left hover:bg-surface-2 ${
+                value === m.id ? "bg-surface-2" : ""
               }`}
             >
-              <span className="text-sm text-zinc-100 truncate">{m.name}</span>
+              <span className="text-sm text-text-primary truncate">{m.name}</span>
               <span className="flex items-center gap-1.5 shrink-0">
                 <Caps model={m} />
-                {value === m.id && <span className="text-[10px] text-blue-400">Current</span>}
+                {value === m.id && <span className="text-[10px] text-blue-500">Current</span>}
               </span>
             </button>
           ))}
@@ -87,7 +87,7 @@ export function ModelPicker({ models, value, onChange, align = "up" }: Props) {
           {!showAll ? (
             <button
               onClick={() => setShowAll(true)}
-              className="w-full flex items-center justify-between px-2 py-2 mt-1 rounded-lg text-left text-xs text-zinc-300 hover:bg-zinc-800"
+              className="w-full flex items-center justify-between px-2 py-2 mt-1 rounded-lg text-left text-xs text-text-secondary hover:bg-surface-2"
             >
               Lihat semua model
               <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -98,7 +98,7 @@ export function ModelPicker({ models, value, onChange, align = "up" }: Props) {
             <>
               {groups.map((g) => (
                 <div key={g.label} className="mt-1">
-                  <div className="px-2 py-1 text-[10px] uppercase tracking-wide text-zinc-500">
+                  <div className="px-2 py-1 text-[10px] uppercase tracking-wide text-text-muted">
                     {g.label}
                   </div>
                   {g.models.map((m) => (
@@ -108,11 +108,11 @@ export function ModelPicker({ models, value, onChange, align = "up" }: Props) {
                         onChange(m.id);
                         setOpen(false);
                       }}
-                      className={`w-full flex items-center justify-between gap-2 px-2 py-1.5 rounded-lg text-left hover:bg-zinc-800 ${
-                        value === m.id ? "bg-zinc-800" : ""
+                      className={`w-full flex items-center justify-between gap-2 px-2 py-1.5 rounded-lg text-left hover:bg-surface-2 ${
+                        value === m.id ? "bg-surface-2" : ""
                       }`}
                     >
-                      <span className="text-xs text-zinc-200 truncate">{m.name}</span>
+                      <span className="text-xs text-text-primary truncate">{m.name}</span>
                       <Caps model={m} />
                     </button>
                   ))}

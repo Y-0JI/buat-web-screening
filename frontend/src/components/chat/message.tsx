@@ -17,10 +17,10 @@ function ToolChips({ tools }: { tools: NonNullable<UIMessage["tools"]> }) {
           key={`${t.name}-${i}`}
           className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] border ${
             t.running
-              ? "border-blue-500/30 bg-blue-500/10 text-blue-300"
+              ? "border-blue-500/30 bg-blue-500/10 text-blue-500"
               : t.ok === false
-                ? "border-red-500/30 bg-red-500/10 text-red-300"
-                : "border-emerald-500/30 bg-emerald-500/10 text-emerald-300"
+                ? "border-red-500/30 bg-red-500/10 text-red-500"
+                : "border-emerald-500/30 bg-emerald-500/10 text-emerald-500"
           }`}
         >
           {t.running ? (
@@ -43,7 +43,7 @@ function Reasoning({ text }: { text: string }) {
     <div className="mb-2">
       <button
         onClick={() => setOpen((v) => !v)}
-        className="flex items-center gap-1.5 text-[11px] text-zinc-500 hover:text-zinc-300 transition-colors"
+        className="flex items-center gap-1.5 text-[11px] text-text-muted hover:text-text-secondary transition-colors"
       >
         <svg
           className={`w-3 h-3 transition-transform ${open ? "rotate-90" : ""}`}
@@ -54,7 +54,7 @@ function Reasoning({ text }: { text: string }) {
         Berpikir…
       </button>
       {open && (
-        <pre className="mt-1.5 max-h-48 overflow-y-auto whitespace-pre-wrap text-[11px] leading-relaxed text-zinc-500 bg-zinc-900/60 border border-zinc-800 rounded-lg p-2.5">
+        <pre className="mt-1.5 max-h-48 overflow-y-auto whitespace-pre-wrap text-[11px] leading-relaxed text-text-muted bg-surface-1/60 border border-border rounded-lg p-2.5">
           {text}
         </pre>
       )}
@@ -75,7 +75,7 @@ export function Message({ msg }: { msg: UIMessage }) {
 
   return (
     <div className="flex justify-start">
-      <div className="max-w-[90%] px-4 py-3 rounded-2xl rounded-bl-md bg-zinc-800/80 text-zinc-100 text-sm">
+      <div className="max-w-[90%] px-4 py-3 rounded-2xl rounded-bl-md bg-surface-2/80 text-text-primary text-sm">
         {msg.charts?.map((c, i) => (
           <PriceChart key={`${c.ticker}-${i}`} chart={c} />
         ))}
@@ -94,9 +94,9 @@ export function Message({ msg }: { msg: UIMessage }) {
           <Markdown text={msg.content} />
         ) : msg.streaming ? (
           <div className="flex gap-1 py-1">
-            <span className="w-1.5 h-1.5 bg-zinc-500 rounded-full animate-bounce" />
-            <span className="w-1.5 h-1.5 bg-zinc-500 rounded-full animate-bounce [animation-delay:0.15s]" />
-            <span className="w-1.5 h-1.5 bg-zinc-500 rounded-full animate-bounce [animation-delay:0.3s]" />
+            <span className="w-1.5 h-1.5 bg-text-muted rounded-full animate-bounce" />
+            <span className="w-1.5 h-1.5 bg-text-muted rounded-full animate-bounce [animation-delay:0.15s]" />
+            <span className="w-1.5 h-1.5 bg-text-muted rounded-full animate-bounce [animation-delay:0.3s]" />
           </div>
         ) : null}
       </div>

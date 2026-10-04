@@ -26,23 +26,23 @@ export function Sidebar({ threads, activeId, onSelect, onNew, onDelete }: Props)
       </div>
       <div className="flex-1 overflow-y-auto px-2 pb-2 space-y-0.5">
         {threads.length === 0 && (
-          <p className="px-3 py-6 text-xs text-zinc-600 text-center">Belum ada percakapan</p>
+          <p className="px-3 py-6 text-xs text-text-muted text-center">Belum ada percakapan</p>
         )}
         {threads.map((t) => (
           <div
             key={t.id}
             className={`group flex items-center gap-1 rounded-lg px-2.5 py-2 cursor-pointer transition-colors ${
-              activeId === t.id ? "bg-zinc-800" : "hover:bg-zinc-800/60"
+              activeId === t.id ? "bg-surface-2" : "hover:bg-surface-2/60"
             }`}
             onClick={() => onSelect(t.id)}
           >
-            <span className="flex-1 truncate text-sm text-zinc-300">{t.title || "Percakapan"}</span>
+            <span className="flex-1 truncate text-sm text-text-secondary">{t.title || "Percakapan"}</span>
             <button
               onClick={(e) => {
                 e.stopPropagation();
                 onDelete(t.id);
               }}
-              className="opacity-0 group-hover:opacity-100 p-1 rounded hover:bg-zinc-700 text-zinc-500 hover:text-red-400 transition-all"
+              className="opacity-0 group-hover:opacity-100 p-1 rounded hover:bg-surface-3 text-text-muted hover:text-red-500 transition-all"
               aria-label="Hapus"
             >
               <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">

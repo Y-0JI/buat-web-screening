@@ -33,13 +33,13 @@ function Panel({ title, rows }: { title: string; rows: RowItem[] }) {
   const visible = rows.filter((r) => r.value != null);
   if (!visible.length) return null;
   return (
-    <div className="rounded-lg border border-zinc-800 bg-zinc-950/40 px-3 py-2">
-      <div className="text-[11px] font-semibold text-zinc-300 mb-1.5">{title}</div>
+    <div className="rounded-lg border border-border bg-surface-0/40 px-3 py-2">
+      <div className="text-[11px] font-semibold text-text-secondary mb-1.5">{title}</div>
       <div className="space-y-1">
         {visible.map((r) => (
           <div key={r.label} className="flex justify-between gap-3 text-[11px]">
-            <span className="text-zinc-500">{r.label}</span>
-            <span className="text-zinc-200 tabular-nums">{r.value}</span>
+            <span className="text-text-muted">{r.label}</span>
+            <span className="text-text-primary tabular-nums">{r.value}</span>
           </div>
         ))}
       </div>
@@ -51,12 +51,12 @@ export function FundamentalsCard({ data }: { data: FundamentalData }) {
   const { valuation: v, income: inc, balance: bal, cashflow: cf, per_share: ps, profitability: pr, solvency: sol, growth: g } = data;
 
   return (
-    <div className="my-2 rounded-xl border border-zinc-800 bg-zinc-900/40 p-3 text-zinc-200">
+    <div className="my-2 rounded-xl border border-border bg-surface-1/40 p-3 text-text-primary">
       <div className="flex items-center justify-between mb-2">
         <div className="text-sm font-semibold">
-          Fundamental <span className="text-zinc-400">{data.ticker}</span>
+          Fundamental <span className="text-text-secondary">{data.ticker}</span>
         </div>
-        {data.as_of && <span className="text-[11px] text-zinc-500">{data.as_of}</span>}
+        {data.as_of && <span className="text-[11px] text-text-muted">{data.as_of}</span>}
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
@@ -128,20 +128,20 @@ export function FundamentalsCard({ data }: { data: FundamentalData }) {
           ]}
         />
         {data.performance.length > 0 && (
-          <div className="rounded-lg border border-zinc-800 bg-zinc-950/40 px-3 py-2">
-            <div className="text-[11px] font-semibold text-zinc-300 mb-1.5">Price Performance</div>
+          <div className="rounded-lg border border-border bg-surface-0/40 px-3 py-2">
+            <div className="text-[11px] font-semibold text-text-secondary mb-1.5">Price Performance</div>
             <div className="space-y-1">
               {data.performance.map((p) => (
                 <div key={p.period} className="flex items-center justify-between gap-2 text-[11px]">
-                  <span className="text-zinc-500 w-8">{p.period}</span>
+                  <span className="text-text-muted w-8">{p.period}</span>
                   <span
                     className={`tabular-nums font-medium ${
-                      (p.change_pct ?? 0) >= 0 ? "text-emerald-400" : "text-red-400"
+                      (p.change_pct ?? 0) >= 0 ? "text-emerald-500" : "text-red-500"
                     }`}
                   >
                     {pct(p.change_pct)}
                   </span>
-                  <span className="text-zinc-400 tabular-nums">
+                  <span className="text-text-secondary tabular-nums">
                     {rp(p.low)} – {rp(p.high)}
                   </span>
                 </div>

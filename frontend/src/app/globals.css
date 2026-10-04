@@ -30,6 +30,9 @@
   --text-secondary: 161 161 170;
   --text-muted: 113 113 122;
 
+  /* Border */
+  --border: 39 39 42;
+
   /* Spacing scale */
   --space-xs: 0.25rem;
   --space-sm: 0.5rem;
@@ -75,6 +78,8 @@
   --color-text-secondary: rgb(var(--text-secondary));
   --color-text-muted: rgb(var(--text-muted));
 
+  --color-border: rgb(var(--border));
+
   --radius-sm: var(--radius-sm);
   --radius-md: var(--radius-md);
   --radius-lg: var(--radius-lg);
@@ -84,6 +89,39 @@
   --shadow-sm: var(--shadow-sm);
   --shadow-md: var(--shadow-md);
   --shadow-lg: var(--shadow-lg);
+}
+
+[data-theme="light"] {
+  --surface-0: 255 255 255;
+  --surface-1: 244 244 245;
+  --surface-2: 228 228 231;
+  --surface-3: 212 212 216;
+
+  --text-primary: 24 24 27;
+  --text-secondary: 82 82 91;
+  --text-muted: 113 113 122;
+
+  --border: 228 228 231;
+
+  --shadow-sm: 0 1px 2px rgba(0,0,0,0.08);
+  --shadow-md: 0 4px 12px rgba(0,0,0,0.1);
+  --shadow-lg: 0 8px 24px rgba(0,0,0,0.14);
+}
+
+.logo-light {
+  display: none;
+}
+
+.logo-dark {
+  display: block;
+}
+
+[data-theme="light"] .logo-dark {
+  display: none;
+}
+
+[data-theme="light"] .logo-light {
+  display: block;
 }
 
 body {
