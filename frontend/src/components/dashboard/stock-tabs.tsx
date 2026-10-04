@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { KeyStatsPanel } from "./key-stats-panel";
 
 interface TabDef {
   id: string;
@@ -53,11 +54,13 @@ export function StockTabs({ ticker }: { ticker: string }) {
         })}
       </div>
 
-      {active && (
+      {tab === "key-stats" ? (
+        <KeyStatsPanel ticker={ticker} />
+      ) : active ? (
         <div className="mt-2 rounded-lg border border-border bg-surface-1 px-3 py-6 text-center text-xs text-text-muted">
           Konten {active.label} — segera
         </div>
-      )}
+      ) : null}
     </div>
   );
 }
