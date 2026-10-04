@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useState } from "react";
 import {
-  FALLBACK_TICKER,
   getHistory,
   getQuote,
   type HistoryPoint,
@@ -48,8 +47,15 @@ function loadOverlay(): OverlayParams {
   }
 }
 
-export function DashboardPanel({ onOpenAi }: { onOpenAi?: () => void }) {
-  const [ticker, setTicker] = useState(FALLBACK_TICKER);
+export function DashboardPanel({
+  ticker,
+  onTicker,
+  onOpenAi,
+}: {
+  ticker: string;
+  onTicker: (t: string) => void;
+  onOpenAi?: () => void;
+}) {
   const [period, setPeriod] = useState<Period>("1M");
   const [series, setSeries] = useState<HistoryPoint[]>([]);
   const [quote, setQuote] = useState<QuoteData | null>(null);
@@ -150,7 +156,6 @@ export function DashboardPanel({ onOpenAi }: { onOpenAi?: () => void }) {
         period={period}
         loading={loading}
         error={error}
-        onTicker={setTicker}
       />
 
       <div className="flex-1 min-h-0 px-4 pt-1 pb-0 relative">

@@ -260,6 +260,26 @@ export async function getQuote(ticker: string): Promise<QuoteData | null> {
   return data.success ? (data.data as QuoteData) : null;
 }
 
+export interface TickerSuggestion {
+  code: string;
+  name: string | null;
+  last_date: string | null;
+}
+
+export async function searchTickers(
+  q: string,
+  signal?: AbortSignal
+): Promise<TickerSuggestion[]> {
+  const query = (q || "").trim();
+  if (query.length < 2) return [];
+  const res = await fetch(
+    `${API_BASE}/api/search?q=${encodeURIComponent(query)}`,
+    signal ? { signal } : undefined
+  );
+  const data = await jsonOrThrow(res);
+  return data.success ? (data.data as TickerSuggestion[]) : [];
+}
+
 export interface BrokerParams {
   start_date?: string;
   end_date?: string;

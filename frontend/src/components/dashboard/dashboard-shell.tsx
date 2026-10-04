@@ -1,19 +1,33 @@
 "use client";
 
 import { useState } from "react";
+import { FALLBACK_TICKER } from "@/lib/chat";
 import { AiPanel, type AiView } from "../ai/ai-panel";
 import { DashboardPanel } from "./dashboard-panel";
+import { SearchBar } from "./search-bar";
 
 export function DashboardShell() {
   const [aiView, setAiView] = useState<AiView>("normal");
+  const [ticker, setTicker] = useState(FALLBACK_TICKER);
 
   return (
-    <div className="flex h-screen bg-zinc-950 text-zinc-100 overflow-hidden">
-      <main className="flex-1 flex flex-col min-w-0 min-h-0">
-        <DashboardPanel onOpenAi={() => setAiView("fullscreen")} />
-      </main>
+    <div className="flex flex-col h-screen bg-zinc-950 text-zinc-100 overflow-hidden">
+      <header className="h-14 shrink-0 flex items-center gap-4 px-4 border-b border-zinc-800">
+        <img src="/logos.png" alt="Logo" className="h-7 w-auto shrink-0" />
+        <SearchBar value={ticker} onSelect={setTicker} />
+      </header>
 
-      <AiPanel view={aiView} onView={setAiView} />
+      <div className="flex flex-1 min-h-0">
+        <main className="flex-1 flex flex-col min-w-0 min-h-0">
+          <DashboardPanel
+            ticker={ticker}
+            onTicker={setTicker}
+            onOpenAi={() => setAiView("fullscreen")}
+          />
+        </main>
+
+        <AiPanel view={aiView} onView={setAiView} />
+      </div>
 
       {aiView !== "fullscreen" && (
         <button

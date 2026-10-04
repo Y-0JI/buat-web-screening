@@ -17,6 +17,8 @@ from app.routers import history as history_mod
 from app.routers.history import period_to_limit, router as history_router
 from app.routers import quote as quote_mod
 from app.routers.quote import quote_payload, router as quote_router
+from app.routers import search as search_mod
+from app.routers.search import search_payload, router as search_router
 
 
 def test_history_series_keeps_value_freq():
@@ -121,12 +123,45 @@ def test_quote_disabled_returns_unsuccessful():
         settings.idx_edge_api_key = old
 
 
+def test_search_payload_and_route():
+    rows = [
+        {"stock_code": "BBCA", "stock_name": "Bank Central Asia Tbk.", "last_date": "2026-10-02"},
+        {"stock_code": "", "stock_name": "Tanpa Kode"},
+        {"stock_code": "BBRI", "stock_name": "Bank Rakyat Indonesia Tbk.", "last_date": "2026-10-02"},
+    ]
+    payload = search_payload(rows)
+    assert [r["code"] for r in payload] == ["BBCA", "BBRI"], payload
+    assert payload[0]["name"] == "Bank Central Asia Tbk."
+    assert search_payload(None) == []
+    assert search_payload([]) == []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json=rows)
+
+    p, old = _provider(handler)
+    real_search = search_mod.IdxEdgeProvider
+    search_mod.IdxEdgeProvider = lambda: p  # noqa: E731
+    try:
+        app = FastAPI()
+        app.include_router(search_router)
+        client = TestClient(app)
+        r = client.get("/api/search", params={"q": "BB"})
+        assert r.status_code == 200, r.text
+        data = r.json()
+        assert data["success"] and [x["code"] for x in data["data"]] == ["BBCA", "BBRI"], data
+        assert client.get("/api/search", params={"q": ""}).json()["data"] == []
+    finally:
+        search_mod.IdxEdgeProvider = real_search
+        settings.idx_edge_api_key = old
+
+
 def main():
     test_history_series_keeps_value_freq()
     test_period_to_limit()
     test_history_route_uses_period_limit()
     test_quote_payload_and_route()
     test_quote_disabled_returns_unsuccessful()
+    test_search_payload_and_route()
     print("OK: test_dashboard_market lolos")
 
 

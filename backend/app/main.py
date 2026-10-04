@@ -21,6 +21,7 @@ from app.routers.fundamentals import router as fundamentals_router
 from app.routers.history import router as history_router
 from app.routers.models import router as models_router
 from app.routers.quote import router as quote_router
+from app.routers.search import router as search_router
 from app.routers.threads import router as threads_router
 
 configure_logging()
@@ -58,6 +59,7 @@ app.include_router(broker_summary_router)
 app.include_router(fundamentals_router)
 app.include_router(models_router)
 app.include_router(quote_router)
+app.include_router(search_router)
 app.include_router(threads_router)
 app.include_router(accumulation_router)
 

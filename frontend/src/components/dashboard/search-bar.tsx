@@ -1,0 +1,125 @@
+"use client";
+
+import { useEffect, useRef, useState, type KeyboardEvent } from "react";
+import { searchTickers, type TickerSuggestion } from "@/lib/chat";
+
+interface Props {
+  value: string;
+  onSelect: (ticker: string) => void;
+}
+
+export function SearchBar({ value, onSelect }: Props) {
+  const [text, setText] = useState("");
+  const [results, setResults] = useState<TickerSuggestion[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [open, setOpen] = useState(false);
+  const [highlight, setHighlight] = useState(0);
+  const ref = useRef<HTMLDivElement>(null);
+  const abortRef = useRef<AbortController | null>(null);
+
+  useEffect(() => {
+    function onClick(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    }
+    document.addEventListener("mousedown", onClick);
+    return () => document.removeEventListener("mousedown", onClick);
+  }, []);
+
+  useEffect(() => {
+    const q = text.trim();
+    if (q.length < 2) {
+      abortRef.current?.abort();
+      setResults([]);
+      setLoading(false);
+      return;
+    }
+    setLoading(true);
+    const timer = setTimeout(async () => {
+      abortRef.current?.abort();
+      const controller = new AbortController();
+      abortRef.current = controller;
+      try {
+        const rows = await searchTickers(q, controller.signal);
+        setResults(rows);
+        setHighlight(0);
+        setOpen(true);
+      } catch {
+        /* dibatalkan / gagal: diamkan */
+      } finally {
+        setLoading(false);
+      }
+    }, 250);
+    return () => {
+      clearTimeout(timer);
+      abortRef.current?.abort();
+    };
+  }, [text]);
+
+  const choose = (code: string) => {
+    setOpen(false);
+    setText("");
+    setResults([]);
+    if (code !== value) onSelect(code);
+  };
+
+  const handleKey = (e: KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "ArrowDown" && results.length) {
+      e.preventDefault();
+      setHighlight((h) => (h + 1) % results.length);
+    } else if (e.key === "ArrowUp" && results.length) {
+      e.preventDefault();
+      setHighlight((h) => (h - 1 + results.length) % results.length);
+    } else if (e.key === "Enter" && open && results.length) {
+      e.preventDefault();
+      choose(results[highlight]?.code || results[0].code);
+    } else if (e.key === "Escape") {
+      setOpen(false);
+    }
+  };
+
+  return (
+    <div className="relative w-full max-w-md" ref={ref}>
+      <div className="flex items-center gap-2 rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 focus-within:border-blue-500 transition-colors">
+        <svg className="w-4 h-4 text-zinc-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-4.35-4.35M10 18a8 8 0 110-16 8 8 0 010 16z" />
+        </svg>
+        <input
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          onKeyDown={handleKey}
+          onFocus={() => results.length && setOpen(true)}
+          placeholder="Cari brand, simbol, atau nama…"
+          aria-label="Cari emiten"
+          className="w-full bg-transparent text-sm text-zinc-100 placeholder-zinc-500 focus:outline-none"
+        />
+        {loading && (
+          <span className="w-3.5 h-3.5 shrink-0 rounded-full border border-zinc-500 border-t-transparent animate-spin" />
+        )}
+      </div>
+
+      {open && text.trim().length >= 2 && (
+        <div className="absolute left-0 right-0 top-full mt-1.5 z-40 max-h-72 overflow-y-auto rounded-xl border border-zinc-700 bg-zinc-900 shadow-xl py-1">
+          {results.length === 0 && !loading ? (
+            <div className="px-3 py-2.5 text-xs text-zinc-500">Tidak ada hasil.</div>
+          ) : (
+            results.map((r, i) => (
+              <button
+                key={r.code}
+                type="button"
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => choose(r.code)}
+                onMouseEnter={() => setHighlight(i)}
+                className={`w-full flex items-baseline gap-2 px-3 py-2 text-left transition-colors ${
+                  i === highlight ? "bg-zinc-800" : ""
+                }`}
+              >
+                <span className="text-sm font-bold text-zinc-100 shrink-0">{r.code}</span>
+                <span className="text-xs text-zinc-400 truncate">{r.name || ""}</span>
+              </button>
+            ))
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
