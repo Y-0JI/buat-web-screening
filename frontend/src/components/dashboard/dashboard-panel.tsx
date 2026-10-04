@@ -159,7 +159,7 @@ export function DashboardPanel({
         error={error}
       />
 
-      <div className="flex-1 min-h-0 px-4 pt-1 pb-0 relative">
+      <div className="shrink-0 px-4 pt-1 pb-0 relative">
         {loading && !series.length ? (
           <div className="h-64 flex items-center justify-center text-sm text-text-muted">
             Memuat chart…
