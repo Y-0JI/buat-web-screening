@@ -169,8 +169,11 @@ def _ttm(items: list[dict], metric: str) -> Optional[float]:
     return sum(vals) if vals else None
 
 
-def _growth(items: list[dict], metric: str) -> Optional[float]:
-    """YoY kuartal terakhir vs kuartal sama tahun sebelumnya."""
+def _growth(items: list[dict], metric: str, fn=None) -> Optional[float]:
+    """YoY kuartal terakhir vs kuartal sama tahun sebelumnya.
+
+    `fn` opsional mengekstrak nilai dari `data` (untuk metrik yang
+    strukturnya beda bank vs non-bank, mis. revenue)."""
     ordered = _sorted_asc(items)
     if len(ordered) < 2:
         return None
@@ -186,8 +189,9 @@ def _growth(items: list[dict], metric: str) -> Optional[float]:
     )
     if target is None:
         return None
-    a = _pick(last.get("data") or {}, _INCOME_CANDIDATES[metric])
-    b = _pick(target.get("data") or {}, _INCOME_CANDIDATES[metric])
+    get = fn or (lambda d: _pick(d, _INCOME_CANDIDATES[metric]))
+    a = get(last.get("data") or {})
+    b = get(target.get("data") or {})
     if a is None or b is None or b == 0:
         return None
     return (a - b) / abs(b) * 100
@@ -419,7 +423,7 @@ async def build_fundamentals(
             "liabilities_to_equity": ratio(total_liabilities, equity),
         },
         "growth": {
-            "revenue_yoy": _growth(inc_items, "revenue"),
+            "revenue_yoy": _growth(inc_items, "revenue", _rev_of),
             "net_income_yoy": _growth(inc_items, "net_income"),
         },
         "performance": _performance(hist or []),
@@ -510,7 +514,7 @@ async def build_fundamentals(
             "year": str(it.get("year") or ""),
             "quarter": str(it.get("quarter") or ""),
             "label": it.get("label"),
-            "revenue": _pick(d, _INCOME_CANDIDATES["revenue"]),
+            "revenue": _rev_of(d),
             "gross": _pick(d, _INCOME_CANDIDATES["gross_profit"]),
             "net": _pick(d, _INCOME_CANDIDATES["net_income"]),
             "eps": _eps_of(d),

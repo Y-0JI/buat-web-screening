@@ -170,6 +170,8 @@ def test_build_bank_full():
     assert d["solvency"]["financial_leverage"] == 2.8
     assert d["effectiveness"]["roe"] == 4200.0 / 5000.0 * 100
     assert d["effectiveness"]["roa"] == 4200.0 / 14000.0 * 100
+    assert d["growth"]["revenue_yoy"] == (1700.0 - 1500.0) / 1500.0 * 100
+    assert d["quarterly"][-1]["revenue"] == 1700.0
     assert d["valuation"]["pbv"] == 8.0
     assert d["valuation"]["peg"] is not None and d["valuation"]["peg"] > 0
     assert d["solvency"]["interest_coverage"] is not None
@@ -194,6 +196,7 @@ def test_build_nonbank_full():
     assert d["solvency"]["current_ratio"] is None  # fixture tanpa aset lancar
     assert d["growth"]["gross_yoy"] == 10.0
     assert d["effectiveness"]["roe"] == 2100.0 / 3000.0 * 100
+    assert d["quarterly"][-1]["revenue"] == 5500.0
 
 
 def test_build_negative_growth_guards():
