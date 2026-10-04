@@ -2,7 +2,6 @@
 
 import type { HistoryPoint, QuoteData } from "@/lib/chat";
 import { fmtCompact, fmtPct, fmtRp } from "@/lib/format";
-import { TickerSearch } from "./ticker-search";
 
 export const PERIODS = ["1M", "3M", "YTD", "1Y", "3Y", "5Y"] as const;
 export type Period = (typeof PERIODS)[number];
@@ -24,10 +23,9 @@ interface Props {
   period: Period;
   loading: boolean;
   error: string | null;
-  onTicker: (t: string) => void;
 }
 
-export function StockPanel({ ticker, quote, series, period, loading, error, onTicker }: Props) {
+export function StockPanel({ ticker, quote, series, period, loading, error }: Props) {
   const last = series.length ? series[series.length - 1] : null;
   const prev = series.length > 1 ? series[series.length - 2] : null;
 
@@ -51,26 +49,23 @@ export function StockPanel({ ticker, quote, series, period, loading, error, onTi
 
   return (
     <div className="px-4 pt-3">
-      <div className="flex items-start justify-between gap-3">
-        <div className="flex items-center gap-2.5 min-w-0">
-          <div className="w-10 h-10 rounded-full bg-blue-700 flex items-center justify-center text-white shrink-0">
-            <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
-              <path d="M12 2C9 7 6 9 6 13a6 6 0 0012 0c0-4-3-6-6-11zm-3 14a3 3 0 016 0H9z" />
-            </svg>
-          </div>
-          <div className="min-w-0">
-            <div className="text-sm text-zinc-100 truncate">
-              <span className="font-bold">{ticker}</span>{" "}
-              <span className="text-zinc-400">
-                {quote?.name || (loading ? "Memuat…" : "")}
-              </span>
-            </div>
-            {quote?.market_label && (
-              <div className="text-[11px] text-zinc-500">{quote.market_label}</div>
-            )}
-          </div>
+      <div className="flex items-center gap-2.5 min-w-0">
+        <div className="w-10 h-10 rounded-full bg-blue-700 flex items-center justify-center text-white shrink-0">
+          <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
+            <path d="M12 2C9 7 6 9 6 13a6 6 0 0012 0c0-4-3-6-6-11zm-3 14a3 3 0 016 0H9z" />
+          </svg>
         </div>
-        <TickerSearch value={ticker} loading={loading} onSubmit={onTicker} />
+        <div className="min-w-0">
+          <div className="text-sm text-zinc-100 truncate">
+            <span className="font-bold">{ticker}</span>{" "}
+            <span className="text-zinc-400">
+              {quote?.name || (loading ? "Memuat…" : "")}
+            </span>
+          </div>
+          {quote?.market_label && (
+            <div className="text-[11px] text-zinc-500">{quote.market_label}</div>
+          )}
+        </div>
       </div>
 
       <div className="mt-1 flex items-baseline gap-2 flex-wrap">
