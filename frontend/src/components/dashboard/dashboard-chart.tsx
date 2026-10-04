@@ -267,7 +267,7 @@ export function DashboardChart({ ticker, period, series, chartType, active, para
   }, [points, chartType, active, params, chrome, ticker, period]);
 
   return (
-    <div className="w-full h-full">
+    <div className="w-full">
       {legend.length > 0 && (
         <div className="flex gap-3 flex-wrap text-[11px] px-1 pb-1">
           {legend.map((row) => (
