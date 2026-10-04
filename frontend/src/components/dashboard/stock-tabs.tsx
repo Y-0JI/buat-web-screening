@@ -10,6 +10,7 @@ interface TabDef {
 }
 
 const TABS: TabDef[] = [
+  { id: "overview", label: "Overview" },
   { id: "key-stats", label: "Key Stats" },
   { id: "analysis", label: "Analysis" },
   { id: "financials", label: "Financials" },
