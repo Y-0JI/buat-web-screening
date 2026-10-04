@@ -6,19 +6,19 @@ const DEPTHS = [
   {
     key: "broker",
     label: "Broker besar",
-    badge: "bg-emerald-500/15 text-emerald-300 border-emerald-500/30",
+    badge: "bg-emerald-500/15 text-emerald-500 border-emerald-500/30",
     desc: "dihitung dari data broker",
   },
   {
     key: "foreign",
     label: "Arus asing",
-    badge: "bg-sky-500/15 text-sky-300 border-sky-500/30",
+    badge: "bg-sky-500/15 text-sky-500 border-sky-500/30",
     desc: "dihitung dari data arus asing",
   },
   {
     key: "hv",
     label: "Harga-volume",
-    badge: "bg-zinc-500/15 text-zinc-300 border-zinc-500/30",
+    badge: "bg-text-muted/15 text-text-secondary border-border/30",
     desc: "dihitung dari data harga-volume",
   },
 ] as const;
@@ -45,24 +45,24 @@ function contradictions(c: AccumulationCandidate): string[] {
 function CandidateRow({ c }: { c: AccumulationCandidate }) {
   const contra = contradictions(c);
   return (
-    <div className="rounded-lg border border-zinc-800 bg-zinc-900/50 px-2.5 py-2">
+    <div className="rounded-lg border border-border bg-surface-1/50 px-2.5 py-2">
       <div className="flex items-center justify-between gap-2">
-        <span className="font-medium text-zinc-100">{c.ticker}</span>
-        <span className="rounded bg-zinc-800 px-1.5 py-0.5 text-[11px] text-zinc-300">
+        <span className="font-medium text-text-primary">{c.ticker}</span>
+        <span className="rounded bg-surface-2 px-1.5 py-0.5 text-[11px] text-text-secondary">
           skor {c.score ?? "-"}
         </span>
       </div>
       {c.reasons ? (
-        <p className="mt-1 text-[11px] leading-relaxed text-zinc-400">{c.reasons}</p>
+        <p className="mt-1 text-[11px] leading-relaxed text-text-secondary">{c.reasons}</p>
       ) : null}
-      <div className="mt-1 flex flex-wrap gap-1 text-[10px] text-zinc-500">
+      <div className="mt-1 flex flex-wrap gap-1 text-[10px] text-text-muted">
         <span>asing {fmt(c.foreign_net)}</span>
         <span>· CMF {fmt(c.cmf)}</span>
         <span>· run {c.runup == null ? "-" : `${(c.runup * 100).toFixed(1)}%`}</span>
       </div>
       {c.broker_checked && !c.broker_confirmed ? (
         <div className="mt-1">
-          <span className="rounded border border-zinc-600 bg-zinc-800/60 px-1.5 py-0.5 text-[10px] text-zinc-400">
+          <span className="rounded border border-border bg-surface-2/60 px-1.5 py-0.5 text-[10px] text-text-secondary">
             broker dicek, tidak mengonfirmasi
           </span>
         </div>
@@ -72,7 +72,7 @@ function CandidateRow({ c }: { c: AccumulationCandidate }) {
           {contra.map((t) => (
             <span
               key={t}
-              className="rounded border border-amber-500/30 bg-amber-500/10 px-1.5 py-0.5 text-[10px] text-amber-300"
+              className="rounded border border-amber-500/30 bg-amber-500/10 px-1.5 py-0.5 text-[10px] text-amber-500"
             >
               {t}
             </span>
@@ -86,7 +86,7 @@ function CandidateRow({ c }: { c: AccumulationCandidate }) {
 export function AccumulationCard({ data }: { data: AccumulationResult }) {
   if (data.error) {
     return (
-      <div className="my-2 rounded-xl border border-zinc-800 bg-zinc-900/40 p-3 text-[12px] text-red-300">
+      <div className="my-2 rounded-xl border border-border bg-surface-1/40 p-3 text-[12px] text-red-500">
         {data.error}
       </div>
     );
@@ -99,28 +99,28 @@ export function AccumulationCard({ data }: { data: AccumulationResult }) {
   })).filter((g) => g.rows.length > 0);
 
   return (
-    <div className="my-2 rounded-xl border border-zinc-800 bg-zinc-900/40 p-3">
+    <div className="my-2 rounded-xl border border-border bg-surface-1/40 p-3">
       <div className="flex flex-wrap items-center gap-2">
-        <span className="text-[12px] font-medium text-zinc-200">
+        <span className="text-[12px] font-medium text-text-primary">
           Screening akumulasi (deskriptif)
         </span>
         {data.scan_date ? (
-          <span className="text-[11px] text-zinc-500">data {data.scan_date}</span>
+          <span className="text-[11px] text-text-muted">data {data.scan_date}</span>
         ) : null}
         {data.status === "partial" ? (
-          <span className="rounded border border-amber-500/30 bg-amber-500/10 px-1.5 py-0.5 text-[10px] text-amber-300">
+          <span className="rounded border border-amber-500/30 bg-amber-500/10 px-1.5 py-0.5 text-[10px] text-amber-500">
             scan tidak lengkap
           </span>
         ) : null}
         {data.stale ? (
-          <span className="rounded border border-red-500/30 bg-red-500/10 px-1.5 py-0.5 text-[10px] text-red-300">
+          <span className="rounded border border-red-500/30 bg-red-500/10 px-1.5 py-0.5 text-[10px] text-red-500">
             data basi
           </span>
         ) : null}
       </div>
 
       {!candidates.length ? (
-        <p className="mt-2 text-[12px] text-zinc-400">
+        <p className="mt-2 text-[12px] text-text-secondary">
           Tidak ada kandidat pada scan terakhir.
         </p>
       ) : (
@@ -133,7 +133,7 @@ export function AccumulationCard({ data }: { data: AccumulationResult }) {
                 >
                   {g.label}
                 </span>
-                <span className="text-[10px] text-zinc-500">{g.desc}</span>
+                <span className="text-[10px] text-text-muted">{g.desc}</span>
               </div>
               <div className="space-y-1.5">
                 {g.rows.map((c) => (
@@ -145,7 +145,7 @@ export function AccumulationCard({ data }: { data: AccumulationResult }) {
         </div>
       )}
 
-      <p className="mt-2 text-[10px] leading-relaxed text-zinc-500">
+      <p className="mt-2 text-[10px] leading-relaxed text-text-muted">
         Hasil screening deskriptif dari aliran harga/arus asing/broker besar.
         Belum terbukti prediktif. Bukan label institusi, bukan saran investasi.
         Kedalaman data: broker &gt; arus asing &gt; harga-volume.

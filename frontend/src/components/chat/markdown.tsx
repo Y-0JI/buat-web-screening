@@ -17,7 +17,7 @@ function inline(text: string): string {
     .replace(/(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)/g, "<em>$1</em>")
     .replace(
       /`(.+?)`/g,
-      '<code class="bg-zinc-700/70 px-1 py-0.5 rounded text-[0.85em]">$1</code>'
+      '<code class="bg-surface-3/70 px-1 py-0.5 rounded text-[0.85em]">$1</code>'
     );
 }
 
@@ -49,17 +49,17 @@ export function Markdown({ text }: { text: string }) {
 
     if (raw.startsWith("### ")) {
       nodes.push(
-        <h4 key={i} className="text-sm font-bold text-zinc-100 mt-3 mb-1"
+        <h4 key={i} className="text-sm font-bold text-text-primary mt-3 mb-1"
           dangerouslySetInnerHTML={{ __html: inline(raw.slice(4)) }} />
       );
     } else if (raw.startsWith("## ")) {
       nodes.push(
-        <h3 key={i} className="text-base font-bold text-zinc-100 mt-3 mb-1"
+        <h3 key={i} className="text-base font-bold text-text-primary mt-3 mb-1"
           dangerouslySetInnerHTML={{ __html: inline(raw.slice(3)) }} />
       );
     } else if (raw.startsWith("# ")) {
       nodes.push(
-        <h2 key={i} className="text-lg font-bold text-zinc-50 mt-3 mb-1"
+        <h2 key={i} className="text-lg font-bold text-text-primary mt-3 mb-1"
           dangerouslySetInnerHTML={{ __html: inline(raw.slice(2)) }} />
       );
     } else if (raw.trim() === "") {

@@ -7,10 +7,14 @@ import {
   HistogramSeries,
   createChart,
 } from "lightweight-charts";
+import { CHART_CHROME } from "../dashboard/chart-chrome";
+import { useTheme } from "../theme/theme-provider";
 import type { UIChart } from "./types";
 
 export function PriceChart({ chart }: { chart: UIChart }) {
   const ref = useRef<HTMLDivElement>(null);
+  const { theme } = useTheme();
+  const chrome = CHART_CHROME[theme];
 
   useEffect(() => {
     const el = ref.current;
@@ -21,15 +25,15 @@ export function PriceChart({ chart }: { chart: UIChart }) {
       height: 256,
       layout: {
         background: { type: ColorType.Solid, color: "transparent" },
-        textColor: "#a1a1aa",
+        textColor: chrome.textColor,
         fontSize: 11,
       },
       grid: {
-        vertLines: { color: "rgba(63,63,70,0.35)" },
-        horzLines: { color: "rgba(63,63,70,0.35)" },
+        vertLines: { color: chrome.grid },
+        horzLines: { color: chrome.grid },
       },
-      rightPriceScale: { borderColor: "rgba(63,63,70,0.6)" },
-      timeScale: { borderColor: "rgba(63,63,70,0.6)" },
+      rightPriceScale: { borderColor: chrome.border },
+      timeScale: { borderColor: chrome.border },
     });
 
     const candles = instance.addSeries(CandlestickSeries, {
@@ -82,11 +86,11 @@ export function PriceChart({ chart }: { chart: UIChart }) {
       ro.disconnect();
       instance.remove();
     };
-  }, [chart]);
+  }, [chart, chrome]);
 
   return (
-    <div className="my-2 rounded-xl border border-zinc-800 bg-zinc-900/40 p-1">
-      <div className="px-2 py-1 text-[11px] text-zinc-400">
+    <div className="my-2 rounded-xl border border-border bg-surface-1/40 p-1">
+      <div className="px-2 py-1 text-[11px] text-text-secondary">
         {chart.ticker} · {chart.period}
       </div>
       <div ref={ref} className="w-full" />

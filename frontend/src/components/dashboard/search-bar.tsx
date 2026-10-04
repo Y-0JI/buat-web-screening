@@ -79,8 +79,8 @@ export function SearchBar({ value, onSelect }: Props) {
 
   return (
     <div className="relative w-full max-w-md" ref={ref}>
-      <div className="flex items-center gap-2 rounded-lg bg-zinc-900 px-3 py-2">
-        <svg className="w-4 h-4 text-zinc-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <div className="flex items-center gap-2 rounded-lg bg-surface-1 px-3 py-2">
+        <svg className="w-4 h-4 text-text-muted shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-4.35-4.35M10 18a8 8 0 110-16 8 8 0 010 16z" />
         </svg>
         <input
@@ -90,17 +90,17 @@ export function SearchBar({ value, onSelect }: Props) {
           onFocus={() => results.length && setOpen(true)}
           placeholder="Cari brand, simbol, atau nama…"
           aria-label="Cari emiten"
-          className="w-full bg-transparent text-sm text-zinc-100 placeholder-zinc-500 focus:outline-none"
+          className="w-full bg-transparent text-sm text-text-primary placeholder-text-muted focus:outline-none"
         />
         {loading && (
-          <span className="w-3.5 h-3.5 shrink-0 rounded-full border border-zinc-500 border-t-transparent animate-spin" />
+          <span className="w-3.5 h-3.5 shrink-0 rounded-full border border-border border-t-transparent animate-spin" />
         )}
       </div>
 
       {open && text.trim().length >= 2 && (
-        <div className="absolute left-0 right-0 top-full mt-1.5 z-40 max-h-72 overflow-y-auto rounded-xl border border-zinc-700 bg-zinc-900 shadow-xl py-1">
+        <div className="absolute left-0 right-0 top-full mt-1.5 z-40 max-h-72 overflow-y-auto rounded-xl border border-border bg-surface-1 shadow-xl py-1">
           {results.length === 0 && !loading ? (
-            <div className="px-3 py-2.5 text-xs text-zinc-500">Tidak ada hasil.</div>
+            <div className="px-3 py-2.5 text-xs text-text-muted">Tidak ada hasil.</div>
           ) : (
             results.map((r, i) => (
               <button
@@ -110,11 +110,11 @@ export function SearchBar({ value, onSelect }: Props) {
                 onClick={() => choose(r.code)}
                 onMouseEnter={() => setHighlight(i)}
                 className={`w-full flex items-baseline gap-2 px-3 py-2 text-left transition-colors ${
-                  i === highlight ? "bg-zinc-800" : ""
+                  i === highlight ? "bg-surface-2" : ""
                 }`}
               >
-                <span className="text-sm font-bold text-zinc-100 shrink-0">{r.code}</span>
-                <span className="text-xs text-zinc-400 truncate">{r.name || ""}</span>
+                <span className="text-sm font-bold text-text-primary shrink-0">{r.code}</span>
+                <span className="text-xs text-text-secondary truncate">{r.name || ""}</span>
               </button>
             ))
           )}

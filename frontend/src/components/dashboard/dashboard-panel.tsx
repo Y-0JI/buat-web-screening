@@ -134,9 +134,9 @@ export function DashboardPanel({
   if (!ready) return null;
 
   return (
-    <div className="h-full flex flex-col min-h-0 bg-zinc-950">
+    <div className="h-full flex flex-col min-h-0 bg-surface-0">
       <div className="flex items-center justify-between px-4 pt-2 md:hidden">
-        <span className="text-[11px] text-zinc-600">Data IDX Edge PRO</span>
+        <span className="text-[11px] text-text-muted">Data IDX Edge PRO</span>
         <button
           type="button"
           onClick={onOpenAi}
@@ -160,7 +160,7 @@ export function DashboardPanel({
 
       <div className="flex-1 min-h-0 px-4 pt-1 pb-0 relative">
         {loading && !series.length ? (
-          <div className="h-64 flex items-center justify-center text-sm text-zinc-500">
+          <div className="h-64 flex items-center justify-center text-sm text-text-muted">
             Memuat chart…
           </div>
         ) : series.length ? (
@@ -187,10 +187,10 @@ export function DashboardPanel({
               onClick={() => setPeriod(p)}
               className={`px-2.5 py-1 rounded-full text-[11px] font-medium transition-colors ${
                 on
-                  ? "bg-emerald-500/15 text-emerald-400 border border-emerald-500/60"
+                  ? "bg-emerald-500/15 text-emerald-500 border border-emerald-500/60"
                   : enabled
-                    ? "text-zinc-400 border border-zinc-800 hover:text-zinc-200 hover:border-zinc-600"
-                    : "text-zinc-700 border border-zinc-800/60 cursor-not-allowed"
+                    ? "text-text-secondary border border-border hover:text-text-primary hover:border-border"
+                    : "text-text-muted border border-border/60 cursor-not-allowed"
               }`}
             >
               {p}

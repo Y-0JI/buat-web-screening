@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { FALLBACK_TICKER } from "@/lib/chat";
 import { AiPanel, type AiView } from "../ai/ai-panel";
+import { ThemeToggle } from "../theme/theme-toggle";
 import { DashboardPanel } from "./dashboard-panel";
 import { SearchBar } from "./search-bar";
 
@@ -11,10 +12,14 @@ export function DashboardShell() {
   const [ticker, setTicker] = useState(FALLBACK_TICKER);
 
   return (
-    <div className="flex flex-col h-screen bg-zinc-950 text-zinc-100 overflow-hidden">
-      <header className="h-14 shrink-0 flex items-center gap-4 px-4 border-b border-zinc-800">
-        <img src="/logos.png" alt="Logo" className="h-7 w-auto shrink-0" />
+    <div className="flex flex-col h-screen bg-surface-0 text-text-primary overflow-hidden">
+      <header className="h-14 shrink-0 flex items-center gap-4 px-4 border-b border-border">
+        <img src="/logoswhite.png" alt="Logo" className="logo-dark h-7 w-auto shrink-0" />
+        <img src="/logos.png" alt="Logo" className="logo-light h-7 w-auto shrink-0" />
         <SearchBar value={ticker} onSelect={setTicker} />
+        <div className="ml-auto">
+          <ThemeToggle />
+        </div>
       </header>
 
       <div className="flex flex-1 min-h-0">

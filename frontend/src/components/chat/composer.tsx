@@ -29,7 +29,7 @@ export function Composer({
 
   return (
     <div className="w-full">
-      <div className="rounded-3xl bg-zinc-900 px-4 pt-3 pb-2.5">
+      <div className="rounded-3xl bg-surface-1 px-4 pt-3 pb-2.5">
         <textarea
           ref={ref}
           value={value}
@@ -37,12 +37,12 @@ export function Composer({
           onKeyDown={handleKey}
           rows={1}
           placeholder="Tanyakan apa saja"
-          className="w-full resize-none bg-transparent text-sm text-zinc-100 placeholder-zinc-500 focus:outline-none max-h-40"
+          className="w-full resize-none bg-transparent text-sm text-text-primary placeholder-text-muted focus:outline-none max-h-40"
         />
         <div className="mt-1.5 flex items-center justify-between">
           <button
             type="button"
-            className="p-1.5 rounded-full text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800 transition-colors"
+            className="p-1.5 rounded-full text-text-secondary hover:text-text-primary hover:bg-surface-2 transition-colors"
             aria-label="Lampiran"
             title="Lampiran (segera)"
           >
@@ -57,7 +57,7 @@ export function Composer({
             {streaming ? (
               <button
                 onClick={onStop}
-                className="p-2.5 rounded-full bg-zinc-700 hover:bg-zinc-600 text-zinc-200 transition-colors"
+                className="p-2.5 rounded-full bg-surface-3 hover:bg-surface-2 text-text-primary transition-colors"
                 aria-label="Stop"
               >
                 <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
@@ -68,7 +68,7 @@ export function Composer({
               <button
                 onClick={onSend}
                 disabled={!value.trim()}
-                className="p-2.5 rounded-full bg-zinc-700 hover:bg-zinc-600 disabled:bg-zinc-800 disabled:text-zinc-600 text-zinc-100 transition-colors"
+                className="p-2.5 rounded-full bg-surface-3 hover:bg-surface-2 disabled:bg-surface-1 disabled:text-text-muted text-text-primary transition-colors"
                 aria-label="Kirim"
               >
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -79,7 +79,7 @@ export function Composer({
           </div>
         </div>
       </div>
-      <p className="mt-2 text-center text-[11px] text-zinc-600">
+      <p className="mt-2 text-center text-[11px] text-text-muted">
         Semua data untuk keperluan informasi. Hasil AI bukan saran keuangan.
       </p>
     </div>
