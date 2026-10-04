@@ -34,7 +34,6 @@ def test_history_series_keeps_value_freq():
 
 
 def test_period_to_limit():
-    assert period_to_limit("1W") == 20  # API menolak limit < 20
     assert period_to_limit("1M") == 22
     assert period_to_limit("3M") == 66
     assert period_to_limit("1Y") == 252
@@ -66,9 +65,9 @@ def test_history_route_uses_period_limit():
     try:
         app = FastAPI()
         app.include_router(history_router)
-        r = TestClient(app).get("/api/history/BBCA?period=1W")
+        r = TestClient(app).get("/api/history/BBCA?period=1M")
         assert r.status_code == 200, r.text
-        assert "limit=20" in seen["url"], seen  # API menolak limit < 20
+        assert "limit=22" in seen["url"], seen
     finally:
         history_mod.IdxEdgeProvider = real_history
         settings.idx_edge_api_key = old

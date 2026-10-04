@@ -1,31 +1,33 @@
 "use client";
 
 import type { HistoryPoint, QuoteData } from "@/lib/chat";
-import { fmtCompact, fmtPct, fmtRp, fmtSigned } from "@/lib/format";
+import { fmtCompact, fmtPct, fmtRp } from "@/lib/format";
+import { TickerSearch } from "./ticker-search";
 
-export const PERIODS = ["1D", "1W", "1M", "3M", "YTD", "1Y", "3Y", "5Y"] as const;
+export const PERIODS = ["1M", "3M", "YTD", "1Y", "3Y", "5Y"] as const;
 export type Period = (typeof PERIODS)[number];
-export const ACTIVE_PERIODS: Period[] = ["1D", "1W", "1M", "3M", "YTD", "1Y"];
+export const ACTIVE_PERIODS: Period[] = ["1M", "3M", "YTD", "1Y"];
+
+const PERIOD_LABEL: Record<Period, string> = {
+  "1M": "Past 1 Month",
+  "3M": "Past 3 Months",
+  YTD: "Year to Date",
+  "1Y": "Past 1 Year",
+  "3Y": "Past 3 Years",
+  "5Y": "Past 5 Years",
+};
 
 interface Props {
   ticker: string;
   quote: QuoteData | null;
   series: HistoryPoint[];
   period: Period;
-  onPeriod: (p: Period) => void;
   loading: boolean;
   error: string | null;
+  onTicker: (t: string) => void;
 }
 
-export function StockPanel({
-  ticker,
-  quote,
-  series,
-  period,
-  onPeriod,
-  loading,
-  error,
-}: Props) {
+export function StockPanel({ ticker, quote, series, period, loading, error, onTicker }: Props) {
   const last = series.length ? series[series.length - 1] : null;
   const prev = series.length > 1 ? series[series.length - 2] : null;
 
@@ -47,41 +49,71 @@ export function StockPanel({
   const lot = quote?.lot ?? (vol != null ? vol / 100 : null);
   const val = quote?.value ?? last?.value ?? null;
 
-  const periodLabel =
-    period === "1D" ? "Today" : period === "YTD" ? "Year to Date" : `Past ${period}`;
-
   return (
-    <div>
-      <div className="flex items-baseline gap-2 flex-wrap">
-        <span className="text-xl font-bold text-zinc-100">{ticker}</span>
-        <span className="text-sm text-zinc-400 truncate max-w-[280px]">
-          {quote?.name || (loading ? "Memuat…" : "")}
-        </span>
+    <div className="px-4 pt-3">
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex items-center gap-2.5 min-w-0">
+          <div className="w-10 h-10 rounded-full bg-blue-700 flex items-center justify-center text-white shrink-0">
+            <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
+              <path d="M12 2C9 7 6 9 6 13a6 6 0 0012 0c0-4-3-6-6-11zm-3 14a3 3 0 016 0H9z" />
+            </svg>
+          </div>
+          <div className="min-w-0">
+            <div className="text-sm text-zinc-100 truncate">
+              <span className="font-bold">{ticker}</span>{" "}
+              <span className="text-zinc-400">
+                {quote?.name || (loading ? "Memuat…" : "")}
+              </span>
+            </div>
+            {quote?.market_label && (
+              <div className="text-[11px] text-zinc-500">{quote.market_label}</div>
+            )}
+          </div>
+        </div>
+        <TickerSearch value={ticker} loading={loading} onSubmit={onTicker} />
       </div>
 
       <div className="mt-1 flex items-baseline gap-2 flex-wrap">
-        <span className="text-2xl font-bold text-zinc-100">{price != null ? fmtRp(price) : "-"}</span>
+        <span className="text-[28px] leading-9 font-bold text-zinc-100">
+          {price != null ? fmtRp(price) : "-"}
+        </span>
         {change != null && (
-          <span className={`text-sm font-semibold ${chgColor}`}>
-            {down ? "▼" : "▲"} {fmtSigned(change)} ({fmtPct(changePct)})
+          <span className={`text-sm font-bold ${chgColor}`}>
+            {down ? "▼" : "▲"} {fmtRp(Math.abs(change))} ({fmtPct(changePct)})
           </span>
         )}
-        <span className="text-xs text-zinc-500">{periodLabel}</span>
-        <span className="text-xs text-zinc-500">
-          Lot <span className="text-zinc-300 font-medium">{fmtCompact(lot)}</span>
+      </div>
+
+      <div className="mt-0.5 flex items-center gap-2.5 flex-wrap text-xs text-zinc-400">
+        <span>{PERIOD_LABEL[period]}</span>
+        <span className="text-zinc-700">|</span>
+        <span>
+          Lot <span className="text-zinc-100 font-bold">{fmtCompact(lot)}</span>
         </span>
-        <span className="text-xs text-zinc-500">
-          Val <span className="text-zinc-300 font-medium">{fmtCompact(val)}</span>
+        <span>
+          Val <span className="text-zinc-100 font-bold">{fmtCompact(val)}</span>
         </span>
       </div>
 
       {last && (
-        <div className="mt-1 text-xs text-zinc-400 flex gap-3 flex-wrap">
-          <span>O <span className="text-zinc-200">{fmtRp(last.open)}</span></span>
-          <span>H <span className="text-zinc-200">{fmtRp(last.high)}</span></span>
-          <span>L <span className="text-zinc-200">{fmtRp(last.low)}</span></span>
-          <span>C <span className="text-zinc-200">{fmtRp(last.close)}</span></span>
-          <span>Vol <span className="text-zinc-200">{fmtCompact(last.volume)}</span></span>
+        <div className="mt-1.5 flex gap-3.5 flex-wrap text-xs">
+          {(
+            [
+              ["O", last.open],
+              ["H", last.high],
+              ["L", last.low],
+              ["C", last.close],
+            ] as const
+          ).map(([label, v]) => (
+            <span key={label}>
+              <span className="text-emerald-500">{label} </span>
+              <span className="text-zinc-100">{fmtRp(v)}</span>
+            </span>
+          ))}
+          <span>
+            <span className="text-emerald-500">Vol </span>
+            <span className="text-zinc-100">{fmtCompact(last.volume)}</span>
+          </span>
         </div>
       )}
 
@@ -90,30 +122,6 @@ export function StockPanel({
           {error}
         </div>
       )}
-
-      <div className="mt-2 flex items-center gap-1.5 flex-wrap">
-        {PERIODS.map((p) => {
-          const enabled = ACTIVE_PERIODS.includes(p);
-          const on = period === p;
-          return (
-            <button
-              key={p}
-              type="button"
-              disabled={!enabled}
-              onClick={() => onPeriod(p)}
-              className={`px-2.5 py-1 rounded-full text-[11px] font-medium transition-colors ${
-                on
-                  ? "bg-emerald-500/15 text-emerald-400 border border-emerald-500/50"
-                  : enabled
-                    ? "text-zinc-400 border border-zinc-700 hover:text-zinc-200 hover:border-zinc-600"
-                    : "text-zinc-700 border border-zinc-800 cursor-not-allowed"
-              }`}
-            >
-              {p}
-            </button>
-          );
-        })}
-      </div>
     </div>
   );
 }
