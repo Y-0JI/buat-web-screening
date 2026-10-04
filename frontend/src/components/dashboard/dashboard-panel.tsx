@@ -9,6 +9,7 @@ import {
 } from "@/lib/chat";
 import { ChartSettings, DEFAULT_ACTIVE, DEFAULT_OVERLAY, OVERLAY_KEY, normalizeOverlay, type ChartType, type IndicatorId, type OverlayParams } from "./chart-settings";
 import { DashboardChart } from "./dashboard-chart";
+import { StockTabs } from "./stock-tabs";
 import { ACTIVE_PERIODS, PERIODS, StockPanel, type Period } from "./stock-panel";
 
 const INDICATOR_KEY = "idx_chart_indicators";
@@ -134,7 +135,7 @@ export function DashboardPanel({
   if (!ready) return null;
 
   return (
-    <div className="h-full flex flex-col min-h-0 bg-surface-0">
+    <div className="h-full flex flex-col min-h-0 bg-surface-0 overflow-y-auto">
       <div className="flex items-center justify-between px-4 pt-2 md:hidden">
         <span className="text-[11px] text-text-muted">Data IDX Edge PRO</span>
         <button
@@ -208,6 +209,8 @@ export function DashboardPanel({
           />
         </div>
       </div>
+
+      <StockTabs ticker={ticker} />
     </div>
   );
 }
