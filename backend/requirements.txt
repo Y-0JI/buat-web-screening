@@ -8,3 +8,4 @@ aiosqlite>=0.20.0
 sqlalchemy[asyncio]>=2.0
 asyncpg>=0.30
 alembic>=1.14
+trafilatura>=1.12

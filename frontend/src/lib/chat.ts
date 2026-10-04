@@ -377,6 +377,70 @@ export async function getFundamentals(
   return data.success ? (data.data as FundamentalData) : null;
 }
 
+export interface OrderFlowRow {
+  time: string | null;
+  action: string | null;
+  price: number | null;
+  lot: number | null;
+  value: number | null;
+  buyer: string | null;
+  seller: string | null;
+  buyer_type: string | null;
+  seller_type: string | null;
+  board: string | null;
+}
+
+export interface OrderFlowData {
+  code: string | null;
+  date: string | null;
+  total: number | null;
+  rows: OrderFlowRow[];
+}
+
+export async function getOrderFlow(
+  ticker: string,
+  opts: { date?: string; limit?: number } = {}
+): Promise<OrderFlowData | null> {
+  const q = new URLSearchParams();
+  if (opts.date) q.set("date", opts.date);
+  if (opts.limit) q.set("limit", String(opts.limit));
+  const res = await fetch(
+    `${API_BASE}/api/order-flow/${encodeURIComponent(ticker)}?${q.toString()}`
+  );
+  const data = await jsonOrThrow(res);
+  return data.success ? (data.data as OrderFlowData) : null;
+}
+
+export interface NewsItem {
+  title: string;
+  url: string;
+  published: string | null;
+  snippet: string | null;
+  source: string | null;
+}
+
+export interface ArticleData {
+  url: string;
+  text: string;
+}
+
+export async function getNews(
+  ticker: string,
+  limit = 20
+): Promise<{ items: NewsItem[]; error: string | null }> {
+  const res = await fetch(
+    `${API_BASE}/api/news/${encodeURIComponent(ticker)}?limit=${limit}`
+  );
+  const data = await jsonOrThrow(res);
+  return { items: data.success ? (data.data as NewsItem[]) : [], error: data.success ? null : (data.error as string) || null };
+}
+
+export async function getArticle(url: string): Promise<ArticleData | null> {
+  const res = await fetch(`${API_BASE}/api/news/article/read?url=${encodeURIComponent(url)}`);
+  const data = await jsonOrThrow(res);
+  return data.success ? (data.data as ArticleData) : null;
+}
+
 /** True bila scan_date lebih tua dari `maxDays` hari bursa. */
 export function staleFromDate(scanDate: string | null, maxDays = 3): boolean {
   if (!scanDate) return false;
