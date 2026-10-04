@@ -117,6 +117,13 @@ export interface FundamentalData {
     pbv: number | null;
     psr: number | null;
     earnings_yield: number | null;
+    pe_ann?: number | null;
+    p_cf?: number | null;
+    p_fcf?: number | null;
+    ev?: number | null;
+    ev_ebit?: number | null;
+    peg?: number | null;
+    peg_3yr?: number | null;
   };
   income: {
     revenue: number | null;
@@ -124,11 +131,27 @@ export interface FundamentalData {
     operating_profit: number | null;
     net_income: number | null;
   };
+  income_q?: {
+    revenue: number | null;
+    gross_profit: number | null;
+    operating_profit: number | null;
+    net_income: number | null;
+    eps: number | null;
+  };
   balance: {
     total_assets: number | null;
     total_liabilities: number | null;
     total_equity: number | null;
     cash: number | null;
+    working_capital?: number | null;
+    long_term_debt?: number | null;
+    short_term_debt?: number | null;
+    total_debt?: number | null;
+    net_debt?: number | null;
+    common_equity?: number | null;
+    inventory?: number | null;
+    receivables?: number | null;
+    payables?: number | null;
   };
   cashflow: {
     operating: number | null;
@@ -136,7 +159,14 @@ export interface FundamentalData {
     financing: number | null;
     free_cash_flow: number | null;
   };
-  per_share: { eps: number | null; book_value: number | null; revenue: number | null };
+  per_share: {
+    eps: number | null;
+    book_value: number | null;
+    revenue: number | null;
+    eps_ann?: number | null;
+    cash?: number | null;
+    fcf?: number | null;
+  };
   profitability: {
     gross_margin: number | null;
     operating_margin: number | null;
@@ -146,8 +176,38 @@ export interface FundamentalData {
     current_ratio: number | null;
     debt_to_equity: number | null;
     liabilities_to_equity: number | null;
+    quick_ratio?: number | null;
+    lt_debt_equity?: number | null;
+    total_debt_assets?: number | null;
+    financial_leverage?: number | null;
+    interest_coverage?: number | null;
+    fcf_q?: number | null;
+    altman_z?: number | null;
   };
-  growth: { revenue_yoy: number | null; net_income_yoy: number | null };
+  growth: { revenue_yoy: number | null; net_income_yoy: number | null; gross_yoy?: number | null };
+  effectiveness?: {
+    roa: number | null;
+    roe: number | null;
+    roce: number | null;
+    roic: number | null;
+    dso: number | null;
+    dio: number | null;
+    dpo: number | null;
+    ccc: number | null;
+    receivables_turnover: number | null;
+    asset_turnover: number | null;
+    inventory_turnover: number | null;
+  };
+  quarterly?: {
+    year: string;
+    quarter: string;
+    label: string | null;
+    revenue: number | null;
+    gross: number | null;
+    net: number | null;
+    eps: number | null;
+  }[];
+  quarterly_meta?: { market_cap: number | null; ev: number | null; shares: number | null };
   performance: {
     period: string;
     change_pct: number | null;

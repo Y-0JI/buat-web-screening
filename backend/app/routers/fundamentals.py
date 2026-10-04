@@ -9,7 +9,7 @@ router = APIRouter(prefix="/api", tags=["fundamentals"])
 
 @router.get("/fundamentals/{ticker}")
 async def fundamentals(ticker: str):
-    data = await build_fundamentals(ticker.upper())
+    data = await build_fundamentals(ticker.upper(), full=True)
     if not data:
         return {"success": False, "error": "Data fundamental tidak tersedia."}
     return {"success": True, "data": data}
