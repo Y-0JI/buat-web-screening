@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import type { NewsItem } from "@/lib/chat";
+import type { LiveTrade } from "@/lib/live";
 import { KeyStatsPanel } from "./key-stats-panel";
 import { NewsPanel } from "./news-panel";
 import { NewsReader } from "./news-reader";
@@ -25,7 +26,7 @@ const TABS: TabDef[] = [
   { id: "news", label: "News" },
 ];
 
-export function StockTabs({ ticker }: { ticker: string }) {
+export function StockTabs({ ticker, liveTrades, liveConnected }: { ticker: string; liveTrades: LiveTrade[]; liveConnected: boolean }) {
   const [tab, setTab] = useState<string | null>(null);
   const [article, setArticle] = useState<NewsItem | null>(null);
 
@@ -68,6 +69,8 @@ export function StockTabs({ ticker }: { ticker: string }) {
           ticker={ticker}
           onOpenArticle={setArticle}
           onOpenNews={openNews}
+          liveTrades={liveTrades}
+          liveConnected={liveConnected}
         />
       ) : tab === "key-stats" ? (
         <KeyStatsPanel ticker={ticker} />

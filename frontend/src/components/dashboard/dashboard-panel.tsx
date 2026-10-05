@@ -7,6 +7,7 @@ import {
   type HistoryPoint,
   type QuoteData,
 } from "@/lib/chat";
+import { useLiveTicker } from "@/lib/live";
 import { ChartSettings, DEFAULT_ACTIVE, DEFAULT_OVERLAY, OVERLAY_KEY, normalizeOverlay, type ChartType, type IndicatorId, type OverlayParams } from "./chart-settings";
 import { DashboardChart } from "./dashboard-chart";
 import { StockTabs } from "./stock-tabs";
@@ -129,9 +130,15 @@ export function DashboardPanel({
 
   const livePrice = quote?.last_price ?? null;
   const marketOpen = quote == null || quote.market_state !== "closed";
+  const live = useLiveTicker(ticker, marketOpen);
+  const wsPrice = live.connected && live.quote ? live.quote.price : null;
+  const displayPrice = wsPrice ?? livePrice;
+  const displayChangePct = live.quote?.change_pct ?? quote?.change_pct ?? null;
 
   useEffect(() => {
     if (!marketOpen) return;
+    // WS gagal/nonaktif -> polling cadangan 10 detik.
+    if (live.connected || document.visibilityState !== "visible") return;
     const tick = async () => {
       if (document.visibilityState !== "visible") return;
       try {
@@ -143,12 +150,26 @@ export function DashboardPanel({
     };
     const id = setInterval(tick, 10_000);
     return () => clearInterval(id);
-  }, [ticker, marketOpen]);
+  }, [ticker, marketOpen, live.connected]);
 
   const toggle = (id: IndicatorId) =>
     setActive((prev) =>
       prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
     );
+
+  // Harga WS menimpa harga REST (tanpa mengubah Lot/Val yang hanya datang via REST).
+  const displayQuote: QuoteData | null =
+    quote && wsPrice != null
+      ? {
+          ...quote,
+          last_price: wsPrice,
+          change_pct: live.quote?.change_pct ?? displayChangePct,
+          change:
+            quote.prev_close != null
+              ? wsPrice - quote.prev_close
+              : quote.change,
+        }
+      : quote;
 
   if (!ready) return null;
 
@@ -163,14 +184,14 @@ export function DashboardPanel({
           aria-label="Buka AI Copilot"
         >
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M12 3v3m0 12v3m9-9h-3M6 12H3m14.5-6.5l-2 2m-7 7l-2 2m11 0l-2-2m-7-7l-2-2M12 8a4 4 0 100 8 4 4 0 000-8z" />
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M12 3v3m0 12v3m9-9h-3M6 12H3m14.5-6.5l-2 2m-7 7l-2-2m-7-7l-2-2M12 8a4 4 0 100 8 4 4 0 000-8z" />
           </svg>
         </button>
       </div>
 
       <StockPanel
         ticker={ticker}
-        quote={quote}
+        quote={displayQuote}
         series={series}
         period={period}
         loading={loading}
@@ -190,7 +211,7 @@ export function DashboardPanel({
             chartType={chartType}
             active={active}
             params={params}
-            livePrice={livePrice}
+            livePrice={displayPrice}
           />
         ) : null}
       </div>
@@ -229,7 +250,7 @@ export function DashboardPanel({
         </div>
       </div>
 
-      <StockTabs ticker={ticker} />
+      <StockTabs ticker={ticker} liveTrades={live.trades} liveConnected={live.connected} />
     </div>
   );
 }
