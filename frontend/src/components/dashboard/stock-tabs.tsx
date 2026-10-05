@@ -1,7 +1,11 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import type { NewsItem } from "@/lib/chat";
 import { KeyStatsPanel } from "./key-stats-panel";
+import { NewsPanel } from "./news-panel";
+import { NewsReader } from "./news-reader";
+import { OverviewPanel } from "./overview-panel";
 
 interface TabDef {
   id: string;
@@ -18,17 +22,21 @@ const TABS: TabDef[] = [
   { id: "insider", label: "Insider" },
   { id: "corp-action", label: "Corp. Action", disabled: true },
   { id: "profile", label: "Profile" },
+  { id: "news", label: "News" },
 ];
 
 export function StockTabs({ ticker }: { ticker: string }) {
   const [tab, setTab] = useState<string | null>(null);
+  const [article, setArticle] = useState<NewsItem | null>(null);
 
   useEffect(() => {
     setTab(null);
+    setArticle(null);
   }, [ticker]);
 
   const click = (id: string) => setTab((prev) => (prev === id ? null : id));
   const active = TABS.find((t) => t.id === tab);
+  const openNews = () => setTab("news");
 
   return (
     <div className="px-4 pb-3">
@@ -55,13 +63,32 @@ export function StockTabs({ ticker }: { ticker: string }) {
         })}
       </div>
 
-      {tab === "key-stats" ? (
+      {tab === "overview" ? (
+        <OverviewPanel
+          ticker={ticker}
+          onOpenArticle={setArticle}
+          onOpenNews={openNews}
+        />
+      ) : tab === "key-stats" ? (
         <KeyStatsPanel ticker={ticker} />
+      ) : tab === "news" ? (
+        <NewsPanel ticker={ticker} onOpenArticle={setArticle} />
       ) : active ? (
         <div className="mt-2 rounded-lg border border-border bg-surface-1 px-3 py-6 text-center text-xs text-text-muted">
           Konten {active.label} — segera
         </div>
       ) : null}
+
+      {article && (
+        <NewsReader
+          item={article}
+          onClose={() => setArticle(null)}
+          onKeepReading={() => {
+            setArticle(null);
+            openNews();
+          }}
+        />
+      )}
     </div>
   );
 }
