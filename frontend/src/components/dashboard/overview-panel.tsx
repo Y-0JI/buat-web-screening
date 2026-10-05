@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   fmtCompact,
   fmtRp,
@@ -14,6 +14,7 @@ import {
   type OrderFlowData,
 } from "@/lib/chat";
 import { BrokerSummaryCard } from "../chat/broker-summary";
+import type { LiveTrade } from "@/lib/live";
 import { NewsCards } from "./news-cards";
 
 const flowCache = new Map<string, OrderFlowData | null>();
@@ -52,11 +53,18 @@ interface Props {
   ticker: string;
   onOpenArticle: (item: NewsItem) => void;
   onOpenNews: () => void;
+  liveTrades: LiveTrade[];
+  liveConnected: boolean;
 }
 
-export function OverviewPanel({ ticker, onOpenArticle, onOpenNews }: Props) {
+export function OverviewPanel({ ticker, onOpenArticle, onOpenNews, liveTrades, liveConnected }: Props) {
   const [flow, setFlow] = useState<OrderFlowData | null | undefined>(() =>
     flowCache.has(ticker) ? flowCache.get(ticker) ?? null : undefined
+  );
+  const rows = useMemo(
+    () =>
+      (liveTrades.length ? liveTrades : (flow?.rows ?? [])).slice(0, 50),
+    [liveTrades, flow]
   );
   const [brokers, setBrokers] = useState<BrokerSummary[] | null>(null);
   const [news, setNews] = useState<NewsItem[] | undefined>(undefined);
@@ -102,7 +110,15 @@ export function OverviewPanel({ ticker, onOpenArticle, onOpenNews }: Props) {
     <div className="mt-2 space-y-3 pb-1">
       <section className="rounded-lg border border-border bg-surface-1 px-3 py-2.5">
         <div className="flex items-center gap-2 flex-wrap mb-2">
-          <h4 className="text-xs font-bold text-text-primary mr-auto">Done Details</h4>
+          <h4 className="text-xs font-bold text-text-primary mr-auto">
+            Done Details{" "}
+            {liveConnected && (
+              <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-500">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                LIVE
+              </span>
+            )}
+          </h4>
           {flow?.date && (
             <span className="text-[11px] text-text-muted">
               Tanggal <span className="text-text-primary">{flow.date}</span>
@@ -134,7 +150,7 @@ export function OverviewPanel({ ticker, onOpenArticle, onOpenNews }: Props) {
                 </tr>
               </thead>
               <tbody className="divide-y divide-border/60">
-                {flow.rows.map((r, i) => (
+                {rows.map((r, i) => (
                   <tr key={`${r.time}-${i}`}>
                     <td className="py-1.5 px-2 text-text-secondary tabular-nums whitespace-nowrap">{r.time || "-"}</td>
                     <td className="py-1.5 px-2"><ActionBadge action={r.action} /></td>

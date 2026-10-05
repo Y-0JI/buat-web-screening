@@ -19,6 +19,7 @@ from app.routers.accumulation import router as accumulation_router
 from app.routers.chat import router as chat_router
 from app.routers.fundamentals import router as fundamentals_router
 from app.routers.history import router as history_router
+from app.routers.live import router as live_router
 from app.routers.models import router as models_router
 from app.routers.news import router as news_router
 from app.routers.order_flow import router as order_flow_router
@@ -57,6 +58,7 @@ register_exception_handlers(app)
 
 app.include_router(chat_router)
 app.include_router(history_router)
+app.include_router(live_router)
 app.include_router(broker_summary_router)
 app.include_router(fundamentals_router)
 app.include_router(models_router)
