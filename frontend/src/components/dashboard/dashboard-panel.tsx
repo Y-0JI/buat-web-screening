@@ -170,6 +170,8 @@ export function DashboardPanel({
               : quote.change,
         }
       : quote;
+  // Indeks tidak punya lot/value di quote -> data agregat datang dari history.
+  const isIndexQuote = (quote?.lot ?? null) === 0 && (quote?.value ?? null) === 0;
 
   if (!ready) return null;
 
@@ -250,7 +252,7 @@ export function DashboardPanel({
         </div>
       </div>
 
-      <StockTabs ticker={ticker} liveTrades={live.trades} liveConnected={live.connected} />
+      <StockTabs ticker={ticker} liveTrades={live.trades} liveConnected={live.connected} isIndex={isIndexQuote} />
     </div>
   );
 }
