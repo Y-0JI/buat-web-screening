@@ -29,15 +29,22 @@ async def _resolve_name(code: str) -> Optional[str]:
 
 
 @router.get("/news/{ticker}")
-async def news_list(ticker: str, limit: int = 20):
+async def news_list(ticker: str, limit: int = 100, page: int = 1, per_page: int = 15):
     code = ticker.upper()
     name = await _resolve_name(code)
-    items = await news_provider.fetch_news(code, name=name, limit=limit)
+    pool = await news_provider.fetch_news(code, name=name, limit=200)
+    per_page = max(1, min(int(per_page or 15), 50))
+    page = max(1, int(page or 1))
+    start = (page - 1) * per_page
+    items = pool[start:start + per_page]
     return {
-        "success": bool(items),
+        "success": True,
         "ticker": code,
         "data": items,
-        "error": None if items else "Belum ada berita untuk emiten ini di feed yang dipantau.",
+        "page": page,
+        "per_page": per_page,
+        "has_more": start + per_page < len(pool),
+        "error": None if items or page > 1 else "Belum ada berita untuk emiten ini di sumber yang dipantau.",
     }
 
 

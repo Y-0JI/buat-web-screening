@@ -426,13 +426,20 @@ export interface ArticleData {
 
 export async function getNews(
   ticker: string,
-  limit = 20
-): Promise<{ items: NewsItem[]; error: string | null }> {
+  opts: { page?: number; perPage?: number } = {}
+): Promise<{ items: NewsItem[]; hasMore: boolean; error: string | null }> {
+  const q = new URLSearchParams();
+  if (opts.page) q.set("page", String(opts.page));
+  if (opts.perPage) q.set("per_page", String(opts.perPage));
   const res = await fetch(
-    `${API_BASE}/api/news/${encodeURIComponent(ticker)}?limit=${limit}`
+    `${API_BASE}/api/news/${encodeURIComponent(ticker)}?${q.toString()}`
   );
   const data = await jsonOrThrow(res);
-  return { items: data.success ? (data.data as NewsItem[]) : [], error: data.success ? null : (data.error as string) || null };
+  return {
+    items: data.success ? (data.data as NewsItem[]) : [],
+    hasMore: Boolean(data.has_more),
+    error: data.success ? null : (data.error as string) || null,
+  };
 }
 
 export async function getArticle(url: string): Promise<ArticleData | null> {

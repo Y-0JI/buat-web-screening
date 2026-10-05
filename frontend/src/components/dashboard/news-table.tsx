@@ -1,9 +1,6 @@
 "use client";
 
-import { useState } from "react";
 import type { NewsItem } from "@/lib/chat";
-
-const VISIBLE_DEFAULT = 15;
 
 function fmtDate(published: string | null): string {
   if (!published) return "-";
@@ -16,15 +13,16 @@ interface Props {
   ticker: string;
   items: NewsItem[];
   onOpen: (item: NewsItem) => void;
+  hasMore: boolean;
+  loading: boolean;
+  onMore: () => void;
 }
 
-export function NewsTable({ ticker, items, onOpen }: Props) {
-  const [expanded, setExpanded] = useState(false);
-  const shown = expanded ? items : items.slice(0, VISIBLE_DEFAULT);
-  if (!items.length) {
+export function NewsTable({ ticker, items, onOpen, hasMore, loading, onMore }: Props) {
+  if (!items.length && !loading) {
     return (
       <div className="rounded-lg border border-border bg-surface-1 px-3 py-6 text-center text-xs text-text-muted">
-        Belum ada berita {ticker} di feed yang dipantau.
+        Belum ada berita {ticker} di sumber yang dipantau.
       </div>
     );
   }
@@ -34,13 +32,14 @@ export function NewsTable({ ticker, items, onOpen }: Props) {
         <span className="px-3 py-1 rounded-full text-xs font-semibold bg-surface-2 text-text-primary">
           All
         </span>
-        {!expanded && items.length > VISIBLE_DEFAULT && (
+        {hasMore && (
           <button
             type="button"
-            onClick={() => setExpanded(true)}
-            className="px-3 py-1 text-xs text-text-secondary hover:text-text-primary transition-colors"
+            onClick={onMore}
+            disabled={loading}
+            className="px-3 py-1 text-xs text-text-secondary hover:text-text-primary transition-colors disabled:opacity-50"
           >
-            More in News Flow ›
+            {loading ? "Memuat…" : "More in News Flow ›"}
           </button>
         )}
       </div>
@@ -55,7 +54,7 @@ export function NewsTable({ ticker, items, onOpen }: Props) {
             </tr>
           </thead>
           <tbody className="divide-y divide-border/60">
-            {shown.map((it) => (
+            {items.map((it) => (
               <tr key={it.url}>
                 <td className="py-2.5 pr-3 text-xs text-text-muted whitespace-nowrap">
                   {fmtDate(it.published)}
