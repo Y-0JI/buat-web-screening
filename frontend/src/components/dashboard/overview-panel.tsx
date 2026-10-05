@@ -160,7 +160,7 @@ export function OverviewPanel({ ticker, onOpenArticle, onOpenNews }: Props) {
         <button
           type="button"
           onClick={onOpenNews}
-          className="flex items-center gap-1 mb-1 text-sm font-bold text-text-primary hover:text-emerald-500 transition-colors"
+          className="flex items-center gap-1 mb-1 text-lg font-bold text-text-primary hover:text-emerald-500 transition-colors"
         >
           News <span aria-hidden>›</span>
         </button>

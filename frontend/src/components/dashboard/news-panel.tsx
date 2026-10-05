@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { getNews, type NewsItem } from "@/lib/chat";
-import { NewsCards } from "./news-cards";
+import { NewsTable } from "./news-table";
 
 const cache = new Map<string, NewsItem[]>();
 
@@ -28,7 +28,7 @@ export function NewsPanel({ ticker, onOpenArticle }: Props) {
     setError(null);
     void (async () => {
       try {
-        const res = await getNews(ticker, 30);
+        const res = await getNews(ticker, 50);
         cache.set(ticker, res.items);
         if (cancelled) return;
         setItems(res.items);
@@ -44,6 +44,7 @@ export function NewsPanel({ ticker, onOpenArticle }: Props) {
 
   return (
     <div className="mt-2">
+      <h4 className="text-base font-bold text-text-primary mb-2">Latest headlines</h4>
       {items === undefined && !error ? (
         <div className="rounded-lg border border-border bg-surface-1 px-3 py-6 text-center text-xs text-text-muted">
           Memuat berita…
@@ -53,7 +54,7 @@ export function NewsPanel({ ticker, onOpenArticle }: Props) {
           {error}
         </div>
       ) : (
-        <NewsCards items={items || []} onOpen={onOpenArticle} columns={3} />
+        <NewsTable ticker={ticker} items={items || []} onOpen={onOpenArticle} />
       )}
     </div>
   );
