@@ -1,0 +1,86 @@
+"use client";
+
+import type { NewsItem } from "@/lib/chat";
+
+function fmtDate(published: string | null): string {
+  if (!published) return "-";
+  const d = new Date(published);
+  if (Number.isNaN(d.getTime())) return published;
+  return d.toLocaleDateString("en-GB", { day: "numeric", month: "short" });
+}
+
+interface Props {
+  ticker: string;
+  items: NewsItem[];
+  onOpen: (item: NewsItem) => void;
+  hasMore: boolean;
+  loading: boolean;
+  onMore: () => void;
+}
+
+export function NewsTable({ ticker, items, onOpen, hasMore, loading, onMore }: Props) {
+  if (!items.length && !loading) {
+    return (
+      <div className="rounded-lg border border-border bg-surface-1 px-3 py-6 text-center text-xs text-text-muted">
+        Belum ada berita {ticker} di sumber yang dipantau.
+      </div>
+    );
+  }
+  return (
+    <div className="rounded-lg border border-border bg-surface-1 px-3 py-2.5">
+      <div className="flex items-center gap-2 flex-wrap mb-1.5">
+        <span className="px-3 py-1 rounded-full text-xs font-semibold bg-surface-2 text-text-primary">
+          All
+        </span>
+        {hasMore && (
+          <button
+            type="button"
+            onClick={onMore}
+            disabled={loading}
+            className="px-3 py-1 text-xs text-text-secondary hover:text-text-primary transition-colors disabled:opacity-50"
+          >
+            {loading ? "Memuat…" : "More in News Flow ›"}
+          </button>
+        )}
+      </div>
+      <div className="max-h-[480px] overflow-y-auto">
+        <table className="w-full text-[13px]">
+          <thead className="sticky top-0 bg-surface-1">
+            <tr className="text-xs text-text-muted">
+              <td className="py-1.5 pr-2 whitespace-nowrap">Time</td>
+              <td className="py-1.5 pr-2">Instrument</td>
+              <td className="py-1.5 pr-2">Headline</td>
+              <td className="py-1.5 text-right">Provider</td>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-border/60">
+            {items.map((it) => (
+              <tr key={it.url}>
+                <td className="py-2.5 pr-3 text-xs text-text-muted whitespace-nowrap">
+                  {fmtDate(it.published)}
+                </td>
+                <td className="py-2.5 pr-3">
+                  <span className="inline-block px-1.5 py-0.5 rounded text-[10px] font-bold bg-surface-2 text-text-primary">
+                    {ticker}
+                  </span>
+                </td>
+                <td className="py-2.5 pr-3">
+                  <button
+                    type="button"
+                    onClick={() => onOpen(it)}
+                    className="text-left font-semibold text-text-primary hover:text-emerald-500 transition-colors"
+                  >
+                    {it.title}
+                  </button>
+                </td>
+                <td className="py-2.5 text-right text-xs text-text-muted whitespace-nowrap">
+                  {it.source || "-"}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}

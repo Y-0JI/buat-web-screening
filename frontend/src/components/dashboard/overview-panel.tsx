@@ -77,7 +77,7 @@ export function OverviewPanel({ ticker, onOpenArticle, onOpenNews }: Props) {
         const [of, bq, nq] = await Promise.all([
           getOrderFlow(ticker, { limit: 50 }).catch(() => null),
           getBrokerSummary(ticker, { flow: "all", net: true, limit: 50, level_limit: 10 }).catch(() => null),
-          getNews(ticker, 9).catch(() => ({ items: [] as NewsItem[], error: null })),
+          getNews(ticker, { perPage: 9 }).catch(() => ({ items: [] as NewsItem[], hasMore: false, error: null })),
         ]);
         if (cancelled) return;
         flowCache.set(ticker, of);
@@ -160,7 +160,7 @@ export function OverviewPanel({ ticker, onOpenArticle, onOpenNews }: Props) {
         <button
           type="button"
           onClick={onOpenNews}
-          className="flex items-center gap-1 mb-1 text-sm font-bold text-text-primary hover:text-emerald-500 transition-colors"
+          className="flex items-center gap-1 mb-1 text-lg font-bold text-text-primary hover:text-emerald-500 transition-colors"
         >
           News <span aria-hidden>›</span>
         </button>

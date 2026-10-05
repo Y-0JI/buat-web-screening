@@ -1,18 +1,27 @@
-"""Agregator berita emiten dari RSS penerbit Indonesia + ekstraksi artikel.
+"""Agregator berita emiten dari RSS penerbit Indonesia + Bing News + ekstraksi artikel.
 
-Sumber: feed RSS yang dapat diakses tanpa kunci (CNBC Indonesia, Detik
-Finance, Tempo Bisnis, Katadata, Antara Ekonomi). Item difilter bila judul
-atau deskripsi memuat kode saham / nama emiten. Ekstraksi teks memakai
-`trafilatura` (hanya domain penerbit yang diizinkan -> anti SSRF).
+Sumber daftar:
+1. Bing News RSS (per emiten, dipaging): jangkauan sampai ~1 tahun, URL
+   penerbit asli diambil dari parameter `url=` pada link.
+2. Feed RSS penerbit (CNBC Indonesia, Detik Finance, Tempo Bisnis, Katadata,
+   Antara Ekonomi): berita terbaru, langsung terbaca.
+
+Item difilter bila judul/snippet memuat kode saham / nama emiten, dibuang
+bila lebih tua dari 365 hari, diurut terbaru dulu. Ekstraksi teks memakai
+`trafilatura` dengan guard SSRF (blokir host privat/loopback/link-local).
 """
 
+import email.utils
 import html
+import asyncio
+import ipaddress
 import logging
 import re
 import time
 import xml.etree.ElementTree as ET
+from datetime import datetime, timezone
 from typing import Optional
-from urllib.parse import urlparse
+from urllib.parse import parse_qs, unquote, urlparse
 
 import httpx
 
@@ -29,23 +38,12 @@ FEEDS: list[tuple[str, str]] = [
     ("https://www.antaranews.com/rss/ekonomi", "Antara Ekonomi"),
 ]
 
-# Host yang boleh diekstrak artikelnya (SSRF guard).
-ALLOWED_HOSTS = {
-    "www.cnbcindonesia.com",
-    "cnbcindonesia.com",
-    "finance.detik.com",
-    "www.detik.com",
-    "detik.com",
-    "rss.tempo.co",
-    "bisnis.tempo.co",
-    "www.tempo.co",
-    "katadata.co.id",
-    "www.katadata.co.id",
-    "www.antaranews.com",
-    "antaranews.com",
-}
+_BING_URL = "https://www.bing.com/news/search"
+_BING_MAX_PAGES = 7
+_BING_PAGE_SIZE = 15
+_MAX_AGE_DAYS = 365
 
-_FEED_TTL = 300
+_FEED_TTL = 120
 _ARTICLE_TTL = 3600
 
 _feed_cache: dict = {"ts": 0.0, "items": []}
@@ -111,10 +109,75 @@ def _name_matchers(name: Optional[str]) -> tuple[str, list[str], list[str]]:
     return clean, acronyms, tokens
 
 
-async def fetch_news(
-    code: str, name: Optional[str] = None, limit: int = 20
+def _parse_pubdate(value: Optional[str]) -> Optional[datetime]:
+    if not value:
+        return None
+    try:
+        dt = email.utils.parsedate_to_datetime(value)
+    except (TypeError, ValueError):
+        return None
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt
+
+
+def _bing_real_url(link: str) -> str:
+    """Ambil URL penerbit asli dari parameter `url=` link Bing."""
+    try:
+        qs = parse_qs(urlparse(link).query)
+        raw = (qs.get("url") or [""])[0]
+        return unquote(raw).strip() or link
+    except (TypeError, ValueError):
+        return link
+
+
+def _parse_bing(content: bytes) -> list[dict]:
+    """Parse RSS Bing News; source dari elemen `Source`."""
+    try:
+        root = ET.fromstring(content)
+    except ET.ParseError:
+        return []
+    out = []
+    ns = {"ns": "https://www.bing.com/news"}
+    for it in root.findall(".//item"):
+        link = (it.findtext("link") or "").strip()
+        if not link:
+            continue
+        src = it.findtext("ns:Source", namespaces=ns) or it.findtext("source")
+        out.append({
+            "title": (it.findtext("title") or "").strip(),
+            "url": _bing_real_url(link),
+            "published": (it.findtext("pubDate") or "").strip() or None,
+            "snippet": _strip_html(it.findtext("description") or "")[:300] or None,
+            "source": (src or "").strip() or "Bing News",
+        })
+    return out
+
+
+async def _fetch_bing_page(
+    client: httpx.AsyncClient, query: str, first: int
 ) -> list[dict]:
-    """Ambil berita dari semua feed, filter yang benar-benar menyebut emiten."""
+    try:
+        resp = await client.get(
+            _BING_URL,
+            params={"q": query, "format": "RSS", "count": "100", "first": str(first)},
+            headers={"User-Agent": _NEWS_UA},
+        )
+        resp.raise_for_status()
+        return _parse_bing(resp.content)
+    except Exception as e:  # noqa: BLE001
+        logger.warning("Gagal mengambil Bing page %s: %s", first, e)
+        return []
+
+
+async def fetch_news(
+    code: str, name: Optional[str] = None, limit: int = 100
+) -> list[dict]:
+    """Ambil berita dari Bing (dipaging) + feed penerbit, maks 1 tahun.
+
+    Kembalikan pool penuh (terbaru dulu); pemotongan halaman dilakukan
+    pemanggil/route agar tombol 'More' bisa memuat batch lama.
+    """
     now = time.time()
     if _feed_cache["items"] and now - _feed_cache["ts"] < _FEED_TTL:
         pool = list(_feed_cache["items"])
@@ -123,15 +186,28 @@ async def fetch_news(
         async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
             for url, source in FEEDS:
                 pool.extend(await _fetch_feed(client, url, source))
+            pages = await asyncio.gather(*[
+                _fetch_bing_page(client, code, page * _BING_PAGE_SIZE)
+                for page in range(_BING_MAX_PAGES)
+            ])
+            for rows in pages:
+                if rows:
+                    pool.extend(rows)
+                else:
+                    break
         _feed_cache["ts"] = now
         _feed_cache["items"] = pool
 
+    cutoff = datetime.now(timezone.utc).timestamp() - _MAX_AGE_DAYS * 86400
     code_l = code.lower()
     full, acronyms, tokens = _name_matchers(name)
     hits = []
     seen_urls = set()
     for it in pool:
         if it["url"] in seen_urls:
+            continue
+        dt = _parse_pubdate(it.get("published"))
+        if dt is not None and dt.timestamp() < cutoff:
             continue
         hay = f"{it['title']} {it['snippet'] or ''}".lower()
         if (
@@ -141,21 +217,36 @@ async def fetch_news(
             or (len(tokens) >= 2 and all(t in hay for t in tokens))
         ):
             seen_urls.add(it["url"])
-            hits.append(it)
-    return hits[: max(1, min(int(limit or 20), 50))]
+            hits.append((dt.timestamp() if dt else 0.0, it))
+    hits.sort(key=lambda x: x[0], reverse=True)
+    return [it for _, it in hits][: max(1, min(int(limit or 100), 200))]
 
 
 _article_cache: dict[str, dict] = {}
 
 
-def article_allowed(url: str) -> bool:
+def _host_is_private(host: str) -> bool:
+    host = (host or "").lower().strip().rstrip(".")
+    if host in {"localhost"} or host.endswith((".localhost", ".internal", ".local", ".lan")):
+        return True
     try:
-        host = (urlparse(url).hostname or "").lower()
+        return ipaddress.ip_address(host).is_private or ipaddress.ip_address(host).is_loopback or ipaddress.ip_address(host).is_link_local or ipaddress.ip_address(host).is_multicast or ipaddress.ip_address(host).is_reserved
+    except ValueError:
+        return False
+
+
+def article_allowed(url: str) -> bool:
+    """Tolak URL non-http dan host privat/loopback/link-local (anti SSRF)."""
+    try:
+        parsed = urlparse(url)
+        if parsed.scheme not in {"http", "https"}:
+            return False
+        host = (parsed.hostname or "").lower()
     except (TypeError, ValueError):
         return False
-    return host in ALLOWED_HOSTS or any(
-        host.endswith(f".{h}") for h in ALLOWED_HOSTS
-    )
+    if not host:
+        return False
+    return not _host_is_private(host)
 
 
 async def fetch_article(url: str) -> Optional[dict]:

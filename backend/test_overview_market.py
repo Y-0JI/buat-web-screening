@@ -84,7 +84,13 @@ def test_news_feed_parse_and_filter():
         return news_provider._parse_feed(SAMPLE_RSS.encode(), "CNBC Indonesia")
 
     real_fetch = news_provider._fetch_feed
+    real_bing = news_provider._fetch_bing_page
     news_provider._fetch_feed = fake_fetch
+
+    async def fake_bing(client, query, first):
+        return []
+
+    news_provider._fetch_bing_page = fake_bing
     news_provider._feed_cache["items"] = []
     news_provider._feed_cache["ts"] = 0.0
     try:
@@ -94,15 +100,43 @@ def test_news_feed_parse_and_filter():
         assert items[0]["snippet"] == "Labanya naik."
     finally:
         news_provider._fetch_feed = real_fetch
+        news_provider._fetch_bing_page = real_bing
         news_provider._feed_cache["items"] = []
 
 
 def test_article_ssrf_guard():
     assert article_allowed("https://www.cnbcindonesia.com/berita/x")
-    assert article_allowed("https://sub.detark.com/x") is False
-    assert article_allowed("https://evil.com/?next=https://www.cnbcindonesia.com") is False
+    assert article_allowed("https://investor.id/market/x")
+    assert article_allowed("http://127.0.0.1/berita") is False
+    assert article_allowed("http://10.1.2.3/x") is False
+    assert article_allowed("http://192.168.1.5/x") is False
+    assert article_allowed("http://localhost:8000/x") is False
+    assert article_allowed("http://169.254.169.254/") is False
+    assert article_allowed("ftp://cnbcindonesia.com/x") is False
     assert article_allowed("not-a-url") is False
-    assert asyncio.run(fetch_article("https://evil.com/x")) is None
+    assert asyncio.run(fetch_article("http://127.0.0.1/x")) is None
+
+
+def test_bing_real_url_and_age_cap():
+    raw = (
+        "http://www.bing.com/news/apiclick.aspx?ref=FexRss&aid=&tid=abc"
+        "&url=https%3a%2f%2finvestor.id%2fmarket%2f1%2fx&c=1&mkt=en-id"
+    )
+    assert news_provider._bing_real_url(raw) == "https://investor.id/market/1/x"
+    xml = (
+        '<?xml version="1.0"?><rss version="2.0"><channel>'
+        "<item><title>BBCA naik</title><link>http://www.bing.com/news/apiclick.aspx?ref=FexRss&amp;aid=&amp;tid=abc&amp;url=https%3a%2f%2finvestor.id%2fmarket%2f1%2fx&amp;c=1&amp;mkt=en-id</link>"
+        "<pubDate>Mon, 05 Oct 2026 10:00:00 GMT</pubDate>"
+        "<description>Naik.</description></item>"
+        '<item><title>BBCA lama</title><link>https://www.cnbcindonesia.com/berita/tua</link>'
+        "<pubDate>Mon, 01 Jan 2024 10:00:00 GMT</pubDate>"
+        "<description>Tua.</description></item>"
+        "</channel></rss>"
+    )
+    rows = news_provider._parse_bing(xml.encode())
+    assert len(rows) == 2
+    assert rows[0]["url"] == "https://investor.id/market/1/x"
+    assert rows[0]["source"] == "Bing News"
 
 
 def test_news_route_uses_provider():
@@ -125,6 +159,7 @@ def test_news_route_uses_provider():
         assert r.status_code == 200, r.text
         data = r.json()
         assert data["success"] and data["data"][0]["title"] == "BBCA naik"
+        assert data["page"] == 1 and data["has_more"] is False
     finally:
         news_mod.news_provider.fetch_news = real_list
         news_mod._resolve_name = real_name
@@ -135,6 +170,7 @@ def main():
     test_order_flow_route_clamps()
     test_news_feed_parse_and_filter()
     test_article_ssrf_guard()
+    test_bing_real_url_and_age_cap()
     test_news_route_uses_provider()
     print("OK: test_overview_market lolos")
 
