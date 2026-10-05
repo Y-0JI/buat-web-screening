@@ -127,6 +127,24 @@ export function DashboardPanel({
     load(ticker, period);
   }, [ticker, period, load]);
 
+  const livePrice = quote?.last_price ?? null;
+  const marketOpen = quote == null || quote.market_state !== "closed";
+
+  useEffect(() => {
+    if (!marketOpen) return;
+    const tick = async () => {
+      if (document.visibilityState !== "visible") return;
+      try {
+        const q = await getQuote(ticker);
+        if (q) setQuote(q);
+      } catch {
+        /* diamkan, coba lagi interval berikut */
+      }
+    };
+    const id = setInterval(tick, 10_000);
+    return () => clearInterval(id);
+  }, [ticker, marketOpen]);
+
   const toggle = (id: IndicatorId) =>
     setActive((prev) =>
       prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
@@ -172,6 +190,7 @@ export function DashboardPanel({
             chartType={chartType}
             active={active}
             params={params}
+            livePrice={livePrice}
           />
         ) : null}
       </div>
