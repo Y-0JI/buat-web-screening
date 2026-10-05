@@ -1,18 +1,36 @@
 """Router quote saham — harga terakhir + nama untuk header dashboard."""
 
 import time
+from datetime import datetime, timedelta, timezone
+from typing import Optional
 
 from fastapi import APIRouter
 
-from app.providers.idx_edge_provider import IdxEdgeProvider
+from app.providers.idx_edge_provider import IdxEdgeProvider, history_series
 
 router = APIRouter(prefix="/api", tags=["quote"])
 
 _NAME_TTL = 24 * 3600
 _name_cache: dict[str, tuple[float, str | None]] = {}
 
+# Cache close sesi sebelumnya per ticker per hari (1 request history/hari).
+_prev_cache: dict[str, tuple[str, Optional[float]]] = {}
 
-def quote_payload(code: str, price: dict | None, name: str | None) -> dict | None:
+# Tracker O/H/L sesi hari ini dari harga live (reset harian, perkiraan).
+_session_cache: dict[str, tuple[str, dict]] = {}
+
+
+def _today_wib() -> str:
+    return (datetime.now(timezone.utc) + timedelta(hours=7)).date().isoformat()
+
+
+def quote_payload(
+    code: str,
+    price: dict | None,
+    name: str | None,
+    prev_close: Optional[float] = None,
+    session: Optional[dict] = None,
+) -> dict | None:
     """Normalisasi respons /api/price + nama → struktur untuk header UI."""
     if not price:
         return None
@@ -35,6 +53,11 @@ def quote_payload(code: str, price: dict | None, name: str | None) -> dict | Non
         freq = float(freq) if freq is not None else None
     except (TypeError, ValueError):
         freq = None
+    change = change_pct = None
+    if prev_close:
+        change = last - prev_close
+        change_pct = change / prev_close * 100
+    session = session or {}
     return {
         "ticker": code,
         "name": name,
@@ -44,7 +67,53 @@ def quote_payload(code: str, price: dict | None, name: str | None) -> dict | Non
         "freq": freq,
         "market_state": price.get("market_state"),
         "market_label": price.get("market_label"),
+        "prev_close": prev_close,
+        "change": change,
+        "change_pct": change_pct,
+        "day_open": session.get("open"),
+        "day_high": session.get("high"),
+        "day_low": session.get("low"),
+        "day_volume": lot,
     }
+
+
+async def prev_close_of(provider: IdxEdgeProvider, code: str) -> Optional[float]:
+    """Close bar harian terakhir dengan date < hari ini (WIB = close sesi lalu)."""
+    today = _today_wib()
+    cached = _prev_cache.get(code)
+    if cached and cached[0] == today:
+        return cached[1]
+    prev = None
+    try:
+        # API menolak limit < 20; ambil 20 bar terakhir lalu pilih yang di bawah hari ini.
+        rows = await provider.fetch_history(code, limit=20)
+        data = history_series(rows)
+        for row in data:
+            if str(row.get("date") or "") < today:
+                prev = row.get("close")
+        if prev is not None:
+            try:
+                prev = float(prev)
+            except (TypeError, ValueError):
+                prev = None
+    except Exception:  # noqa: BLE001 — pelengkap, bukan fatal
+        prev = None
+    _prev_cache[code] = (today, prev)
+    return prev
+
+
+def track_session(code: str, last: float) -> dict:
+    """Lacak O/H/L sesi hari ini dari harga live (reset tiap ganti hari)."""
+    today = _today_wib()
+    cached = _session_cache.get(code)
+    if not cached or cached[0] != today:
+        session = {"open": last, "high": last, "low": last}
+    else:
+        session = cached[1]
+        session["high"] = max(session.get("high", last), last)
+        session["low"] = min(session.get("low", last), last)
+    _session_cache[code] = (today, session)
+    return session
 
 
 async def resolve_name(provider: IdxEdgeProvider, code: str) -> str | None:
@@ -77,5 +146,12 @@ async def get_quote(ticker: str):
     else:
         name = await resolve_name(provider, code)
         _name_cache[code] = (time.time(), name)
-    payload = quote_payload(code, price, name)
+    prev = await prev_close_of(provider, code)
+    session: dict = {}
+    try:
+        last = float((price or {}).get("last_price") or 0)
+        session = track_session(code, last)
+    except (TypeError, ValueError):
+        session = {}
+    payload = quote_payload(code, price, name, prev, session)
     return {"success": payload is not None, "ticker": code, "data": payload}
