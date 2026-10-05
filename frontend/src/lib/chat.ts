@@ -63,6 +63,13 @@ export interface QuoteData {
   freq: number | null;
   market_state: string | null;
   market_label: string | null;
+  prev_close?: number | null;
+  change?: number | null;
+  change_pct?: number | null;
+  day_open?: number | null;
+  day_high?: number | null;
+  day_low?: number | null;
+  day_volume?: number | null;
 }
 
 export const FALLBACK_TICKER = "BBCA";

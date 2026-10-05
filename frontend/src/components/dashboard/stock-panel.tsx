@@ -30,20 +30,38 @@ export function StockPanel({ ticker, quote, series, period, loading, error }: Pr
   const prev = series.length > 1 ? series[series.length - 2] : null;
 
   const price = quote?.last_price ?? last?.close ?? null;
-  let change: number | null = null;
-  let changePct: number | null = null;
-  if (price != null && prev?.close) {
-    change = price - prev.close;
-    changePct = (change / prev.close) * 100;
-  } else if (last?.change != null) {
-    change = last.change;
-    changePct = last.change_pct ?? null;
+  let change: number | null = quote?.change ?? null;
+  let changePct: number | null = quote?.change_pct ?? null;
+  if (change == null || changePct == null) {
+    if (price != null && prev?.close) {
+      change = price - prev.close;
+      changePct = (change / prev.close) * 100;
+    } else if (last?.change != null) {
+      change = last.change;
+      changePct = last.change_pct ?? null;
+    }
   }
 
   const down = (change ?? 0) < 0;
   const chgColor = down ? "text-red-500" : "text-emerald-500";
 
-  const vol = last?.volume ?? null;
+  const day = quote?.day_open != null || quote?.day_high != null || quote?.day_low != null;
+  const ohlc = day
+    ? ([
+        ["O", quote?.day_open],
+        ["H", quote?.day_high],
+        ["L", quote?.day_low],
+        ["C", price],
+      ] as const)
+    : last
+      ? ([
+          ["O", last.open],
+          ["H", last.high],
+          ["L", last.low],
+          ["C", last.close],
+        ] as const)
+      : null;
+  const vol = quote?.day_volume ?? last?.volume ?? null;
   const lot = quote?.lot ?? (vol != null ? vol / 100 : null);
   const val = quote?.value ?? last?.value ?? null;
 
@@ -90,24 +108,17 @@ export function StockPanel({ ticker, quote, series, period, loading, error }: Pr
         </span>
       </div>
 
-      {last && (
+      {ohlc && (
         <div className="mt-1.5 flex gap-3.5 flex-wrap text-xs">
-          {(
-            [
-              ["O", last.open],
-              ["H", last.high],
-              ["L", last.low],
-              ["C", last.close],
-            ] as const
-          ).map(([label, v]) => (
+          {ohlc.map(([label, v]) => (
             <span key={label}>
               <span className="text-emerald-500">{label} </span>
-              <span className="text-text-primary">{fmtRp(v)}</span>
+              <span className="text-text-primary">{v != null ? fmtRp(v) : "-"}</span>
             </span>
           ))}
           <span>
             <span className="text-emerald-500">Vol </span>
-            <span className="text-text-primary">{fmtCompact(last.volume)}</span>
+            <span className="text-text-primary">{vol != null ? fmtCompact(vol) : "-"}</span>
           </span>
         </div>
       )}

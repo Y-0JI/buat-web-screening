@@ -78,11 +78,18 @@ def test_history_route_uses_period_limit():
 def test_quote_payload_and_route():
     price = {"last_price": 6100.0, "lot": 1290293.91, "value": 781124815800,
              "freq": 26154, "market_state": "closed", "market_label": "Market tutup"}
-    payload = quote_payload("BBCA", price, "Bank Central Asia Tbk.")
+    payload = quote_payload("BBCA", price, "Bank Central Asia Tbk.", 6000.0, {"open": 6100.0, "high": 6125.0, "low": 6075.0})
     assert payload is not None
     assert payload["ticker"] == "BBCA"
     assert payload["last_price"] == 6100.0
     assert payload["name"] == "Bank Central Asia Tbk."
+    assert payload["prev_close"] == 6000.0
+    assert payload["change"] == 100.0
+    assert abs(payload["change_pct"] - 100.0 / 6000.0 * 100) < 1e-9
+    assert payload["day_open"] == 6100.0
+    assert payload["day_high"] == 6125.0
+    assert payload["day_low"] == 6075.0
+    assert payload["day_volume"] == 1290293.91
     assert quote_payload("BBCA", None, None) is None
     assert quote_payload("BBCA", {"last_price": "rusak"}, None) is None
 
@@ -90,6 +97,12 @@ def test_quote_payload_and_route():
         url = str(request.url)
         if url.endswith("/api/price/BBCA"):
             return httpx.Response(200, json=price)
+        if "/api/history/BBCA" in url:
+            assert "limit=20" in url, url  # API menolak limit < 20
+            return httpx.Response(200, json={"rows": [
+                {"date": "2020-01-03", "open": 1, "high": 1, "low": 1, "close": 6000.0, "volume": 10},
+                {"date": "2020-01-02", "open": 1, "high": 1, "low": 1, "close": 5990.0, "volume": 10},
+            ]})
         if "/api/search" in url:
             return httpx.Response(200, json=[
                 {"stock_code": "BBCA", "stock_name": "Bank Central Asia Tbk."}])
@@ -98,6 +111,9 @@ def test_quote_payload_and_route():
     p, old = _provider(handler)
     real_quote = quote_mod.IdxEdgeProvider
     quote_mod.IdxEdgeProvider = lambda: p  # noqa: E731
+    quote_mod._prev_cache.clear()
+    quote_mod._session_cache.clear()
+    quote_mod._name_cache.clear()
     try:
         app = FastAPI()
         app.include_router(quote_router)
@@ -106,6 +122,9 @@ def test_quote_payload_and_route():
         data = r.json()
         assert data["success"] and data["data"]["last_price"] == 6100.0
         assert data["data"]["name"] == "Bank Central Asia Tbk."
+        assert data["data"]["prev_close"] == 6000.0
+        assert data["data"]["change"] == 100.0
+        assert data["data"]["day_open"] == 6100.0
     finally:
         quote_mod.IdxEdgeProvider = real_quote
         settings.idx_edge_api_key = old
