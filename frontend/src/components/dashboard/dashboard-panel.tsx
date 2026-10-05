@@ -55,10 +55,12 @@ export function DashboardPanel({
   ticker,
   onTicker,
   onOpenAi,
+  homeTick,
 }: {
   ticker: string;
   onTicker: (t: string) => void;
   onOpenAi?: () => void;
+  homeTick?: number;
 }) {
   const [period, setPeriod] = useState<Period>("1M");
   const [series, setSeries] = useState<HistoryPoint[]>([]);
@@ -138,6 +140,11 @@ export function DashboardPanel({
     load(ticker, period);
   }, [ticker, period, load]);
 
+  // Sinyal "pulang": paksa muat ulang walau ticker sudah sama.
+  useEffect(() => {
+    load(ticker, period);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [homeTick]);
   const marketOpen = quote == null || quote.market_state !== "closed";
   // WS tidak mengirim tick indeks -> indeks tetap pakai polling REST.
   const isIndex = (quote?.lot ?? null) === 0 && (quote?.value ?? null) === 0;
