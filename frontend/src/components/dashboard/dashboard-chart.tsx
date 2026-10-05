@@ -8,6 +8,9 @@ import {
   LineSeries,
   LineStyle,
   createChart,
+  type IChartApi,
+  type IPriceLine,
+  type ISeriesApi,
 } from "lightweight-charts";
 import type { HistoryPoint } from "@/lib/chat";
 import {
@@ -37,6 +40,7 @@ interface Props {
   chartType: ChartType;
   active: IndicatorId[];
   params: OverlayParams;
+  livePrice: number | null;
 }
 
 interface LegendRow {
@@ -49,8 +53,11 @@ function histColor(up: boolean): string {
   return up ? "rgba(34,197,94,0.45)" : "rgba(239,68,68,0.45)";
 }
 
-export function DashboardChart({ ticker, period, series, chartType, active, params }: Props) {
+export function DashboardChart({ ticker, period, series, chartType, active, params, livePrice }: Props) {
   const ref = useRef<HTMLDivElement>(null);
+  const mainSeriesRef = useRef<ISeriesApi<"Candlestick" | "Line"> | null>(null);
+  const priceLineRef = useRef<IPriceLine | null>(null);
+  const lastDateRef = useRef<string | null>(null);
   const { theme } = useTheme();
   const chrome = CHART_CHROME[theme];
 
@@ -128,33 +135,34 @@ export function DashboardChart({ ticker, period, series, chartType, active, para
     });
 
     if (chartType === "candlestick") {
-      instance
-        .addSeries(CandlestickSeries, {
-          upColor: "#22c55e",
-          downColor: "#ef4444",
-          borderVisible: false,
-          wickUpColor: "#22c55e",
-          wickDownColor: "#ef4444",
-        })
-        .setData(
-          points.map((p) => ({
-            time: p.date,
-            open: p.open,
-            high: p.high,
-            low: p.low,
-            close: p.close,
-          }))
-        );
+      const candles = instance.addSeries(CandlestickSeries, {
+        upColor: "#22c55e",
+        downColor: "#ef4444",
+        borderVisible: false,
+        wickUpColor: "#22c55e",
+        wickDownColor: "#ef4444",
+      });
+      candles.setData(
+        points.map((p) => ({
+          time: p.date,
+          open: p.open,
+          high: p.high,
+          low: p.low,
+          close: p.close,
+        }))
+      );
+      mainSeriesRef.current = candles;
     } else {
-      instance
-        .addSeries(LineSeries, {
-          color: "#22c55e",
-          lineWidth: 2,
-          priceLineVisible: false,
-          lastValueVisible: false,
-        })
-        .setData(points.map((p) => ({ time: p.date, value: p.close })));
+      const line = instance.addSeries(LineSeries, {
+        color: "#22c55e",
+        lineWidth: 2,
+        priceLineVisible: false,
+        lastValueVisible: false,
+      });
+      line.setData(points.map((p) => ({ time: p.date, value: p.close })));
+      mainSeriesRef.current = line;
     }
+    lastDateRef.current = points[points.length - 1].date;
 
     const overlay = (color: string, data: LinePoint[], dashed = false) => {
       if (!data.length) return;
@@ -265,6 +273,48 @@ export function DashboardChart({ ticker, period, series, chartType, active, para
       instance.remove();
     };
   }, [points, chartType, active, params, chrome, ticker, period]);
+
+  // Harga live: update candle terakhir + garis harga tanpa rebuild chart.
+  useEffect(() => {
+    const main = mainSeriesRef.current;
+    if (!main) return;
+    const prevLine = priceLineRef.current;
+    if (prevLine) {
+      try {
+        main.removePriceLine(prevLine);
+      } catch {
+        /* abaikan */
+      }
+      priceLineRef.current = null;
+    }
+    if (livePrice == null) return;
+    const isUp = points.length > 1 ? livePrice >= points[points.length - 2].close : true;
+    const color = isUp ? "#22c55e" : "#ef4444";
+    try {
+      const bar = points[points.length - 1];
+      if (chartType === "candlestick") {
+        (main as ISeriesApi<"Candlestick">).update({
+          time: bar.date,
+          open: bar.open,
+          high: Math.max(bar.high, livePrice),
+          low: Math.min(bar.low, livePrice),
+          close: livePrice,
+        });
+      } else {
+        (main as ISeriesApi<"Line">).update({ time: bar.date, value: livePrice });
+      }
+      priceLineRef.current = main.createPriceLine({
+        price: livePrice,
+        color,
+        lineWidth: 1,
+        lineStyle: LineStyle.Dashed,
+        axisLabelVisible: true,
+        title: "",
+      });
+    } catch {
+      /* abaikan */
+    }
+  }, [livePrice, points, chartType]);
 
   return (
     <div className="w-full">

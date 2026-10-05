@@ -1,10 +1,15 @@
 """Router quote saham — harga terakhir + nama untuk header dashboard."""
 
+import time
+
 from fastapi import APIRouter
 
 from app.providers.idx_edge_provider import IdxEdgeProvider
 
 router = APIRouter(prefix="/api", tags=["quote"])
+
+_NAME_TTL = 24 * 3600
+_name_cache: dict[str, tuple[float, str | None]] = {}
 
 
 def quote_payload(code: str, price: dict | None, name: str | None) -> dict | None:
@@ -65,5 +70,12 @@ async def get_quote(ticker: str):
     code = ticker.upper()
     provider = IdxEdgeProvider()
     price = await provider.fetch_price(code)
-    payload = quote_payload(code, price, await resolve_name(provider, code))
+    name: str | None = None
+    cached = _name_cache.get(code)
+    if cached and time.time() - cached[0] < _NAME_TTL:
+        name = cached[1]
+    else:
+        name = await resolve_name(provider, code)
+        _name_cache[code] = (time.time(), name)
+    payload = quote_payload(code, price, name)
     return {"success": payload is not None, "ticker": code, "data": payload}

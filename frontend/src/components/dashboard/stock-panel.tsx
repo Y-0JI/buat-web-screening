@@ -32,8 +32,8 @@ export function StockPanel({ ticker, quote, series, period, loading, error }: Pr
   const price = quote?.last_price ?? last?.close ?? null;
   let change: number | null = null;
   let changePct: number | null = null;
-  if (last && prev && prev.close) {
-    change = last.close - prev.close;
+  if (price != null && prev?.close) {
+    change = price - prev.close;
     changePct = (change / prev.close) * 100;
   } else if (last?.change != null) {
     change = last.change;
