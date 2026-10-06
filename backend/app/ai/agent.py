@@ -30,6 +30,9 @@ TOOL_TIMEOUT = 60
 
 _PERIOD_LIMITS = {"1mo": 22, "3mo": 66, "6mo": 126, "1y": 252}
 
+# Tunggu satu tick running-trade sebalik sebelum fallback ke snapshot REST.
+_LIVE_WAIT = 2.0
+
 
 def _edge_provider() -> IdxEdgeProvider:
     return IdxEdgeProvider()
@@ -51,6 +54,93 @@ async def _get_price_history(ticker: str, period: str = "3mo") -> dict:
     if not series:
         return {"error": f"Riwayat harga {ticker} tidak tersedia."}
     return {"ticker": ticker.upper(), "period": period, "series": series}
+
+
+def _extract_live_quote(message: Any) -> Optional[dict]:
+    """Ambil {price, change_pct, time} dari satu pesan LiveFeed.
+
+    Bentuk yang datang: `{"type":"quote", price, change_pct, time}` atau
+    `{"type":"trade", data:{price, change_pct, time}}` (dan snapshot).
+    """
+    if not isinstance(message, dict):
+        return None
+    raw_data = message.get("data")
+    data: dict = raw_data if isinstance(raw_data, dict) else message
+    price = data.get("price")
+    if not isinstance(price, (int, float)):
+        return None
+    change_pct = data.get("change_pct")
+    return {
+        "price": float(price),
+        "change_pct": float(change_pct) if isinstance(change_pct, (int, float)) else None,
+        "time": data.get("time"),
+    }
+
+
+async def _live_tick(code: str, timeout: float = _LIVE_WAIT) -> Optional[dict]:
+    """Tunggu satu tick running-trade untuk `code`; None bila tak ada/timeout."""
+    from app.services.live_feed import get_feed
+
+    try:
+        feed = get_feed()
+        queue = await feed.subscribe({code})
+    except Exception as e:  # noqa: BLE001 — WS belum siap, biarkan fallback
+        logger.info("Live feed tidak tersedia untuk %s: %s", code, e)
+        return None
+    try:
+        raw = await asyncio.wait_for(queue.get(), timeout=timeout)
+    except asyncio.TimeoutError:
+        return None
+    except Exception as e:  # noqa: BLE001
+        logger.info("Gagal baca tick live %s: %s", code, e)
+        return None
+    finally:
+        try:
+            await feed.unsubscribe({code}, queue)
+        except Exception:  # noqa: BLE001 — unsubscribe gagal tidak berpengaruh ke AI
+            pass
+    try:
+        message = json.loads(raw) if isinstance(raw, str) else raw
+    except (TypeError, ValueError):
+        return None
+    return _extract_live_quote(message)
+
+
+async def _get_live_price(ticker: str) -> dict:
+    """Harga terakhir satu saham: stream running-trade, fallback snapshot REST."""
+    code = (ticker or "").strip().upper()
+    if not code:
+        return {"error": "Kode saham wajib diisi."}
+
+    live = await _live_tick(code)
+    if live:
+        return {
+            "ticker": code,
+            "price": live["price"],
+            "change_pct": live["change_pct"],
+            "as_of": live["time"],
+            "source": "running-trade",
+        }
+
+    price = await _edge_provider().fetch_price(code)
+    if not price:
+        return {"error": f"Harga {code} tidak tersedia."}
+    # Snapshot REST tidak punya change_pct; as_of = jam trade terakhir hari ini
+    # (null saat tidak ada transaksi -> harga dari penutupan sebelumnya).
+    out = {
+        "ticker": code,
+        "price": price.get("last_price"),
+        "change_pct": None,
+        "as_of": price.get("data_ts") or price.get("source_date"),
+        "source": "rest-snapshot",
+        "market_state": price.get("market_state"),
+        "market_label": price.get("market_label"),
+        "lot": price.get("lot"),
+        "value": price.get("value"),
+    }
+    if price.get("no_trade_today"):
+        out["no_trade_today"] = True
+    return out
 
 
 async def _get_fundamentals(ticker: str) -> dict:
@@ -231,6 +321,22 @@ TOOL_SPECS: list[dict] = [
         "fn": _get_price_history,
     },
     {
+        "name": "get_live_price",
+        "description": (
+            "Harga terakhir satu saham beserta perubahan intraday (change_pct). Sumber "
+            "utama: stream running-trade real-time (source=running-trade); bila tidak "
+            "tersedia, fallback ke snapshot REST (source=rest-snapshot, change_pct "
+            "mungkin null). Untuk pertanyaan harga SEKARANG/TERKINI gunakan tool ini, "
+            "bukan get_price_history (yang OHLCV harian). Sebutkan waktu datanya (as_of)."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {"ticker": {"type": "string", "description": "Kode saham IDX, mis. BBCA."}},
+            "required": ["ticker"],
+        },
+        "fn": _get_live_price,
+    },
+    {
         "name": "get_fundamentals",
         "description": "Ringkasan fundamental satu saham: valuasi (PE/PBV/PSR/Earnings Yield), laba-rugi, neraca, arus kas, per-share, profitabilitas, solvabilitas, pertumbuhan, dan price performance.",
         "parameters": {
@@ -382,7 +488,12 @@ SYSTEM_PROMPT = (
     "seasonality, market cap, insider, order flow, laporan keuangan, pencarian). "
     "Jika tool mengembalikan error, sampaikan apa adanya. Jangan memberi "
     "rekomendasi beli/jual; akhiri analisis dengan catatan singkat bahwa ini alat "
-    "riset, bukan saran keuangan. Untuk broker summary, panggil get_broker_summary "
+    "riset, bukan saran keuangan. Untuk pertanyaan harga SEKARANG/TERKINI, "
+    "WAJIB panggil tool get_live_price (bukan get_price_history yang OHLCV "
+    "harian), dan sebutkan kapan datanya (as_of) serta sumbernya "
+    "(running-trade = real-time, rest-snapshot = snapshot yang bisa tertinggal). "
+    "Bila change_pct null dan sumber rest-snapshot, sampaikan harga itu "
+    "snapshot/tertinggal. Untuk broker summary, panggil get_broker_summary "
     "cukup SEKALI per saham (default semua investor) — jangan panggil berulang "
     "untuk asing/domestik, karena filter bisa diubah user di kartu. Untuk pertanyaan "
     "daftar saham dari tool get_accumulation_candidates, panggil tool itu dan jelaskan "
@@ -404,8 +515,15 @@ def _summarize(result: Any) -> str:
 
 def _build_messages(history: list[dict], context: Optional[dict]) -> list[dict]:
     system = SYSTEM_PROMPT
-    if context and context.get("view"):
-        system += f"\nKonteks: user sedang di halaman {context['view']}."
+    if context:
+        ticker = context.get("ticker")
+        view = context.get("view")
+        if ticker and view:
+            system += f"\nKonteks: user sedang melihat saham {ticker} di halaman {view}."
+        elif ticker:
+            system += f"\nKonteks: user sedang melihat saham {ticker}."
+        elif view:
+            system += f"\nKonteks: user sedang di halaman {view}."
     msgs = [{"role": "system", "content": system}]
     for m in history:
         role = "user" if m.get("role") == "user" else "assistant"

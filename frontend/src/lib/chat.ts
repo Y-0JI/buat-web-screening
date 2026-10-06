@@ -599,6 +599,8 @@ export interface StreamChatOptions {
   threadId?: number | null;
   model?: string;
   signal?: AbortSignal;
+  // Konteks tampilan (halaman aktif, ticker yang sedang dibuka) untuk AI.
+  context?: { view?: string; ticker?: string };
   onEvent: (event: ChatEvent) => void;
 }
 
@@ -610,6 +612,7 @@ export async function streamChat(opts: StreamChatOptions): Promise<void> {
       message: opts.message,
       thread_id: opts.threadId ?? null,
       model: opts.model,
+      context: opts.context ?? null,
     }),
     signal: opts.signal,
   });
