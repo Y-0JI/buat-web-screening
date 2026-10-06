@@ -327,6 +327,31 @@ export async function getQuote(ticker: string): Promise<QuoteData | null> {
   return data.success ? (data.data as QuoteData) : null;
 }
 
+export interface SeasonalityData {
+  ticker: string;
+  years: string[];
+  months: string[];
+  monthly_returns: Record<string, Record<string, number>>;
+  summary: string | null;
+  yearly_avg: number | null;
+}
+
+export async function getSeasonality(
+  ticker: string
+): Promise<SeasonalityData | null> {
+  const res = await fetch(
+    `${API_BASE}/api/seasonal/${encodeURIComponent(ticker)}`
+  );
+  const data = await jsonOrThrow(res);
+  return data.success ? (data.data as SeasonalityData) : null;
+}
+
+export function toTradingViewSymbol(ticker: string): string {
+  const code = (ticker || "").trim().toUpperCase();
+  if (code === "IHSG" || code === "COMPOSITE" || code === "JKSE") return "IDX:COMPOSITE";
+  return `IDX:${code}`;
+}
+
 export interface TickerSuggestion {
   code: string;
   name: string | null;

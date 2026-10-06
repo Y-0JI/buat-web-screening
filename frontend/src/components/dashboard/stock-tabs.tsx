@@ -7,6 +7,9 @@ import { KeyStatsPanel } from "./key-stats-panel";
 import { NewsPanel } from "./news-panel";
 import { NewsReader } from "./news-reader";
 import { OverviewPanel } from "./overview-panel";
+import { SeasonalityPanel } from "./seasonality-panel";
+import { TradingViewChart } from "./tradingview-chart";
+import { toTradingViewSymbol } from "@/lib/chat";
 
 interface TabDef {
   id: string;
@@ -24,9 +27,16 @@ const TABS: TabDef[] = [
   { id: "corp-action", label: "Corp. Action", disabled: true },
   { id: "profile", label: "Profile" },
   { id: "news", label: "News" },
+  { id: "chartplus", label: "Chart+" },
 ];
 
-export function StockTabs({ ticker, liveTrades, liveConnected }: { ticker: string; liveTrades: LiveTrade[]; liveConnected: boolean }) {
+const INDEX_TABS: TabDef[] = [
+  { id: "overview", label: "Overview" },
+  { id: "seasonality", label: "Seasonality" },
+  { id: "chartplus", label: "Chart+" },
+];
+
+export function StockTabs({ ticker, liveTrades, liveConnected, isIndex }: { ticker: string; liveTrades: LiveTrade[]; liveConnected: boolean; isIndex: boolean }) {
   const [tab, setTab] = useState<string | null>(null);
   const [article, setArticle] = useState<NewsItem | null>(null);
 
@@ -36,13 +46,14 @@ export function StockTabs({ ticker, liveTrades, liveConnected }: { ticker: strin
   }, [ticker]);
 
   const click = (id: string) => setTab((prev) => (prev === id ? null : id));
-  const active = TABS.find((t) => t.id === tab);
+  const list = isIndex ? INDEX_TABS : TABS;
+  const active = list.find((t) => t.id === tab);
   const openNews = () => setTab("news");
 
   return (
     <div className="px-4 pb-3">
       <div className="flex overflow-x-auto rounded-lg border border-border divide-x divide-border bg-surface-1">
-        {TABS.map((t) => {
+        {list.map((t) => {
           const on = tab === t.id;
           return (
             <button
@@ -71,11 +82,18 @@ export function StockTabs({ ticker, liveTrades, liveConnected }: { ticker: strin
           onOpenNews={openNews}
           liveTrades={liveTrades}
           liveConnected={liveConnected}
+          hideBrokers={isIndex}
         />
       ) : tab === "key-stats" ? (
         <KeyStatsPanel ticker={ticker} />
       ) : tab === "news" ? (
         <NewsPanel ticker={ticker} onOpenArticle={setArticle} />
+      ) : tab === "seasonality" ? (
+        <SeasonalityPanel ticker={ticker} />
+      ) : tab === "chartplus" ? (
+        <div className="mt-2">
+          <TradingViewChart symbol={toTradingViewSymbol(ticker)} />
+        </div>
       ) : active ? (
         <div className="mt-2 rounded-lg border border-border bg-surface-1 px-3 py-6 text-center text-xs text-text-muted">
           Konten {active.label} — segera

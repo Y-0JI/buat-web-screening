@@ -55,9 +55,10 @@ interface Props {
   onOpenNews: () => void;
   liveTrades: LiveTrade[];
   liveConnected: boolean;
+  hideBrokers?: boolean;
 }
 
-export function OverviewPanel({ ticker, onOpenArticle, onOpenNews, liveTrades, liveConnected }: Props) {
+export function OverviewPanel({ ticker, onOpenArticle, onOpenNews, liveTrades, liveConnected, hideBrokers }: Props) {
   const [flow, setFlow] = useState<OrderFlowData | null | undefined>(() =>
     flowCache.has(ticker) ? flowCache.get(ticker) ?? null : undefined
   );
@@ -168,9 +169,11 @@ export function OverviewPanel({ ticker, onOpenArticle, onOpenNews, liveTrades, l
         )}
       </section>
 
-      {brokers?.map((b, i) => (
-        <BrokerSummaryCard key={`ov-broker-${b.stock_code}-${i}`} initial={b} />
-      ))}
+      {brokers?.map((b, i) =>
+        hideBrokers ? null : (
+          <BrokerSummaryCard key={`ov-broker-${b.stock_code}-${i}`} initial={b} />
+        )
+      )}
 
       <section className="rounded-lg border border-border bg-surface-1 px-3 py-2.5">
         <button

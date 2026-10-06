@@ -25,6 +25,7 @@ from app.routers.news import router as news_router
 from app.routers.order_flow import router as order_flow_router
 from app.routers.quote import router as quote_router
 from app.routers.search import router as search_router
+from app.routers.seasonal import router as seasonal_router
 from app.routers.threads import router as threads_router
 
 configure_logging()
@@ -66,6 +67,7 @@ app.include_router(quote_router)
 app.include_router(news_router)
 app.include_router(order_flow_router)
 app.include_router(search_router)
+app.include_router(seasonal_router)
 app.include_router(threads_router)
 app.include_router(accumulation_router)
 
