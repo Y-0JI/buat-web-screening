@@ -3,12 +3,20 @@
 import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 import { searchTickers, type TickerSuggestion } from "@/lib/chat";
 
+export interface PinnedTicker {
+  code: string;
+  name?: string;
+}
+
 interface Props {
   value: string;
   onSelect: (ticker: string) => void;
+  // Selalu tampil di atas hasil (mis. IHSG) — bisa dibuka tanpa mengetik.
+  pinned?: PinnedTicker[];
+  placeholder?: string;
 }
 
-export function SearchBar({ value, onSelect }: Props) {
+export function SearchBar({ value, onSelect, pinned = [], placeholder = "Cari brand, simbol, atau nama…" }: Props) {
   const [text, setText] = useState("");
   const [results, setResults] = useState<TickerSuggestion[]>([]);
   const [loading, setLoading] = useState(false);
@@ -62,16 +70,25 @@ export function SearchBar({ value, onSelect }: Props) {
     if (code !== value) onSelect(code);
   };
 
+  // pinned selalu di atas; hasil yang kodenya sama disembunyikan agar tidak dobel.
+  const pinnedCodes = new Set(pinned.map((p) => p.code));
+  const items = [
+    ...pinned.map((p) => ({ code: p.code, name: p.name ?? "" })),
+    ...results
+      .filter((r) => !pinnedCodes.has(r.code))
+      .map((r) => ({ code: r.code, name: r.name || "" })),
+  ];
+
   const handleKey = (e: KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === "ArrowDown" && results.length) {
+    if (e.key === "ArrowDown" && items.length) {
       e.preventDefault();
-      setHighlight((h) => (h + 1) % results.length);
-    } else if (e.key === "ArrowUp" && results.length) {
+      setHighlight((h) => (h + 1) % items.length);
+    } else if (e.key === "ArrowUp" && items.length) {
       e.preventDefault();
-      setHighlight((h) => (h - 1 + results.length) % results.length);
-    } else if (e.key === "Enter" && open && results.length) {
+      setHighlight((h) => (h - 1 + items.length) % items.length);
+    } else if (e.key === "Enter" && open && items.length) {
       e.preventDefault();
-      choose(results[highlight]?.code || results[0].code);
+      choose(items[Math.min(highlight, items.length - 1)].code);
     } else if (e.key === "Escape") {
       setOpen(false);
     }
@@ -87,8 +104,8 @@ export function SearchBar({ value, onSelect }: Props) {
           value={text}
           onChange={(e) => setText(e.target.value)}
           onKeyDown={handleKey}
-          onFocus={() => results.length && setOpen(true)}
-          placeholder="Cari brand, simbol, atau nama…"
+          onFocus={() => items.length && setOpen(true)}
+          placeholder={placeholder}
           aria-label="Cari emiten"
           className="w-full bg-transparent text-sm text-text-primary placeholder-text-muted focus:outline-none"
         />
@@ -97,12 +114,12 @@ export function SearchBar({ value, onSelect }: Props) {
         )}
       </div>
 
-      {open && text.trim().length >= 2 && (
+      {open && (items.length > 0 || text.trim().length >= 2) && (
         <div className="absolute left-0 right-0 top-full mt-1.5 z-40 max-h-72 overflow-y-auto rounded-xl border border-border bg-surface-1 shadow-xl py-1">
-          {results.length === 0 && !loading ? (
+          {items.length === 0 && !loading ? (
             <div className="px-3 py-2.5 text-xs text-text-muted">Tidak ada hasil.</div>
           ) : (
-            results.map((r, i) => (
+            items.map((r, i) => (
               <button
                 key={r.code}
                 type="button"
@@ -114,7 +131,7 @@ export function SearchBar({ value, onSelect }: Props) {
                 }`}
               >
                 <span className="text-sm font-bold text-text-primary shrink-0">{r.code}</span>
-                <span className="text-xs text-text-secondary truncate">{r.name || ""}</span>
+                <span className="text-xs text-text-secondary truncate">{r.name}</span>
               </button>
             ))
           )}
