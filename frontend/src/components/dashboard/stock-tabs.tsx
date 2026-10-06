@@ -155,11 +155,12 @@ export function StockTabs({ ticker, onTicker, liveTrades, liveConnected, isIndex
               </p>
             </div>
 
-            <div className="w-32 sm:w-56 shrink-0">
+            <div className="w-24 sm:w-40 shrink-0">
               <SearchBar
                 value={ticker}
                 onSelect={onTicker}
                 pinned={[{ code: FALLBACK_TICKER }]}
+                placeholder=""
               />
             </div>
 

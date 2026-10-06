@@ -13,9 +13,10 @@ interface Props {
   onSelect: (ticker: string) => void;
   // Selalu tampil di atas hasil (mis. IHSG) — bisa dibuka tanpa mengetik.
   pinned?: PinnedTicker[];
+  placeholder?: string;
 }
 
-export function SearchBar({ value, onSelect, pinned = [] }: Props) {
+export function SearchBar({ value, onSelect, pinned = [], placeholder = "Cari brand, simbol, atau nama…" }: Props) {
   const [text, setText] = useState("");
   const [results, setResults] = useState<TickerSuggestion[]>([]);
   const [loading, setLoading] = useState(false);
@@ -104,7 +105,7 @@ export function SearchBar({ value, onSelect, pinned = [] }: Props) {
           onChange={(e) => setText(e.target.value)}
           onKeyDown={handleKey}
           onFocus={() => items.length && setOpen(true)}
-          placeholder="Cari brand, simbol, atau nama…"
+          placeholder={placeholder}
           aria-label="Cari emiten"
           className="w-full bg-transparent text-sm text-text-primary placeholder-text-muted focus:outline-none"
         />
