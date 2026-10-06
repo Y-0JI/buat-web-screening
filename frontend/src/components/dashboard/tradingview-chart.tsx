@@ -30,7 +30,7 @@ export function TradingViewChart({ symbol, height = 480 }: Props) {
     script.innerHTML = JSON.stringify({
       autosize: true,
       symbol,
-      interval: "5",
+      interval: "D",
       timezone: "Asia/Jakarta",
       theme: theme === "light" ? "light" : "dark",
       style: "1",
