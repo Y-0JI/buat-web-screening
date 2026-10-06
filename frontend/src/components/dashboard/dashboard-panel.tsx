@@ -278,7 +278,13 @@ export function DashboardPanel({
         </div>
       </div>
 
-      <StockTabs ticker={ticker} liveTrades={live.trades} liveConnected={live.connected} isIndex={isIndex} />
+      <StockTabs
+        ticker={ticker}
+        onTicker={onTicker}
+        liveTrades={live.trades}
+        liveConnected={live.connected}
+        isIndex={isIndex}
+      />
     </div>
   );
 }

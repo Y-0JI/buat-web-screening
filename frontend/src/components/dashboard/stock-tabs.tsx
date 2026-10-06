@@ -7,9 +7,10 @@ import { KeyStatsPanel } from "./key-stats-panel";
 import { NewsPanel } from "./news-panel";
 import { NewsReader } from "./news-reader";
 import { OverviewPanel } from "./overview-panel";
+import { SearchBar } from "./search-bar";
 import { SeasonalityPanel } from "./seasonality-panel";
 import { TradingViewChart } from "./tradingview-chart";
-import { toTradingViewSymbol } from "@/lib/chat";
+import { FALLBACK_TICKER, toTradingViewSymbol } from "@/lib/chat";
 
 interface TabDef {
   id: string;
@@ -36,13 +37,14 @@ const INDEX_TABS: TabDef[] = [
   { id: "chartplus", label: "Chart+" },
 ];
 
-export function StockTabs({ ticker, liveTrades, liveConnected, isIndex }: { ticker: string; liveTrades: LiveTrade[]; liveConnected: boolean; isIndex: boolean }) {
+export function StockTabs({ ticker, onTicker, liveTrades, liveConnected, isIndex }: { ticker: string; onTicker: (t: string) => void; liveTrades: LiveTrade[]; liveConnected: boolean; isIndex: boolean }) {
   const [tab, setTab] = useState<string | null>(null);
   const [article, setArticle] = useState<NewsItem | null>(null);
   const [chartMenu, setChartMenu] = useState(false);
 
   useEffect(() => {
-    setTab(null);
+    // Chart+ tetap terbuka saat ticker diganti dari search di header-nya.
+    setTab((prev) => (prev === "chartplus" ? prev : null));
     setArticle(null);
     setChartMenu(false);
   }, [ticker]);
@@ -144,13 +146,21 @@ export function StockTabs({ ticker, liveTrades, liveConnected, isIndex }: { tick
                 className="h-6 w-6 object-contain"
               />
             </button>
-            <div className="flex-1 min-w-0 px-1">
+            <div className="min-w-0 flex-1 px-1">
               <h2 className="text-xs font-semibold leading-tight truncate">
                 {ticker} · Chart+
               </h2>
-              <p className="text-[10px] text-text-muted leading-tight truncate">
+              <p className="hidden sm:block text-[10px] text-text-muted leading-tight truncate">
                 TradingView Advanced Chart
               </p>
+            </div>
+
+            <div className="w-32 sm:w-56 shrink-0">
+              <SearchBar
+                value={ticker}
+                onSelect={onTicker}
+                pinned={[{ code: FALLBACK_TICKER }]}
+              />
             </div>
 
             {chartMenu && (
