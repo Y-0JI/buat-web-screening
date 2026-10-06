@@ -72,7 +72,8 @@ export interface QuoteData {
   day_volume?: number | null;
 }
 
-export const FALLBACK_TICKER = "BBCA";
+export const FALLBACK_TICKER = "IHSG";
+export const SECONDARY_TICKER = "BBCA";
 
 export interface BrokerRow {
   code: string | null;
