@@ -121,6 +121,12 @@ export function StockTabs({ ticker, liveTrades, liveConnected, isIndex }: { tick
       {chartFull && (
         <div className="fixed inset-0 z-50 bg-surface-0 flex flex-col min-h-0">
           <header className="h-12 shrink-0 flex items-center gap-2 px-3 border-b border-border">
+            <img
+              src="/emblem.png"
+              alt=""
+              aria-hidden="true"
+              className="h-6 w-6 shrink-0 object-contain"
+            />
             <button
               type="button"
               onClick={() => setTab(null)}
