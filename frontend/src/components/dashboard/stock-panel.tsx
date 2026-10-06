@@ -27,52 +27,43 @@ interface Props {
 
 export function StockPanel({ ticker, quote, series, period, loading, error }: Props) {
   const last = series.length ? series[series.length - 1] : null;
+  const prev = series.length > 1 ? series[series.length - 2] : null;
 
   const price = quote?.last_price ?? last?.close ?? null;
-  // Change relatif ke awal rentang periode (bukan selalu harian).
-  const ref = series.length ? series[0].close : null;
-  let change: number | null = null;
-  let changePct: number | null = null;
-  if (price != null && ref) {
-    change = price - ref;
-    changePct = (change / ref) * 100;
-  } else if (quote?.change != null) {
-    change = quote.change;
-    changePct = quote.change_pct ?? null;
-  } else if (last?.change != null) {
-    change = last.change;
-    changePct = last.change_pct ?? null;
+  let change: number | null = quote?.change ?? null;
+  let changePct: number | null = quote?.change_pct ?? null;
+  if (change == null || changePct == null) {
+    if (price != null && prev?.close) {
+      change = price - prev.close;
+      changePct = (change / prev.close) * 100;
+    } else if (last?.change != null) {
+      change = last.change;
+      changePct = last.change_pct ?? null;
+    }
   }
 
   const down = (change ?? 0) < 0;
   const chgColor = down ? "text-red-500" : "text-emerald-500";
 
-  // Indeks: quote lot/value = 0 -> ambil dari bar terakhir (agregat pasar).
-  const isIndexQuote = (quote?.lot ?? null) === 0 && (quote?.value ?? null) === 0;
-  const rawLot = isIndexQuote
-    ? last?.volume != null
-      ? last.volume / 100
-      : null
-    : (quote?.lot ?? (last?.volume != null ? last.volume / 100 : null));
-  const rawVal = isIndexQuote ? (last?.value ?? null) : (quote?.value ?? last?.value ?? null);
-  // Jangan tampilkan "0" bila datanya tidak ada.
-  const lot = rawLot === 0 ? null : rawLot;
-  const val = rawVal === 0 ? null : rawVal;
-  const vol = isIndexQuote ? (last?.volume ?? null) : (quote?.day_volume ?? last?.volume ?? null);
-  const o =
-    isIndexQuote || quote?.day_open == null ? last?.open : quote.day_open;
-  const h =
-    isIndexQuote || quote?.day_high == null ? last?.high : quote.day_high;
-  const l = isIndexQuote || quote?.day_low == null ? last?.low : quote.day_low;
-  const c = isIndexQuote ? last?.close : price;
-  const ohlc = last
+  const day = quote?.day_open != null || quote?.day_high != null || quote?.day_low != null;
+  const ohlc = day
     ? ([
-        ["O", o],
-        ["H", h],
-        ["L", l],
-        ["C", c],
+        ["O", quote?.day_open],
+        ["H", quote?.day_high],
+        ["L", quote?.day_low],
+        ["C", price],
       ] as const)
-    : null;
+    : last
+      ? ([
+          ["O", last.open],
+          ["H", last.high],
+          ["L", last.low],
+          ["C", last.close],
+        ] as const)
+      : null;
+  const vol = quote?.day_volume ?? last?.volume ?? null;
+  const lot = quote?.lot ?? (vol != null ? vol / 100 : null);
+  const val = quote?.value ?? last?.value ?? null;
 
   return (
     <div className="px-4 pt-3">
