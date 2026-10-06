@@ -10,13 +10,27 @@ import { SearchBar } from "./search-bar";
 export function DashboardShell() {
   const [aiView, setAiView] = useState<AiView>("normal");
   const [ticker, setTicker] = useState(FALLBACK_TICKER);
+  const [homeTick, setHomeTick] = useState(0);
+
+  const goHome = () => {
+    setTicker(FALLBACK_TICKER);
+    setHomeTick((n) => n + 1);
+  };
 
   return (
     <div className="flex flex-col h-screen bg-surface-0 text-text-primary overflow-hidden">
       <header className="h-14 shrink-0 flex items-center gap-4 px-4 border-b border-border">
-        <img src="/logoswhite.png" alt="Logo" className="logo-dark h-7 w-auto shrink-0" />
-        <img src="/logos.png" alt="Logo" className="logo-light h-7 w-auto shrink-0" />
-        <SearchBar value={ticker} onSelect={setTicker} />
+        <button
+          type="button"
+          onClick={goHome}
+          className="shrink-0 rounded-lg focus:outline-none cursor-pointer"
+          aria-label="Kembali ke beranda"
+          title="Kembali ke beranda"
+        >
+          <img src="/logoswhite.png" alt="Logo" className="logo-dark h-7 w-auto pointer-events-none" />
+          <img src="/logos.png" alt="Logo" className="logo-light h-7 w-auto pointer-events-none" />
+        </button>
+        <SearchBar key={homeTick} value={ticker} onSelect={setTicker} />
         <div className="ml-auto">
           <ThemeToggle />
         </div>
@@ -28,6 +42,7 @@ export function DashboardShell() {
             ticker={ticker}
             onTicker={setTicker}
             onOpenAi={() => setAiView("fullscreen")}
+            homeTick={homeTick}
           />
         </main>
 

@@ -2,6 +2,8 @@
 
 import { useCallback, useEffect, useState } from "react";
 import {
+  FALLBACK_TICKER,
+  SECONDARY_TICKER,
   getHistory,
   getQuote,
   type HistoryPoint,
@@ -53,10 +55,12 @@ export function DashboardPanel({
   ticker,
   onTicker,
   onOpenAi,
+  homeTick,
 }: {
   ticker: string;
   onTicker: (t: string) => void;
   onOpenAi?: () => void;
+  homeTick?: number;
 }) {
   const [period, setPeriod] = useState<Period>("1M");
   const [series, setSeries] = useState<HistoryPoint[]>([]);
@@ -99,7 +103,7 @@ export function DashboardPanel({
     }
   }, [params]);
 
-  const load = useCallback(async (code: string, p: Period) => {
+  const load = useCallback(async (code: string, p: Period, fb = true): Promise<boolean> => {
     setLoading(true);
     setError(null);
     try {
@@ -108,37 +112,60 @@ export function DashboardPanel({
         getQuote(code).catch(() => null),
       ]);
       if (!hist.length) {
+        if (fb && code !== SECONDARY_TICKER) {
+          return load(SECONDARY_TICKER, p, false).then((ok) => {
+            if (ok) onTicker(SECONDARY_TICKER);
+            return ok;
+          });
+        }
         setError(`Data ${code} tidak tersedia.`);
         setSeries([]);
         setQuote(null);
-      } else {
-        setSeries(hist);
-        setQuote(q);
+        return false;
       }
+      setSeries(hist);
+      setQuote(q);
+      return true;
     } catch {
       setError("Gagal memuat data. Periksa koneksi backend.");
       setSeries([]);
       setQuote(null);
+      return false;
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [onTicker]);
 
   useEffect(() => {
     load(ticker, period);
   }, [ticker, period, load]);
 
-  const livePrice = quote?.last_price ?? null;
+  // Sinyal "pulang": paksa muat ulang walau ticker sudah sama.
+  useEffect(() => {
+    load(ticker, period);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [homeTick]);
+
   const marketOpen = quote == null || quote.market_state !== "closed";
-  const live = useLiveTicker(ticker, marketOpen);
-  const wsPrice = live.connected && live.quote ? live.quote.price : null;
-  const displayPrice = wsPrice ?? livePrice;
-  const displayChangePct = live.quote?.change_pct ?? quote?.change_pct ?? null;
+  // WS tidak mengirim tick indeks -> indeks tetap pakai polling REST.
+  const isIndex = (quote?.lot ?? null) === 0 && (quote?.value ?? null) === 0;
+  const live = useLiveTicker(ticker, marketOpen && !isIndex);
+  const wsPrice =
+    live.connected && !isIndex && live.quote ? live.quote.price : null;
+  const restPrice = quote?.last_price ?? null;
+  const displayPrice = wsPrice ?? restPrice;
+  // WS menimpa change_pct harian; harga periode dihitung di bawah dari series.
+  const wsChangePct =
+    wsPrice != null && !isIndex ? live.quote?.change_pct ?? null : null;
 
   useEffect(() => {
     if (!marketOpen) return;
-    // WS gagal/nonaktif -> polling cadangan 10 detik.
-    if (live.connected || document.visibilityState !== "visible") return;
+    // WS gagal/nonaktif ATAU indeks (tanpa tick WS) -> polling cadangan 10 detik.
+    if (
+      (live.connected && live.quote && !isIndex) ||
+      document.visibilityState !== "visible"
+    )
+      return;
     const tick = async () => {
       if (document.visibilityState !== "visible") return;
       try {
@@ -159,17 +186,18 @@ export function DashboardPanel({
 
   // Harga WS menimpa harga REST (tanpa mengubah Lot/Val yang hanya datang via REST).
   const displayQuote: QuoteData | null =
-    quote && wsPrice != null
+    quote && wsPrice != null && !isIndex
       ? {
           ...quote,
           last_price: wsPrice,
-          change_pct: live.quote?.change_pct ?? displayChangePct,
+          change_pct: wsChangePct ?? quote.change_pct,
           change:
             quote.prev_close != null
               ? wsPrice - quote.prev_close
               : quote.change,
         }
       : quote;
+  // Indeks tidak punya lot/value di quote -> data agregat datang dari history.
 
   if (!ready) return null;
 
@@ -250,7 +278,7 @@ export function DashboardPanel({
         </div>
       </div>
 
-      <StockTabs ticker={ticker} liveTrades={live.trades} liveConnected={live.connected} />
+      <StockTabs ticker={ticker} liveTrades={live.trades} liveConnected={live.connected} isIndex={isIndex} />
     </div>
   );
 }
