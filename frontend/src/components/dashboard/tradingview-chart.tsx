@@ -7,11 +7,14 @@ const SRC = "https://s3.tradingview.com/external-embedding/embed-widget-advanced
 
 interface Props {
   symbol: string;
+  // Angka -> px, string -> dipakai apa adanya (mis. "100%" untuk mode fullscreen).
+  height?: number | string;
 }
 
-export function TradingViewChart({ symbol }: Props) {
+export function TradingViewChart({ symbol, height = 480 }: Props) {
   const ref = useRef<HTMLDivElement>(null);
   const { theme } = useTheme();
+  const cssHeight = typeof height === "number" ? `${height}px` : height;
 
   useEffect(() => {
     const el = ref.current;
@@ -19,7 +22,7 @@ export function TradingViewChart({ symbol }: Props) {
     el.innerHTML = "";
     const holder = document.createElement("div");
     holder.className = "tradingview-widget-container__widget";
-    holder.style.height = "480px";
+    holder.style.height = cssHeight;
     holder.style.width = "100%";
     const script = document.createElement("script");
     script.src = SRC;
@@ -39,7 +42,7 @@ export function TradingViewChart({ symbol }: Props) {
     });
     el.appendChild(holder);
     el.appendChild(script);
-  }, [symbol, theme]);
+  }, [symbol, theme, cssHeight]);
 
-  return <div ref={ref} className="tradingview-widget-container rounded-lg overflow-hidden" style={{ height: 480 }} />;
+  return <div ref={ref} className="tradingview-widget-container rounded-lg overflow-hidden" style={{ height: cssHeight }} />;
 }
