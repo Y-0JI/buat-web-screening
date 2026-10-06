@@ -39,6 +39,8 @@ export function TradingViewChart({ symbol, height = 480 }: Props) {
       withdateranges: true,
       hide_side_toolbar: false,
       details: false,
+      // Nyalakan context menu klik-kanan (mode embed kemungkinan mematikan default).
+      enabled_features: ["context_menus", "custom_items_in_context_menu"],
     });
     el.appendChild(holder);
     el.appendChild(script);
