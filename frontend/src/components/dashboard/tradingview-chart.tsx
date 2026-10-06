@@ -35,7 +35,7 @@ export function TradingViewChart({ symbol, height = 480 }: Props) {
       theme: theme === "light" ? "light" : "dark",
       style: "1",
       locale: "id",
-      allow_symbol_change: false,
+      allow_symbol_change: true,
       withdateranges: true,
       hide_side_toolbar: false,
       details: false,
