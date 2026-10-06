@@ -50,6 +50,17 @@ export function StockTabs({ ticker, liveTrades, liveConnected, isIndex }: { tick
   const active = list.find((t) => t.id === tab);
   const openNews = () => setTab("news");
 
+  // Chart+ dibuka fullscreen: Esc = kembali ke dashboard.
+  const chartFull = tab === "chartplus";
+  useEffect(() => {
+    if (!chartFull) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setTab(null);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [chartFull]);
+
   return (
     <div className="px-4 pb-3">
       <div className="flex overflow-x-auto rounded-lg border border-border divide-x divide-border bg-surface-1">
@@ -90,10 +101,6 @@ export function StockTabs({ ticker, liveTrades, liveConnected, isIndex }: { tick
         <NewsPanel ticker={ticker} onOpenArticle={setArticle} />
       ) : tab === "seasonality" ? (
         <SeasonalityPanel ticker={ticker} />
-      ) : tab === "chartplus" ? (
-        <div className="mt-2">
-          <TradingViewChart symbol={toTradingViewSymbol(ticker)} />
-        </div>
       ) : active ? (
         <div className="mt-2 rounded-lg border border-border bg-surface-1 px-3 py-6 text-center text-xs text-text-muted">
           Konten {active.label} — segera
@@ -109,6 +116,36 @@ export function StockTabs({ ticker, liveTrades, liveConnected, isIndex }: { tick
             openNews();
           }}
         />
+      )}
+
+      {chartFull && (
+        <div className="fixed inset-0 z-50 bg-surface-0 flex flex-col min-h-0">
+          <header className="h-12 shrink-0 flex items-center gap-2 px-3 border-b border-border">
+            <button
+              type="button"
+              onClick={() => setTab(null)}
+              className="flex items-center gap-1.5 px-2 py-1.5 rounded-lg text-text-secondary hover:text-text-primary hover:bg-surface-2 transition-colors"
+              aria-label="Kembali ke dashboard"
+              title="Kembali ke dashboard"
+            >
+              <svg className="w-[18px] h-[18px]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+              </svg>
+              <span className="text-xs font-medium">Kembali</span>
+            </button>
+            <div className="flex-1 min-w-0 px-1">
+              <h2 className="text-xs font-semibold leading-tight truncate">
+                {ticker} · Chart+
+              </h2>
+              <p className="text-[10px] text-text-muted leading-tight truncate">
+                TradingView Advanced Chart
+              </p>
+            </div>
+          </header>
+          <div className="flex-1 min-h-0">
+            <TradingViewChart symbol={toTradingViewSymbol(ticker)} height="100%" />
+          </div>
+        </div>
       )}
     </div>
   );
