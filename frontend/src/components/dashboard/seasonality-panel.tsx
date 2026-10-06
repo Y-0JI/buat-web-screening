@@ -15,6 +15,7 @@ export function SeasonalityPanel({ ticker }: { ticker: string }) {
     cache.has(ticker) ? cache.get(ticker) ?? null : undefined
   );
   const [error, setError] = useState<string | null>(null);
+  const stats = data?.monthly_stats ?? [];
 
   useEffect(() => {
     if (cache.has(ticker)) {
@@ -55,6 +56,39 @@ export function SeasonalityPanel({ ticker }: { ticker: string }) {
         <div className="rounded-lg border border-border bg-surface-1 px-3 py-2.5">
           {data.summary && (
             <p className="mb-2 text-xs text-text-secondary leading-relaxed">{data.summary}</p>
+          )}
+          {stats.length > 0 && (
+            <div className="mb-3">
+              <div className="text-[11px] font-semibold text-text-secondary mb-1">
+                Statistik per bulan
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-[11px]">
+                  <thead>
+                    <tr className="text-text-muted">
+                      <td className="py-1 pr-2 font-semibold">Bulan</td>
+                      <td className="py-1 px-2 text-right font-semibold">Rata-rata</td>
+                      <td className="py-1 px-2 text-right font-semibold">Naik</td>
+                      <td className="py-1 px-2 text-right font-semibold">Turun</td>
+                      <td className="py-1 px-2 text-right font-semibold">Total</td>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border/60">
+                    {stats.map((s) => (
+                      <tr key={s.month}>
+                        <td className="py-1 pr-2 text-text-muted">{s.month}</td>
+                        <td className={`py-1 px-2 text-right tabular-nums ${cellColor(s.avg)}`}>
+                          {s.avg == null ? "-" : `${s.avg.toFixed(2)}%`}
+                        </td>
+                        <td className="py-1 px-2 text-right tabular-nums text-emerald-500">{s.up ?? "-"}</td>
+                        <td className="py-1 px-2 text-right tabular-nums text-red-500">{s.down ?? "-"}</td>
+                        <td className="py-1 px-2 text-right tabular-nums text-text-primary">{s.total ?? "-"}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
           )}
           <div className="overflow-x-auto">
             <table className="w-full text-[11px]">

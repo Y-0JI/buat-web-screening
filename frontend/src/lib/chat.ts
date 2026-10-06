@@ -328,12 +328,22 @@ export async function getQuote(ticker: string): Promise<QuoteData | null> {
   return data.success ? (data.data as QuoteData) : null;
 }
 
+export interface SeasonalityMonthStat {
+  month: string;
+  avg: number | null;
+  up: number | null;
+  down: number | null;
+  total: number | null;
+  up_prob: number | null;
+}
+
 export interface SeasonalityData {
   ticker: string;
   years: string[];
   months: string[];
   monthly_returns: Record<string, Record<string, number>>;
   summary: string | null;
+  monthly_stats?: SeasonalityMonthStat[];
   yearly_avg: number | null;
 }
 
