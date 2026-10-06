@@ -10,6 +10,26 @@ _MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun",
            "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
 
 
+def _monthly_stats(summary: object) -> list[dict]:
+    """Ringkasan per bulan dari `summary` IDX Edge (dict bulan -> statistik)."""
+    if not isinstance(summary, dict):
+        return []
+    out = []
+    for m in _MONTHS:
+        s = summary.get(m)
+        if not isinstance(s, dict):
+            continue
+        out.append({
+            "month": m,
+            "avg": s.get("avg"),
+            "up": s.get("up"),
+            "down": s.get("down"),
+            "total": s.get("total"),
+            "up_prob": s.get("up_prob"),
+        })
+    return out
+
+
 def seasonal_payload(code: str, data: dict | None) -> dict | None:
     """Normalisasi respons /api/seasonal -> tabel bulan x tahun."""
     if not data:
@@ -22,12 +42,15 @@ def seasonal_payload(code: str, data: dict | None) -> dict | None:
         reverse=True,
     )[:10]
     avg = data.get("yearly_avg")
+    stats = _monthly_stats(data.get("summary"))
     return {
         "ticker": code,
         "years": years,
         "months": _MONTHS,
         "monthly_returns": monthly,
-        "summary": data.get("summary"),
+        # `summary` mentah adalah dict -> harus jadi teks agar aman dirender.
+        "summary": f"{len(stats)} bulan punya riwayat musiman." if stats else None,
+        "monthly_stats": stats,
         "yearly_avg": avg if isinstance(avg, (int, float)) else None,
     }
 

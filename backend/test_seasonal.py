@@ -21,7 +21,11 @@ SAMPLE = {
         "Jan": {"2024": 1.33, "2025": -4.55, "2026": -7.79},
         "Feb": {"2024": 1.8, "2025": 0.5},
     },
-    "summary": "Ringkasan musiman.",
+    # Bentuk nyata IDX Edge: dict per bulan, BUKAN string.
+    "summary": {
+        "Jan": {"avg": -2.46, "up": 0, "down": 7, "total": 7, "up_prob": 0.0},
+        "Feb": {"avg": 1.15, "up": 4, "down": 3, "total": 7, "up_prob": 57.14},
+    },
     "yearly_avg": 2.5,
 }
 
@@ -45,11 +49,19 @@ def test_seasonal_payload():
     assert len(p["months"]) == 12
     assert p["monthly_returns"]["Jan"]["2026"] == -7.79
     assert p["yearly_avg"] == 2.5
+    # summary mentah = dict -> WAJIB jadi teks (regresi React child).
+    assert isinstance(p["summary"], str)
+    assert len(p["monthly_stats"]) == 2
+    assert p["monthly_stats"][0]["month"] == "Jan"
+    assert p["monthly_stats"][0]["avg"] == -2.46
     assert seasonal_payload("BBCA", None) is None
     assert seasonal_payload("BBCA", {}) is None
     # years dihitung dari data bila tidak ada
     q = seasonal_payload("BBCA", {"monthly_returns": {"Mar": {"2023": 1.0}}})
     assert q is not None and q["years"] == ["2023"]
+    # summary non-dict -> None, tidak crash
+    r = seasonal_payload("X", {"monthly_returns": {"Mar": {"2023": 1.0}}, "summary": "teks"})
+    assert r is not None and r["summary"] is None and r["monthly_stats"] == []
 
 
 def test_seasonal_route():
