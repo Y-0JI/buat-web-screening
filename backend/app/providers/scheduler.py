@@ -2,7 +2,7 @@
 
 Memastikan total request ke sumber eksternal (Yahoo Finance / IDX) tidak
 melebihi `settings.rate_limit_per_minute` (sliding window 60 detik). Provider
-memanggil `await request_scheduler.acquire()` sebelum tiap request; bila窗口
+memanggil `await request_scheduler.acquire()` sebelum tiap request; bila window
 penuh, menunggu hingga slot bebas. Tanpa dependency baru.
 
 Catatan: ini pembatas request lintas-provider, berbeda dengan `scheduler.py`
@@ -35,7 +35,7 @@ class RequestScheduler:
                 if len(self._window) < self._max:
                     self._window.append(now)
                     return
-                # estimasi waktu tunggu hingga slot paling tua keluar窗口
+                # estimasi waktu tunggu hingga slot paling tua keluar window
                 wait = 60 - (now - self._window[0]) + 0.05
             if wait > 0:
                 await asyncio.sleep(wait)
