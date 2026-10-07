@@ -40,9 +40,10 @@ const uid = () => `m${Date.now()}-${seq++}`;
 interface Props {
   view: AiView;
   onView: (v: AiView) => void;
+  ticker?: string;
 }
 
-export function AiPanel({ view, onView }: Props) {
+export function AiPanel({ view, onView, ticker }: Props) {
   const [models, setModels] = useState<ModelInfo[]>([]);
   const [model, setModel] = useState("coba9router");
   const [threads, setThreads] = useState<ThreadSummary[]>([]);
@@ -319,6 +320,7 @@ export function AiPanel({ view, onView }: Props) {
           threadId,
           model,
           signal: controller.signal,
+          context: { view: "dashboard", ticker },
           onEvent,
         });
       } catch {
@@ -332,7 +334,7 @@ export function AiPanel({ view, onView }: Props) {
         abortRef.current = null;
       }
     },
-    [activeId, input, model, patchAssistant, refreshThreads, streaming]
+    [activeId, input, model, patchAssistant, refreshThreads, streaming, ticker]
   );
 
   const stop = useCallback(() => {

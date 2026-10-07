@@ -46,7 +46,7 @@ export function DashboardShell() {
           />
         </main>
 
-        <AiPanel view={aiView} onView={setAiView} />
+        <AiPanel view={aiView} onView={setAiView} ticker={ticker} />
       </div>
 
       {aiView !== "fullscreen" && (
