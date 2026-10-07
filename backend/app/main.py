@@ -5,6 +5,7 @@ Layer provider/service/repository tetap dipakai oleh tool agen. Router fitur
 lama tidak lagi dipasang.
 """
 
+import asyncio
 import logging
 from contextlib import asynccontextmanager
 
@@ -43,7 +44,28 @@ async def lifespan(app: FastAPI):
         logger.info("Database tables ready")
     except Exception as e:  # noqa: BLE001
         logger.warning("Database tidak tersedia: %s", e)
+    task: "asyncio.Task[None] | None" = None
+    stop: "asyncio.Event | None" = None
+    try:
+        from app.services.accumulation_daily import accumulation_daily_loop
+
+        stop = asyncio.Event()
+        task = asyncio.create_task(accumulation_daily_loop(stop))
+        logger.info("Scheduler akumulasi harian aktif")
+    except Exception as e:  # noqa: BLE001
+        logger.warning("Scheduler akumulasi tidak aktif: %s", e)
     yield
+    if stop is not None:
+        stop.set()
+    if task is not None:
+        try:
+            await asyncio.wait_for(asyncio.shield(task), timeout=5.0)
+        except (asyncio.TimeoutError, asyncio.CancelledError, Exception):  # noqa: BLE001
+            task.cancel()
+            try:
+                await task
+            except (asyncio.CancelledError, Exception):  # noqa: BLE001
+                pass
 
 
 app = FastAPI(title="IDX Copilot", version="0.2.0", lifespan=lifespan)

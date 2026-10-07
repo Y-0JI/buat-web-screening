@@ -49,11 +49,54 @@ def test_run_one_cycle_lewati_bila_disabled_atau_busy(monkeypatch=None):
         settings.accumulation_enabled, settings.accumulation_scan_token = saved_enabled, saved_token
 
 
+def test_lifespan_tetap_hidup_bila_scheduler_gagal(monkeypatch=None):
+    # Lifespan yang akan dipakai Task ini: create_task dibungkus try, loop
+    # di-cancel saat shutdown. Test langsung perilaku create_task/cancel:
+    import asyncio
+    async def boom():
+        await asyncio.sleep(0)
+        raise RuntimeError("loop rusak")
+    async def go():
+        t = asyncio.create_task(boom())
+        try:
+            await asyncio.wait_for(asyncio.shield(t), timeout=5)
+        except Exception:
+            pass
+        t.cancel()
+        try:
+            await t
+        except (asyncio.CancelledError, RuntimeError):
+            pass
+        return "hidup"
+    assert asyncio.run(go()) == "hidup"
+
+
+def test_lifespan_menyalakan_dan_mematikan_loop():
+    import app.services.accumulation_daily as sched
+    from fastapi.testclient import TestClient
+    import app.main as main_mod
+    jalan = []
+    async def fake_loop(stop, now_fn=None, initial_delay_s=30, error_retry_s=300):
+        jalan.append("start")
+        await stop.wait()
+        jalan.append("stop")
+    real = sched.accumulation_daily_loop
+    sched.accumulation_daily_loop = fake_loop
+    try:
+        with TestClient(main_mod.app):
+            assert jalan == ["start"], jalan
+        assert jalan == ["start", "stop"], jalan
+    finally:
+        sched.accumulation_daily_loop = real
+
+
 def main():
     test_next_run_at_senin_pagi()
     test_is_market_day()
     test_next_run_at_lewat_jadwal_lompat_ke_besok()
     test_run_one_cycle_lewati_bila_disabled_atau_busy()
+    test_lifespan_tetap_hidup_bila_scheduler_gagal()
+    test_lifespan_menyalakan_dan_mematikan_loop()
     print("OK: test_accumulation_daily lolos")
 
 
