@@ -90,4 +90,14 @@ describe("AccumulationCard (render)", () => {
     );
     expect(html).toContain("Belum ada hasil scan");
   });
+
+  test("menampilkan umur data saat stale", () => {
+    const html = renderToStaticMarkup(
+      createElement(AccumulationCard, {
+        data: { ...sample, stale: true, stale_trading_days: 5 },
+      })
+    );
+    expect(html).toContain("data basi");
+    expect(html).toContain("hari bursa ke-5");
+  });
 });

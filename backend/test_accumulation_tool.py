@@ -91,7 +91,7 @@ async def _test_empty_and_stale_and_limit():
         assert r["stale"] is True, r
         assert len(r["candidates"]) <= 25, len(r["candidates"])
         assert r["status"] == "partial", r
-        assert old.isoformat() in json.dumps(r), r  # tanggal scan ikut terbawa
+        assert old.isoformat() in r.get("note", ""), r  # tanggal scan ikut terbawa di note
     finally:
         await engine.dispose()
 

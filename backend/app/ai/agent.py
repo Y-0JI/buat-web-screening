@@ -313,6 +313,7 @@ async def _get_accumulation_candidates(limit: int = 10) -> dict:
             "Hasil screening deskriptif dari aliran harga/arus asing/broker besar; "
             "belum terbukti prediktif (hasil backtest tidak menunjukkan edge). BUKAN "
             "label institusi, bukan saran investasi, bukan rekomendasi. "
+            f"Data per {scan.get('scan_date') or 'tanggal tak diketahui'}. "
             "depth=broker = dihitung dengan data broker, depth=foreign = hanya "
             "arus asing, depth=hv = hanya harga-volume."
         ),
@@ -584,6 +585,8 @@ SYSTEM_PROMPT = (
     "alternatif (get_top_active, get_live_price per saham). Untuk data akumulasi "
     "(get_accumulation_candidates), WAJIB sebutkan tanggal datanya (scan_date) dan "
     "bila field stale=true katakan bahwa itu data lama, bukan data hari ini. "
+    "Bila tool punya scan_date, sebutkan tanggal itu persis seperti tertulis "
+    "(contoh: 'data per 2026-09-30'); jangan menulis ulang ke nama hari/bulan. "
     "Untuk broker summary, panggil get_broker_summary "
     "cukup SEKALI per saham (default semua investor) — jangan panggil berulang "
     "untuk asing/domestik, karena filter bisa diubah user di kartu. Untuk pertanyaan "
