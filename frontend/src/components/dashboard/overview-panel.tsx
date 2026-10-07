@@ -1,14 +1,16 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   fmtCompact,
   fmtRp,
 } from "@/lib/format";
 import {
+  formatTradeDate,
   getBrokerSummary,
   getNews,
   getOrderFlow,
+  getOrderFlowDates,
   type BrokerSummary,
   type NewsItem,
   type OrderFlowData,
@@ -18,6 +20,12 @@ import type { LiveTrade } from "@/lib/live";
 import { NewsCards } from "./news-cards";
 
 const flowCache = new Map<string, OrderFlowData | null>();
+const datesCache = new Map<string, string[]>();
+
+function fullVal(v: number | null | undefined): string {
+  if (v == null || !Number.isFinite(Number(v))) return "-";
+  return Math.round(Number(v)).toLocaleString("id-ID");
+}
 
 function ActionBadge({ action }: { action: string | null }) {
   const buy = action === "BUY";
@@ -59,38 +67,71 @@ interface Props {
 }
 
 export function OverviewPanel({ ticker, onOpenArticle, onOpenNews, liveTrades, liveConnected, hideBrokers }: Props) {
-  const [flow, setFlow] = useState<OrderFlowData | null | undefined>(() =>
-    flowCache.has(ticker) ? flowCache.get(ticker) ?? null : undefined
-  );
+  const [flow, setFlow] = useState<OrderFlowData | null | undefined>(undefined);
+  const [dates, setDates] = useState<string[]>([]);
+  const [selDate, setSelDate] = useState<string | null>(null);
+  const lastLoaded = useRef<string>("");
   const rows = useMemo(
     () =>
-      (liveTrades.length ? liveTrades : (flow?.rows ?? [])).slice(0, 50),
-    [liveTrades, flow]
+      (liveTrades.length && (selDate == null || selDate === dates[0]) ? liveTrades : (flow?.rows ?? [])).slice(0, 50),
+    [liveTrades, flow, selDate, dates]
   );
   const [brokers, setBrokers] = useState<BrokerSummary[] | null>(null);
   const [news, setNews] = useState<NewsItem[] | undefined>(undefined);
   const [error, setError] = useState<string | null>(null);
+  const showLive = liveConnected && (selDate == null || selDate === dates[0]);
+
+  const loadFlow = async (date: string | null, cancelled: () => boolean) => {
+    const key = `${ticker}|${date ?? ""}`;
+    const cached = flowCache.get(key);
+    if (cached !== undefined) {
+      if (cached) lastLoaded.current = cached.date ?? "";
+      setFlow(cached ?? null);
+      setSelDate((prev) => prev ?? cached?.date ?? null);
+      return;
+    }
+    try {
+      const of = await getOrderFlow(ticker, { date: date ?? undefined, limit: 50 }).catch(() => null);
+      if (cancelled()) return;
+      flowCache.set(key, of);
+      if (of) lastLoaded.current = of.date ?? "";
+      setFlow(of);
+      setSelDate((prev) => prev ?? of?.date ?? null);
+    } catch {
+      if (!cancelled()) setFlow((prev) => prev ?? null);
+    }
+  };
 
   useEffect(() => {
     let cancelled = false;
-    if (flowCache.has(ticker)) {
-      setFlow(flowCache.get(ticker) ?? null);
-    } else {
-      setFlow(undefined);
-    }
+    const isCancelled = () => cancelled;
+    setFlow(undefined);
+    setDates([]);
+    setSelDate(null);
+    lastLoaded.current = "";
     setBrokers(null);
     setNews(undefined);
     setError(null);
     void (async () => {
       try {
-        const [of, bq, nq] = await Promise.all([
+        const [ds, of, bq, nq] = await Promise.all([
+          (datesCache.get(ticker) !== undefined
+            ? Promise.resolve(datesCache.get(ticker) ?? [])
+            : getOrderFlowDates(ticker).catch(() => [] as string[])),
           getOrderFlow(ticker, { limit: 50 }).catch(() => null),
           getBrokerSummary(ticker, { flow: "all", net: true, limit: 50, level_limit: 10 }).catch(() => null),
           getNews(ticker, { perPage: 9 }).catch(() => ({ items: [] as NewsItem[], hasMore: false, error: null })),
         ]);
         if (cancelled) return;
-        flowCache.set(ticker, of);
+        datesCache.set(ticker, ds);
+        setDates(ds);
+        const d0 = ds[0] ?? null;
+        if (of) {
+          flowCache.set(`${ticker}|`, of);
+          lastLoaded.current = of.date ?? "";
+        }
         setFlow(of);
+        setSelDate(d0 ?? of?.date ?? null);
         setBrokers(bq ? [bq] : []);
         setNews(nq.items);
       } catch {
@@ -107,22 +148,50 @@ export function OverviewPanel({ ticker, onOpenArticle, onOpenNews, liveTrades, l
     };
   }, [ticker]);
 
+  const changeDate = async (date: string) => {
+    if (!date || date === lastLoaded.current) {
+      setSelDate(date);
+      return;
+    }
+    setSelDate(date);
+    setFlow(undefined);
+    await loadFlow(date, () => false);
+  };
+
   return (
     <div className="mt-2 space-y-3 pb-1">
-      <section className="rounded-lg border border-border bg-surface-1 px-3 py-2.5">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 items-start">
+      <section className="rounded-lg border border-border bg-surface-1 px-3 py-2.5 min-w-0">
         <div className="flex items-center gap-2 flex-wrap mb-2">
           <h4 className="text-xs font-bold text-text-primary mr-auto">
-            Done Details{" "}
-            {liveConnected && (
+            Running Trade{" "}
+            {showLive && (
               <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-500">
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
                 LIVE
               </span>
             )}
           </h4>
+          {dates.length > 0 && (
+            <label className="flex items-center gap-1.5 text-[11px] text-text-muted">
+              Tanggal
+              <select
+                value={selDate ?? ""}
+                onChange={(e) => void changeDate(e.target.value)}
+                className="bg-surface-2 border border-border rounded px-1.5 py-1 text-text-primary text-[11px]"
+                aria-label="Tanggal running trade"
+              >
+                {dates.map((d) => (
+                  <option key={d} value={d}>
+                    {formatTradeDate(d)}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
           {flow?.date && (
             <span className="text-[11px] text-text-muted">
-              Tanggal <span className="text-text-primary">{flow.date}</span>
+              Tanggal <span className="text-text-primary">{formatTradeDate(flow.date)}</span>
             </span>
           )}
           {flow?.total != null && (
@@ -132,15 +201,15 @@ export function OverviewPanel({ ticker, onOpenArticle, onOpenNews, liveTrades, l
           )}
         </div>
         {flow === undefined ? (
-          <p className="py-4 text-center text-xs text-text-muted">Memuat done details…</p>
+          <p className="py-4 text-center text-xs text-text-muted">Memuat running trade…</p>
         ) : !(flow?.rows?.length) ? (
           <p className="py-4 text-center text-xs text-text-muted">Done details tidak tersedia.</p>
         ) : (
-          <div className="max-h-80 overflow-y-auto rounded-lg border border-border/60">
-            <table className="w-full text-[11px]">
+          <div className="max-h-80 overflow-auto rounded-lg border border-border/60">
+            <table className="w-full text-[11px] min-w-[520px]">
               <thead className="sticky top-0 bg-surface-2">
                 <tr className="text-text-muted">
-                  <th className="py-1.5 px-2 text-left font-semibold">Time</th>
+                  <th className="py-1.5 px-2 text-left font-semibold whitespace-nowrap">Time</th>
                   <th className="py-1.5 px-2 text-left font-semibold">Action</th>
                   <th className="py-1.5 px-2 text-right font-semibold">Price</th>
                   <th className="py-1.5 px-2 text-right font-semibold">Lot</th>
@@ -157,7 +226,7 @@ export function OverviewPanel({ ticker, onOpenArticle, onOpenNews, liveTrades, l
                     <td className="py-1.5 px-2"><ActionBadge action={r.action} /></td>
                     <td className="py-1.5 px-2 text-right text-text-primary tabular-nums">{r.price != null ? fmtRp(r.price) : "-"}</td>
                     <td className="py-1.5 px-2 text-right text-text-primary tabular-nums">{r.lot != null ? fmtCompact(r.lot) : "-"}</td>
-                    <td className="py-1.5 px-2 text-right text-text-primary tabular-nums">{r.value != null ? fmtCompact(r.value) : "-"}</td>
+                    <td className="py-1.5 px-2 text-right text-text-primary tabular-nums">{fullVal(r.value)}</td>
                     <td className="py-1.5 px-2"><BrokerBadge code={r.buyer} kind={r.buyer_type} /></td>
                     <td className="py-1.5 px-2"><BrokerBadge code={r.seller} kind={r.seller_type} /></td>
                     <td className="py-1.5 px-2 text-text-secondary">{r.board || "-"}</td>
@@ -171,9 +240,10 @@ export function OverviewPanel({ ticker, onOpenArticle, onOpenNews, liveTrades, l
 
       {brokers?.map((b, i) =>
         hideBrokers ? null : (
-          <BrokerSummaryCard key={`ov-broker-${b.stock_code}-${i}`} initial={b} />
+          <BrokerSummaryCard key={`ov-broker-${b.stock_code}-${i}`} initial={b} compact />
         )
       )}
+      </div>
 
       <section className="rounded-lg border border-border bg-surface-1 px-3 py-2.5">
         <button

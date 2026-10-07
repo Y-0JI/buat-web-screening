@@ -57,3 +57,25 @@ async def order_flow(ticker: str, date: Optional[str] = None, limit: int = 50):
     if not payload:
         return {"success": False, "error": "Order flow tidak tersedia."}
     return {"success": True, "data": payload}
+
+
+def done_dates_payload(data: Optional[dict]) -> Optional[dict]:
+    """Normalisasi respons /api/done-details/dates -> daftar tanggal."""
+    if not data:
+        return None
+    dates = [d for d in (data.get("dates") or []) if isinstance(d, str)]
+    code = data.get("code")
+    return {
+        "code": code,
+        "count": data.get("count", len(dates)),
+        "dates": dates,
+    }
+
+
+@router.get("/order-flow/{ticker}/dates")
+async def order_flow_dates(ticker: str):
+    data = await IdxEdgeProvider().fetch_done_detail_dates(ticker.upper())
+    payload = done_dates_payload(data)
+    if not payload or not payload["dates"]:
+        return {"success": False, "error": "Daftar tanggal tidak tersedia."}
+    return {"success": True, "data": payload}
