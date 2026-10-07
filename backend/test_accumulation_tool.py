@@ -4,6 +4,7 @@ Jalan: ./.venv/bin/python test_accumulation_tool.py
 """
 
 import asyncio
+import json
 import os
 import sys
 from datetime import date, timedelta
@@ -90,13 +91,41 @@ async def _test_empty_and_stale_and_limit():
         assert r["stale"] is True, r
         assert len(r["candidates"]) <= 25, len(r["candidates"])
         assert r["status"] == "partial", r
+        assert old.isoformat() in r.get("note", ""), r  # tanggal scan ikut terbawa di note
     finally:
+        await engine.dispose()
+
+
+async def _test_trigger_tidak_menyentuh_jaringan_saat_segar():
+    from app.config import settings
+
+    engine = await _fresh()
+    orig = agent.IdxEdgeProvider
+    saved_enabled = settings.accumulation_enabled
+    saved_token = settings.accumulation_scan_token
+    settings.accumulation_enabled = True
+    settings.accumulation_scan_token = "secret"
+
+    def boom(*a, **k):
+        raise RuntimeError("trigger test menyentuh jaringan!")
+
+    agent.IdxEdgeProvider = boom
+    try:
+        await repo.save_scan(date.today(), "complete", signals=[])
+        from app.services import accumulation_scan as scan_mod
+        out = await scan_mod.trigger_scan_if_stale()
+        assert out == {"ok": False, "reason": "fresh"}, out
+    finally:
+        agent.IdxEdgeProvider = orig
+        settings.accumulation_enabled = saved_enabled
+        settings.accumulation_scan_token = saved_token
         await engine.dispose()
 
 
 def main():
     asyncio.run(_test_reads_db_no_network())
     asyncio.run(_test_empty_and_stale_and_limit())
+    asyncio.run(_test_trigger_tidak_menyentuh_jaringan_saat_segar())
     print("OK: test_accumulation_tool lolos")
 
 

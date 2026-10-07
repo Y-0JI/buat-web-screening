@@ -331,3 +331,37 @@ async def continue_scan(prep: dict, force: bool = False) -> None:
             pass
     finally:
         _in_progress = False
+
+
+async def trigger_scan_if_stale(*, force: bool = False, tag: str = "chat") -> dict:
+    """Bangkitkan background scan bila data DB bukan scan hari ini.
+
+    Syarat mulai: accumulation_enabled True, token scan terisi, tak ada scan
+    berjalan, dan BELUM ada scan complete untuk tanggal data hari ini
+    (diperiksa ringan tanpa mengubah baris DB). Idempotent: dua pemanggil
+    bersamaan hanya satu yang lolos single-flight.
+    """
+    from datetime import datetime, timedelta, timezone
+
+    from app.ai.agent import _trading_days_since
+
+    if not settings.accumulation_enabled or not settings.accumulation_scan_token:
+        logger.info("trigger akumulasi (%s): nonaktif, lewati", tag)
+        return {"ok": False, "reason": "disabled"}
+    if scan_running():
+        return {"ok": False, "reason": "busy"}
+    latest = await repo.get_latest_scan(limit=1)
+    today = datetime.now(timezone.utc) + timedelta(hours=7)
+    data_today = _iso_date(today.date().isoformat())
+    if latest and latest.get("status") == "complete" and data_today and _trading_days_since(latest.get("scan_date")) == 0:
+        return {"ok": False, "reason": "fresh"}
+    try:
+        prep = await begin_scan(force=force)
+    except Exception as e:  # noqa: BLE001
+        logger.warning("trigger akumulasi (%s): begin error: %s", tag, e)
+        return {"ok": False, "reason": "begin-error"}
+    if not prep.get("ok"):
+        return {"ok": False, "reason": prep.get("reason", "skip"), "scan_date": prep.get("scan_date")}
+    asyncio.create_task(continue_scan(prep, force=force))
+    logger.info("trigger akumulasi (%s): background scan jalan", tag)
+    return {"ok": True, "scan_id": prep.get("scan_id"), "scan_date": prep.get("scan_date")}

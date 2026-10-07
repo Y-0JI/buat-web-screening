@@ -144,6 +144,7 @@ def test_accumulation_prompt_disclaimer():
         assert "deskriptif" in low, (name, text)
         assert "belum terbukti prediktif" in low, (name, text)
         assert "bukan rekomendasi" in low, (name, text)
+    assert "persis seperti tertulis" in agent.SYSTEM_PROMPT
 
 
 def test_accumulation_prompt_no_forbidden_phrases():

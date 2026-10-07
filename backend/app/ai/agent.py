@@ -147,10 +147,11 @@ _TOP_WAIT = 3.0
 
 
 def _norm_top_item(item: Any) -> Any:
-    """Normalisasi defensif item top-aktif; field mentah dipertahankan.
+    """Normalisasi item top-aktif dari pesan snapshot|top5 WS.
 
-    Bentuk item provider belum terverifikasi (belum teramati saat pasar buka),
-    jadi kita petakan nama alternatif tanpa membuang field aslinya.
+    Bentuk terverifikasi (market buka):
+    {"ticker","metric","count","last_price","last_change_pct"}.
+    Field mentah dipertahankan agar tidak ada info yang hilang.
     """
     if not isinstance(item, dict):
         return item
@@ -276,6 +277,12 @@ async def _get_accumulation_candidates(limit: int = 10) -> dict:
     scan = await acc_repo.get_latest_scan(limit=limit)
     if not scan:
         return {"error": "Belum ada hasil scan akumulasi."}
+    try:
+        from app.services import accumulation_scan as scan_svc
+
+        await scan_svc.trigger_scan_if_stale(tag="chat")
+    except Exception:  # noqa: BLE001 — tool tak boleh gagal karena trigger
+        pass
     age = _trading_days_since(scan.get("scan_date"))
     stale = age is not None and age > _STALE_TRADING_DAYS
     candidates = []
@@ -306,6 +313,7 @@ async def _get_accumulation_candidates(limit: int = 10) -> dict:
             "Hasil screening deskriptif dari aliran harga/arus asing/broker besar; "
             "belum terbukti prediktif (hasil backtest tidak menunjukkan edge). BUKAN "
             "label institusi, bukan saran investasi, bukan rekomendasi. "
+            f"Data per {scan.get('scan_date') or 'tanggal tak diketahui'}. "
             "depth=broker = dihitung dengan data broker, depth=foreign = hanya "
             "arus asing, depth=hv = hanya harga-volume."
         ),
@@ -577,6 +585,8 @@ SYSTEM_PROMPT = (
     "alternatif (get_top_active, get_live_price per saham). Untuk data akumulasi "
     "(get_accumulation_candidates), WAJIB sebutkan tanggal datanya (scan_date) dan "
     "bila field stale=true katakan bahwa itu data lama, bukan data hari ini. "
+    "Bila tool punya scan_date, sebutkan tanggal itu persis seperti tertulis "
+    "(contoh: 'data per 2026-09-30'); jangan menulis ulang ke nama hari/bulan. "
     "Untuk broker summary, panggil get_broker_summary "
     "cukup SEKALI per saham (default semua investor) — jangan panggil berulang "
     "untuk asing/domestik, karena filter bisa diubah user di kartu. Untuk pertanyaan "

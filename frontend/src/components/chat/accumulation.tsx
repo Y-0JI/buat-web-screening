@@ -117,6 +117,11 @@ export function AccumulationCard({ data }: { data: AccumulationResult }) {
             data basi
           </span>
         ) : null}
+        {data.stale && data.stale_trading_days != null ? (
+          <span className="rounded border border-amber-500/30 bg-amber-500/10 px-1.5 py-0.5 text-[10px] text-amber-500">
+            hari bursa ke-{data.stale_trading_days}
+          </span>
+        ) : null}
       </div>
 
       {!candidates.length ? (
