@@ -1,5 +1,7 @@
 import { describe, expect, test } from "bun:test";
-import { reduceLiveMessage, wsUrl } from "./live";
+import { mergeTradeRows, reduceLiveMessage, wsUrl } from "./live";
+import type { OrderFlowRow } from "./chat";
+import type { LiveTrade } from "./live";
 
 const EMPTY = { quote: null, trades: [] };
 
@@ -56,5 +58,51 @@ describe("reduceLiveMessage", () => {
 
   test("pesan tak dikenal diabaikan", () => {
     expect(reduceLiveMessage(EMPTY, "BBCA", { type: "top5" })).toEqual(EMPTY);
+  });
+});
+
+describe("mergeTradeRows", () => {
+  const rest = (time: string, extra: Partial<OrderFlowRow> = {}): OrderFlowRow => ({
+    time,
+    action: "BUY",
+    price: 100,
+    lot: 1,
+    value: 10000,
+    buyer: "A",
+    seller: "B",
+    buyer_type: "D",
+    seller_type: "D",
+    board: "RG",
+    ...extra,
+  });
+  const live = (time: string, extra: Partial<LiveTrade> = {}): LiveTrade => ({
+    ticker: "BBCA",
+    ...rest(time),
+    buyer_type: null,
+    seller_type: null,
+    ...extra,
+  });
+
+  test("tick live baru di depan, history REST tetap ada", () => {
+    const out = mergeTradeRows(
+      [rest("10:00:01"), rest("10:00:00")],
+      [live("10:00:02")]
+    );
+    expect(out.map((r) => r.time)).toEqual(["10:00:02", "10:00:01", "10:00:00"]);
+  });
+
+  test("duplikat REST/live hanya sekali, metadata REST menang", () => {
+    const out = mergeTradeRows([rest("10:00:01")], [live("10:00:01")]);
+    expect(out).toHaveLength(1);
+    expect(out[0].buyer_type).toBe("D");
+  });
+
+  test("dibatasi 50 baris terbaru", () => {
+    const many = Array.from({ length: 60 }, (_, i) => live(`10:00:${String(i).padStart(2, "0")}`));
+    expect(mergeTradeRows([], many)).toHaveLength(50);
+  });
+
+  test("tanpa live tetap mengembalikan tape REST", () => {
+    expect(mergeTradeRows([rest("10:00:01")], [])).toHaveLength(1);
   });
 });
