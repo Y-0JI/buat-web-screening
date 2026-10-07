@@ -141,7 +141,7 @@ def _restore(saved):
 def test_endpoint_token_and_single_flight():
     saved = _apply_cfg()
     client = TestClient(app)
-    orig = (scan.begin_scan, scan.continue_scan, scan.scan_running)
+    orig = (scan.begin_scan, scan.continue_scan, scan.scan_running, scan.trigger_scan_if_stale)
     try:
         settings.accumulation_scan_token = ""
         assert client.post("/api/accumulation/scan").status_code == 403
@@ -157,8 +157,14 @@ def test_endpoint_token_and_single_flight():
         async def fake_continue(prep, force=False):
             return None
 
+        async def fake_trigger(*, force=False, tag="endpoint"):
+            if scan.scan_running():
+                return {"ok": False, "reason": "busy"}
+            return {"ok": True, "scan_id": 123, "scan_date": "2026-09-30"}
+
         scan.begin_scan = fake_begin
         scan.continue_scan = fake_continue
+        scan.trigger_scan_if_stale = fake_trigger
         scan.scan_running = lambda: False
         r = client.post("/api/accumulation/scan", headers={"X-Scan-Token": "secret"})
         assert r.status_code == 202 and r.json()["scan_id"] == 123, r.text
@@ -167,7 +173,7 @@ def test_endpoint_token_and_single_flight():
         assert client.post("/api/accumulation/scan",
                            headers={"X-Scan-Token": "secret"}).status_code == 409
     finally:
-        scan.begin_scan, scan.continue_scan, scan.scan_running = orig
+        scan.begin_scan, scan.continue_scan, scan.scan_running, scan.trigger_scan_if_stale = orig
         _restore(saved)
 
 

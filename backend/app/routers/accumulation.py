@@ -37,31 +37,27 @@ async def trigger_scan(
         raise HTTPException(status_code=403, detail="Fitur scan tidak aktif.")
     _check_token(x_scan_token)
 
-    if scan_svc.scan_running():
+    out = await scan_svc.trigger_scan_if_stale(force=force, tag="endpoint")
+    if out.get("reason") == "busy":
         raise HTTPException(status_code=409, detail="Scan sedang berjalan.")
-
-    prep = await scan_svc.begin_scan(force=force)
-    if prep.get("busy"):
-        raise HTTPException(status_code=409, detail="Scan sedang berjalan.")
-    if prep.get("error"):
-        raise HTTPException(status_code=500, detail=prep["error"])
-    if not prep.get("ok"):
+    if out.get("reason") == "begin-error":
+        raise HTTPException(status_code=500, detail="Gagal memulai scan.")
+    if not out.get("ok"):
+        latest = await repo.get_latest_scan(limit=1)
         return JSONResponse(
             status_code=200,
             content={
                 "success": True, "skipped": True,
-                "scan_id": prep.get("scan_id"),
-                "scan_date": prep.get("scan_date"),
-                "reason": prep.get("reason"),
+                "scan_id": (latest or {}).get("id"),
+                "scan_date": out.get("scan_date") or (latest or {}).get("scan_date"),
+                "reason": out.get("reason", "skip"),
             },
         )
-
-    asyncio.create_task(scan_svc.continue_scan(prep, force=force))
     return JSONResponse(
         status_code=202,
         content={
             "success": True, "accepted": True,
-            "scan_id": prep["scan_id"], "scan_date": prep["scan_date"],
+            "scan_id": out.get("scan_id"), "scan_date": out.get("scan_date"),
         },
     )
 

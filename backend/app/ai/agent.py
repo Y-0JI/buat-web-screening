@@ -277,6 +277,12 @@ async def _get_accumulation_candidates(limit: int = 10) -> dict:
     scan = await acc_repo.get_latest_scan(limit=limit)
     if not scan:
         return {"error": "Belum ada hasil scan akumulasi."}
+    try:
+        from app.services import accumulation_scan as scan_svc
+
+        await scan_svc.trigger_scan_if_stale(tag="chat")
+    except Exception:  # noqa: BLE001 — tool tak boleh gagal karena trigger
+        pass
     age = _trading_days_since(scan.get("scan_date"))
     stale = age is not None and age > _STALE_TRADING_DAYS
     candidates = []
