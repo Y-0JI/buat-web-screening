@@ -17,6 +17,7 @@ import {
 } from "@/lib/chat";
 import { BrokerSummaryCard } from "../chat/broker-summary";
 import type { LiveTrade } from "@/lib/live";
+import { mergeTradeRows } from "@/lib/live";
 import { NewsCards } from "./news-cards";
 
 const flowCache = new Map<string, OrderFlowData | null>();
@@ -71,15 +72,18 @@ export function OverviewPanel({ ticker, onOpenArticle, onOpenNews, liveTrades, l
   const [dates, setDates] = useState<string[]>([]);
   const [selDate, setSelDate] = useState<string | null>(null);
   const lastLoaded = useRef<string>("");
+  const viewingLatest = selDate == null || selDate === dates[0];
   const rows = useMemo(
     () =>
-      (liveTrades.length && (selDate == null || selDate === dates[0]) ? liveTrades : (flow?.rows ?? [])).slice(0, 50),
-    [liveTrades, flow, selDate, dates]
+      viewingLatest && liveTrades.length
+        ? mergeTradeRows(flow?.rows ?? [], liveTrades)
+        : (flow?.rows ?? []).slice(0, 50),
+    [liveTrades, flow, viewingLatest]
   );
   const [brokers, setBrokers] = useState<BrokerSummary[] | null>(null);
   const [news, setNews] = useState<NewsItem[] | undefined>(undefined);
   const [error, setError] = useState<string | null>(null);
-  const showLive = liveConnected && (selDate == null || selDate === dates[0]);
+  const showLive = liveConnected && viewingLatest;
 
   const loadFlow = async (date: string | null, cancelled: () => boolean) => {
     const key = `${ticker}|${date ?? ""}`;
@@ -200,9 +204,9 @@ export function OverviewPanel({ ticker, onOpenArticle, onOpenNews, liveTrades, l
             </span>
           )}
         </div>
-        {flow === undefined ? (
+        {flow === undefined && !rows.length ? (
           <p className="py-4 text-center text-xs text-text-muted">Memuat running trade…</p>
-        ) : !(flow?.rows?.length) ? (
+        ) : !rows.length ? (
           <p className="py-4 text-center text-xs text-text-muted">Done details tidak tersedia.</p>
         ) : (
           <div className="max-h-80 overflow-auto rounded-lg border border-border/60">

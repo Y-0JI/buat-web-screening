@@ -86,6 +86,30 @@ export function reduceLiveMessage(
   return prev;
 }
 
+export function mergeTradeRows(
+  rest: OrderFlowRow[],
+  live: LiveTrade[],
+  cap = 50
+): OrderFlowRow[] {
+  const key = (r: OrderFlowRow) =>
+    `${r.time ?? ""}|${r.price ?? ""}|${r.lot ?? ""}|${r.buyer ?? ""}|${r.seller ?? ""}`;
+  const seen = new Set<string>();
+  const out: OrderFlowRow[] = [];
+  for (const r of rest) {
+    seen.add(key(r));
+    out.push(r);
+  }
+  for (const l of live) {
+    const k = key(l);
+    if (!seen.has(k)) {
+      seen.add(k);
+      out.push(l);
+    }
+  }
+  out.sort((a, b) => String(b.time ?? "").localeCompare(String(a.time ?? "")));
+  return out.slice(0, cap);
+}
+
 interface LiveState {
   quote: LiveQuote | null;
   trades: LiveTrade[];
