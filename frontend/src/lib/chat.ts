@@ -437,16 +437,19 @@ export interface OrderFlowData {
   code: string | null;
   date: string | null;
   total: number | null;
+  page: number | null;
+  total_pages: number | null;
   rows: OrderFlowRow[];
 }
 
 export async function getOrderFlow(
   ticker: string,
-  opts: { date?: string; limit?: number } = {}
+  opts: { date?: string; limit?: number; page?: number } = {}
 ): Promise<OrderFlowData | null> {
   const q = new URLSearchParams();
   if (opts.date) q.set("date", opts.date);
   if (opts.limit) q.set("limit", String(opts.limit));
+  if (opts.page != null) q.set("page", String(opts.page));
   const res = await fetch(
     `${API_BASE}/api/order-flow/${encodeURIComponent(ticker)}?${q.toString()}`
   );

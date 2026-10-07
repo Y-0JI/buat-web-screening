@@ -70,33 +70,39 @@ export function OverviewPanel({ ticker, onOpenArticle, onOpenNews, liveTrades, l
   const [flow, setFlow] = useState<OrderFlowData | null | undefined>(undefined);
   const [dates, setDates] = useState<string[]>([]);
   const [selDate, setSelDate] = useState<string | null>(null);
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState<number | null>(null);
   const lastLoaded = useRef<string>("");
   const rows = useMemo(
     () =>
-      (liveTrades.length && (selDate == null || selDate === dates[0]) ? liveTrades : (flow?.rows ?? [])).slice(0, 50),
-    [liveTrades, flow, selDate, dates]
+      (liveTrades.length && (selDate == null || selDate === dates[0]) && page === 1 ? liveTrades : (flow?.rows ?? [])).slice(0, 50),
+    [liveTrades, flow, selDate, dates, page]
   );
   const [brokers, setBrokers] = useState<BrokerSummary[] | null>(null);
   const [news, setNews] = useState<NewsItem[] | undefined>(undefined);
   const [error, setError] = useState<string | null>(null);
   const showLive = liveConnected && (selDate == null || selDate === dates[0]);
 
-  const loadFlow = async (date: string | null, cancelled: () => boolean) => {
-    const key = `${ticker}|${date ?? ""}`;
+  const loadFlow = async (date: string | null, flowPage: number, cancelled: () => boolean) => {
+    const key = `${ticker}|${date ?? ""}|${flowPage}`;
     const cached = flowCache.get(key);
     if (cached !== undefined) {
-      if (cached) lastLoaded.current = cached.date ?? "";
+      lastLoaded.current = key;
       setFlow(cached ?? null);
       setSelDate((prev) => prev ?? cached?.date ?? null);
+      setPage(cached?.page ?? flowPage);
+      setTotalPages(cached?.total_pages ?? null);
       return;
     }
     try {
-      const of = await getOrderFlow(ticker, { date: date ?? undefined, limit: 50 }).catch(() => null);
+      const of = await getOrderFlow(ticker, { date: date ?? undefined, limit: 50, page: flowPage }).catch(() => null);
       if (cancelled()) return;
       flowCache.set(key, of);
-      if (of) lastLoaded.current = of.date ?? "";
+      lastLoaded.current = key;
       setFlow(of);
       setSelDate((prev) => prev ?? of?.date ?? null);
+      setPage(of?.page ?? flowPage);
+      setTotalPages(of?.total_pages ?? null);
     } catch {
       if (!cancelled()) setFlow((prev) => prev ?? null);
     }
@@ -108,6 +114,8 @@ export function OverviewPanel({ ticker, onOpenArticle, onOpenNews, liveTrades, l
     setFlow(undefined);
     setDates([]);
     setSelDate(null);
+    setPage(1);
+    setTotalPages(null);
     lastLoaded.current = "";
     setBrokers(null);
     setNews(undefined);
@@ -118,7 +126,7 @@ export function OverviewPanel({ ticker, onOpenArticle, onOpenNews, liveTrades, l
           (datesCache.get(ticker) !== undefined
             ? Promise.resolve(datesCache.get(ticker) ?? [])
             : getOrderFlowDates(ticker).catch(() => [] as string[])),
-          getOrderFlow(ticker, { limit: 50 }).catch(() => null),
+          getOrderFlow(ticker, { limit: 50, page: 1 }).catch(() => null),
           getBrokerSummary(ticker, { flow: "all", net: true, limit: 50, level_limit: 10 }).catch(() => null),
           getNews(ticker, { perPage: 9 }).catch(() => ({ items: [] as NewsItem[], hasMore: false, error: null })),
         ]);
@@ -126,12 +134,15 @@ export function OverviewPanel({ ticker, onOpenArticle, onOpenNews, liveTrades, l
         datesCache.set(ticker, ds);
         setDates(ds);
         const d0 = ds[0] ?? null;
+        const key = `${ticker}|${d0 ?? ""}|1`;
         if (of) {
-          flowCache.set(`${ticker}|`, of);
-          lastLoaded.current = of.date ?? "";
+          flowCache.set(key, of);
+          lastLoaded.current = key;
         }
         setFlow(of);
         setSelDate(d0 ?? of?.date ?? null);
+        setPage(of?.page ?? 1);
+        setTotalPages(of?.total_pages ?? null);
         setBrokers(bq ? [bq] : []);
         setNews(nq.items);
       } catch {
@@ -149,13 +160,28 @@ export function OverviewPanel({ ticker, onOpenArticle, onOpenNews, liveTrades, l
   }, [ticker]);
 
   const changeDate = async (date: string) => {
-    if (!date || date === lastLoaded.current) {
-      setSelDate(date);
-      return;
-    }
+    if (!date) return;
     setSelDate(date);
+    setPage(1);
+    setTotalPages(null);
     setFlow(undefined);
-    await loadFlow(date, () => false);
+    await loadFlow(date, 1, () => false);
+  };
+
+  const gotoOpening = async () => {
+    if (totalPages == null || totalPages <= 1 || !selDate) return;
+    setPage(totalPages);
+    setFlow(undefined);
+    await loadFlow(selDate, totalPages, () => false);
+  };
+
+  const stepBack = async () => {
+    if (totalPages == null || !selDate) return;
+    const next = Math.min(page + 1, totalPages);
+    if (next === page) return;
+    setPage(next);
+    setFlow(undefined);
+    await loadFlow(selDate, next, () => false);
   };
 
   return (
@@ -197,6 +223,31 @@ export function OverviewPanel({ ticker, onOpenArticle, onOpenNews, liveTrades, l
           {flow?.total != null && (
             <span className="text-[11px] text-text-muted">
               Total Transaksi: <span className="text-text-primary font-semibold">{flow.total.toLocaleString("id-ID")}</span>
+            </span>
+          )}
+          {totalPages != null && totalPages > 1 && (
+            <span className="flex items-center gap-1 text-[11px]">
+              <button
+                type="button"
+                onClick={() => void gotoOpening()}
+                disabled={page >= totalPages}
+                className="px-1.5 py-1 rounded border border-border text-text-secondary hover:text-text-primary hover:border-border disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                title="Loncat ke transaksi awal buka market"
+              >
+                Awal Buka
+              </button>
+              <button
+                type="button"
+                onClick={() => void stepBack()}
+                disabled={page >= totalPages}
+                className="px-1.5 py-1 rounded border border-border text-text-secondary hover:text-text-primary hover:border-border disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                title="Mundur ke transaksi lebih awal"
+              >
+                ← Mundur
+              </button>
+              <span className="text-text-muted tabular-nums">
+                {page}/{totalPages}
+              </span>
             </span>
           )}
         </div>

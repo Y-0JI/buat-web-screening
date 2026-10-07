@@ -11,7 +11,7 @@ router = APIRouter(prefix="/api", tags=["order-flow"])
 _MAX_LIMIT = 100
 
 
-def order_flow_payload(data: Optional[dict]) -> Optional[dict]:
+def order_flow_payload(data: Optional[dict], page: Optional[int] = None) -> Optional[dict]:
     """Normalisasi respons /api/done-details → baris cetak per transaksi."""
     if not data:
         return None
@@ -43,17 +43,20 @@ def order_flow_payload(data: Optional[dict]) -> Optional[dict]:
         "code": data.get("code"),
         "date": data.get("date"),
         "total": data.get("total"),
+        "page": page if page is not None else data.get("page"),
+        "total_pages": data.get("total_pages"),
         "rows": rows,
     }
 
 
 @router.get("/order-flow/{ticker}")
-async def order_flow(ticker: str, date: Optional[str] = None, limit: int = 50):
+async def order_flow(ticker: str, date: Optional[str] = None, limit: int = 50, page: int = 1):
     limit = max(1, min(int(limit or 50), _MAX_LIMIT))
+    page = max(1, int(page or 1))
     data = await IdxEdgeProvider().fetch_done_details(
-        ticker.upper(), date=date or None, per_page=limit
+        ticker.upper(), date=date or None, per_page=limit, page=page
     )
-    payload = order_flow_payload(data)
+    payload = order_flow_payload(data, page=page)
     if not payload:
         return {"success": False, "error": "Order flow tidak tersedia."}
     return {"success": True, "data": payload}
