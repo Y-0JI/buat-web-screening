@@ -454,6 +454,26 @@ export async function getOrderFlow(
   return data.success ? (data.data as OrderFlowData) : null;
 }
 
+export async function getOrderFlowDates(
+  ticker: string
+): Promise<string[]> {
+  const res = await fetch(
+    `${API_BASE}/api/order-flow/${encodeURIComponent(ticker)}/dates`
+  );
+  const data = await jsonOrThrow(res);
+  if (!data.success) return [];
+  const dates = (data.data as { dates?: unknown } | null)?.dates;
+  return Array.isArray(dates)
+    ? dates.filter((d): d is string => typeof d === "string")
+    : [];
+}
+
+export function formatTradeDate(iso: string | null): string {
+  if (!iso) return "-";
+  const [y, m, d] = (iso || "").split("-");
+  return y && m && d ? `${d}/${m}/${y}` : iso;
+}
+
 export interface NewsItem {
   title: string;
   url: string;

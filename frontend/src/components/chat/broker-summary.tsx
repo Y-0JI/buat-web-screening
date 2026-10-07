@@ -37,7 +37,7 @@ interface Row {
   avg: number | null;
 }
 
-export function BrokerSummaryCard({ initial }: { initial: BrokerSummary }) {
+export function BrokerSummaryCard({ initial, compact = false }: { initial: BrokerSummary; compact?: boolean }) {
   const [data, setData] = useState<BrokerSummary>(initial);
   const [flow, setFlow] = useState(initial.flow || "all");
   const [net, setNet] = useState(Boolean(initial.net));
@@ -129,16 +129,16 @@ export function BrokerSummaryCard({ initial }: { initial: BrokerSummary }) {
   const s = data.summary;
 
   return (
-    <div className="my-2 rounded-xl border border-border bg-surface-1/40 p-3 text-text-primary">
+    <div className={`${compact ? "" : "my-2 "}rounded-xl border border-border bg-surface-1/40 p-3 text-text-primary`}>
       <div className="flex items-center justify-between mb-2">
-        <div className="text-sm font-semibold">
+        <div className={`${compact ? "text-xs" : "text-sm"} font-semibold`}>
           Broker Summary <span className="text-text-secondary">{ticker}</span>
         </div>
         {loading && <span className="text-[11px] text-text-muted">memuat…</span>}
       </div>
 
       {/* Kontrol */}
-      <div className="flex flex-wrap items-center gap-2 mb-3 text-[11px]">
+      <div className={`flex flex-wrap items-center gap-2 ${compact ? "mb-2 text-[10px]" : "mb-3 text-[11px]"}`}>
         <input
           type="date"
           value={startDate}
@@ -187,9 +187,9 @@ export function BrokerSummaryCard({ initial }: { initial: BrokerSummary }) {
       </div>
 
       {/* Top 1/3/5 */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 mb-3">
+      <div className={`grid grid-cols-1 sm:grid-cols-3 gap-2 ${compact ? "mb-2" : "mb-3"}`}>
         {tops.map((t) => (
-          <div key={t.n} className="rounded-lg border border-border bg-surface-0/40 px-3 py-2">
+          <div key={t.n} className={`rounded-lg border border-border bg-surface-0/40 px-3 ${compact ? "py-1" : "py-2"}`}>
             <div className="text-[11px] text-text-muted">Top {t.n}</div>
             <div
               className={`text-sm font-semibold ${
@@ -204,7 +204,7 @@ export function BrokerSummaryCard({ initial }: { initial: BrokerSummary }) {
       </div>
 
       {/* Agregat */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-3 text-[11px]">
+      <div className={`grid grid-cols-2 sm:grid-cols-4 gap-2 ${compact ? "mb-2 text-[10px]" : "mb-3 text-[11px]"}`}>
         <div className="rounded-lg border border-border px-3 py-2">
           <div className="text-text-muted">Broker</div>
           <div>
@@ -231,7 +231,7 @@ export function BrokerSummaryCard({ initial }: { initial: BrokerSummary }) {
       </div>
 
       {/* Tabel dua sisi */}
-      <div className="grid grid-cols-2 gap-3 text-[11px]">
+      <div className={`grid grid-cols-2 gap-3 ${compact ? "text-[10px]" : "text-[11px]"}`}>
         <BrokerColumn title="Top Buyer" rows={buyers} tone="buy" />
         <BrokerColumn title="Top Seller" rows={sellers} tone="sell" />
       </div>

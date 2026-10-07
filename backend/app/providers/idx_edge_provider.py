@@ -409,3 +409,11 @@ class IdxEdgeProvider:
             params["date"] = date
         data = await self._get_json("/api/done-details", params)
         return data if isinstance(data, dict) else None
+
+    async def fetch_done_detail_dates(
+        self, code: str
+    ) -> Optional[dict]:
+        data = await self._get_json(
+            "/api/done-details/dates", {"code": code}
+        )
+        return data if isinstance(data, dict) else None
