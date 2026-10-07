@@ -67,6 +67,30 @@ def test_extract_view_filters_codes():
     assert extract_view({"type": "top5"}, {"BBCA"}) is None
 
 
+def test_capture_market_from_snapshot_and_top5():
+    feed = _PatchedFeed([_snapshot(), {"type": "top5", "top": [{"ticker": "BBCA"}], "window_seconds": 60, "boards": {"value": {"BBRI": 1}}}])
+
+    async def scenario():
+        q = await feed.subscribe({"BBCA"})
+        await asyncio.sleep(0.3)
+        await feed.unsubscribe({"BBCA"}, q)
+
+    asyncio.run(scenario())
+    market = feed.latest_market()
+    assert market["status"] == "open", market
+    top = feed.latest_top()
+    assert top["window_seconds"] == 60, top
+    assert [x.get("ticker") for x in top["top"]] == ["BBCA"], top["top"]
+    assert "value" in top["boards"], top["boards"]
+
+
+def test_market_state_empty_before_any_message():
+    feed = _PatchedFeed([])
+    assert feed.latest_market() == {}
+    assert feed.latest_top()["top"] == []
+    assert feed.latest_top()["window_seconds"] is None
+
+
 def test_quote_view():
     q = quote_view({"t": "BBCA", "p": 6100, "pc": 0.5, "a": "10:00:01"})
     assert q == {"type": "quote", "ticker": "BBCA", "price": 6100, "change_pct": 0.5, "time": "10:00:01"}
@@ -164,6 +188,8 @@ def test_ws_route_rejects_empty_ticker_and_pipes_messages():
 def main():
     test_extract_view_filters_codes()
     test_quote_view()
+    test_capture_market_from_snapshot_and_top5()
+    test_market_state_empty_before_any_message()
     test_subscribe_receives_filtered_snapshot_and_live_trade_then_quiet()
     test_unsubscribed_code_gets_nothing()
     test_ws_route_rejects_empty_ticker_and_pipes_messages()

@@ -143,6 +143,72 @@ async def _get_live_price(ticker: str) -> dict:
     return out
 
 
+_TOP_WAIT = 3.0
+
+
+def _norm_top_item(item: Any) -> Any:
+    """Normalisasi defensif item top-aktif; field mentah dipertahankan.
+
+    Bentuk item provider belum terverifikasi (belum teramati saat pasar buka),
+    jadi kita petakan nama alternatif tanpa membuang field aslinya.
+    """
+    if not isinstance(item, dict):
+        return item
+    out = dict(item)
+    if "ticker" not in out and "t" in out:
+        out["ticker"] = out["t"]
+    if "price" not in out:
+        for k in ("last_price", "p"):
+            if k in out:
+                out["price"] = out[k]
+                break
+    if "change_pct" not in out:
+        for k in ("last_change_pct", "pc"):
+            if k in out:
+                out["change_pct"] = out[k]
+                break
+    return out
+
+
+async def _get_top_active() -> dict:
+    """5 saham teraktif (stream running-trade) + status pasar.
+
+    Ini top-AKTIF (volume/nilai/frekuensi), BUKAN top gainer/loser. Vendor
+    tidak membuka data top gainer/loser untuk API key.
+    """
+    from app.services.live_feed import get_feed
+
+    feed = get_feed()
+    try:
+        await feed.ensure_running()
+    except Exception as e:  # noqa: BLE001 — biarkan; mungkin tetap ada cache
+        logger.info("Live feed tidak tersedia: %s", e)
+
+    loop = asyncio.get_running_loop()
+    deadline = loop.time() + _TOP_WAIT
+    market = feed.latest_market()
+    top = feed.latest_top()
+    while not market and not top.get("top") and loop.time() < deadline:
+        await asyncio.sleep(0.25)
+        market = feed.latest_market()
+        top = feed.latest_top()
+
+    if not market and not top.get("top"):
+        return {"error": "Data top-aktif belum tersedia (feed belum menerima snapshot)."}
+
+    return {
+        "as_of": market.get("label") or market.get("status"),
+        "market": market,
+        "window_seconds": top.get("window_seconds"),
+        "top": [_norm_top_item(x) for x in top.get("top", [])],
+        "note": (
+            "Top 5 saham TERAKTIF dari stream running-trade (volume/nilai). Ini "
+            "BUKAN top gainer/loser; data top gainer/loser tidak tersedia lewat "
+            "API key vendor. Saat pasar tutup, daftar bisa kosong."
+        ),
+    }
+
+
 async def _get_fundamentals(ticker: str) -> dict:
     data = await build_fundamentals(ticker.upper())
     if not data:
@@ -337,6 +403,18 @@ TOOL_SPECS: list[dict] = [
         "fn": _get_live_price,
     },
     {
+        "name": "get_top_active",
+        "description": (
+            "5 saham paling AKTIF (teraktif) di pasar saat ini dari stream "
+            "running-trade, plus status pasar (open/break/closed, label, next_open). "
+            "Gunakan untuk pertanyaan 'saham teraktif/ramai hari ini'. Ini BUKAN "
+            "top gainer/loser — data top gainer/loser tidak tersedia lewat API key "
+            "vendor; sampaikan itu bila ditanya."
+        ),
+        "parameters": {"type": "object", "properties": {}},
+        "fn": _get_top_active,
+    },
+    {
         "name": "get_fundamentals",
         "description": "Ringkasan fundamental satu saham: valuasi (PE/PBV/PSR/Earnings Yield), laba-rugi, neraca, arus kas, per-share, profitabilitas, solvabilitas, pertumbuhan, dan price performance.",
         "parameters": {
@@ -493,7 +571,13 @@ SYSTEM_PROMPT = (
     "harian), dan sebutkan kapan datanya (as_of) serta sumbernya "
     "(running-trade = real-time, rest-snapshot = snapshot yang bisa tertinggal). "
     "Bila change_pct null dan sumber rest-snapshot, sampaikan harga itu "
-    "snapshot/tertinggal. Untuk broker summary, panggil get_broker_summary "
+    "snapshot/tertinggal. Untuk pertanyaan 'saham teraktif'/'ramai', panggil tool "
+    "get_top_active (top-aktif, BUKAN top gainer). Top gainer/loser SELURUH PASAR "
+    "TIDAK tersedia lewat API key vendor — katakan itu apa adanya lalu tawarkan "
+    "alternatif (get_top_active, get_live_price per saham). Untuk data akumulasi "
+    "(get_accumulation_candidates), WAJIB sebutkan tanggal datanya (scan_date) dan "
+    "bila field stale=true katakan bahwa itu data lama, bukan data hari ini. "
+    "Untuk broker summary, panggil get_broker_summary "
     "cukup SEKALI per saham (default semua investor) — jangan panggil berulang "
     "untuk asing/domestik, karena filter bisa diubah user di kartu. Untuk pertanyaan "
     "daftar saham dari tool get_accumulation_candidates, panggil tool itu dan jelaskan "
