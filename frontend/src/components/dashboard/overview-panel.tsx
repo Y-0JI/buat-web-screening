@@ -71,36 +71,40 @@ export function OverviewPanel({ ticker, onOpenArticle, onOpenNews, liveTrades, l
   const [flow, setFlow] = useState<OrderFlowData | null | undefined>(undefined);
   const [dates, setDates] = useState<string[]>([]);
   const [selDate, setSelDate] = useState<string | null>(null);
+  const [page, setPage] = useState(1);
   const lastLoaded = useRef<string>("");
   const viewingLatest = selDate == null || selDate === dates[0];
+  const totalPages = Math.max(1, flow?.total_pages ?? 1);
   const rows = useMemo(
     () =>
-      viewingLatest && liveTrades.length
-        ? mergeTradeRows(flow?.rows ?? [], liveTrades)
-        : (flow?.rows ?? []).slice(0, 50),
-    [liveTrades, flow, viewingLatest]
+      viewingLatest && page === 1 && liveTrades.length
+        ? mergeTradeRows(flow?.rows ?? [], liveTrades, 100)
+        : (flow?.rows ?? []).slice(0, 100),
+    [liveTrades, flow, viewingLatest, page]
   );
   const [brokers, setBrokers] = useState<BrokerSummary[] | null>(null);
   const [news, setNews] = useState<NewsItem[] | undefined>(undefined);
   const [error, setError] = useState<string | null>(null);
   const showLive = liveConnected && viewingLatest;
 
-  const loadFlow = async (date: string | null, cancelled: () => boolean) => {
-    const key = `${ticker}|${date ?? ""}`;
+  const loadFlow = async (date: string | null, pageNum: number, cancelled: () => boolean) => {
+    const key = `${ticker}|${date ?? ""}|${pageNum}`;
     const cached = flowCache.get(key);
     if (cached !== undefined) {
-      if (cached) lastLoaded.current = cached.date ?? "";
+      if (cached) lastLoaded.current = `${cached.date ?? ""}|${cached.page ?? 1}`;
       setFlow(cached ?? null);
       setSelDate((prev) => prev ?? cached?.date ?? null);
+      setPage(cached?.page ?? pageNum);
       return;
     }
     try {
-      const of = await getOrderFlow(ticker, { date: date ?? undefined, limit: 50 }).catch(() => null);
+      const of = await getOrderFlow(ticker, { date: date ?? undefined, limit: 100, page: pageNum }).catch(() => null);
       if (cancelled()) return;
       flowCache.set(key, of);
-      if (of) lastLoaded.current = of.date ?? "";
+      if (of) lastLoaded.current = `${of.date ?? ""}|${of.page ?? 1}`;
       setFlow(of);
       setSelDate((prev) => prev ?? of?.date ?? null);
+      setPage(of?.page ?? pageNum);
     } catch {
       if (!cancelled()) setFlow((prev) => prev ?? null);
     }
@@ -112,6 +116,7 @@ export function OverviewPanel({ ticker, onOpenArticle, onOpenNews, liveTrades, l
     setFlow(undefined);
     setDates([]);
     setSelDate(null);
+    setPage(1);
     lastLoaded.current = "";
     setBrokers(null);
     setNews(undefined);
@@ -122,7 +127,7 @@ export function OverviewPanel({ ticker, onOpenArticle, onOpenNews, liveTrades, l
           (datesCache.get(ticker) !== undefined
             ? Promise.resolve(datesCache.get(ticker) ?? [])
             : getOrderFlowDates(ticker).catch(() => [] as string[])),
-          getOrderFlow(ticker, { limit: 50 }).catch(() => null),
+          getOrderFlow(ticker, { limit: 100, page: 1 }).catch(() => null),
           getBrokerSummary(ticker, { flow: "all", net: true, limit: 50, level_limit: 10 }).catch(() => null),
           getNews(ticker, { perPage: 9 }).catch(() => ({ items: [] as NewsItem[], hasMore: false, error: null })),
         ]);
@@ -131,11 +136,12 @@ export function OverviewPanel({ ticker, onOpenArticle, onOpenNews, liveTrades, l
         setDates(ds);
         const d0 = ds[0] ?? null;
         if (of) {
-          flowCache.set(`${ticker}|`, of);
-          lastLoaded.current = of.date ?? "";
+          flowCache.set(`${ticker}||1`, of);
+          lastLoaded.current = `${of.date ?? ""}|${of.page ?? 1}`;
         }
         setFlow(of);
         setSelDate(d0 ?? of?.date ?? null);
+        setPage(of?.page ?? 1);
         setBrokers(bq ? [bq] : []);
         setNews(nq.items);
       } catch {
@@ -153,13 +159,25 @@ export function OverviewPanel({ ticker, onOpenArticle, onOpenNews, liveTrades, l
   }, [ticker]);
 
   const changeDate = async (date: string) => {
-    if (!date || date === lastLoaded.current) {
+    if (!date) return;
+    const wantKey = `${date}|1`;
+    if (wantKey === lastLoaded.current) {
       setSelDate(date);
+      setPage(1);
       return;
     }
     setSelDate(date);
+    setPage(1);
     setFlow(undefined);
-    await loadFlow(date, () => false);
+    await loadFlow(date, 1, () => false);
+  };
+
+  const changePage = async (next: number) => {
+    const p = Math.min(Math.max(1, next), totalPages);
+    if (p === page) return;
+    setPage(p);
+    setFlow(undefined);
+    await loadFlow(selDate, p, () => false);
   };
 
   return (
@@ -209,6 +227,7 @@ export function OverviewPanel({ ticker, onOpenArticle, onOpenNews, liveTrades, l
         ) : !rows.length ? (
           <p className="py-4 text-center text-xs text-text-muted">Done details tidak tersedia.</p>
         ) : (
+          <>
           <div className="max-h-80 overflow-auto rounded-lg border border-border/60">
             <table className="w-full text-[11px] min-w-[520px]">
               <thead className="sticky top-0 bg-surface-2">
@@ -239,6 +258,30 @@ export function OverviewPanel({ ticker, onOpenArticle, onOpenNews, liveTrades, l
               </tbody>
             </table>
           </div>
+          {totalPages > 1 && (
+            <div className="flex items-center justify-between mt-2">
+              <button
+                type="button"
+                disabled={page <= 1}
+                onClick={() => void changePage(page - 1)}
+                className="px-2.5 py-1 rounded-full text-[11px] font-medium border border-border text-text-secondary hover:text-text-primary disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              >
+                Sebelumnya
+              </button>
+              <span className="text-[11px] text-text-muted">
+                Hal {page}/{totalPages}
+              </span>
+              <button
+                type="button"
+                disabled={page >= totalPages}
+                onClick={() => void changePage(page + 1)}
+                className="px-2.5 py-1 rounded-full text-[11px] font-medium border border-border text-text-secondary hover:text-text-primary disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              >
+                Berikutnya
+              </button>
+            </div>
+          )}
+          </>
         )}
       </section>
 
