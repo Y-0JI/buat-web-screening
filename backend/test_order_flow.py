@@ -99,11 +99,45 @@ def test_order_flow_date_param_reaches_provider():
         of_mod.IdxEdgeProvider = real
 
 
+class _PagedProvider(_FakeProvider):
+    """Fake done-details dengan total_pages: page terakhir = jam buka."""
+
+    PAGES = {
+        1: {"code": "BBCA", "date": "2026-10-06", "total": 192, "total_pages": 192,
+            "data": [{"time": "16:14:49", "price_num": 6100, "lot": 8}]},
+        192: {"code": "BBCA", "date": "2026-10-06", "total": 192, "total_pages": 192,
+              "data": [{"time": "08:58:00", "price_num": 6050, "lot": 2}]},
+    }
+
+    async def fetch_done_details(self, code, date=None, page=1, per_page=100):
+        return dict(self.PAGES.get(page, {"code": code, "date": date, "total": 192, "total_pages": 192, "data": []}))
+
+
+def test_order_flow_page_passthrough_and_last_page():
+    real = _use(_PagedProvider())
+    try:
+        app = FastAPI()
+        app.include_router(order_flow_router)
+        latest = TestClient(app).get("/api/order-flow/BBCA?date=2026-10-06&limit=50").json()
+        assert latest["success"], latest
+        assert latest["data"]["page"] == 1, latest["data"]
+        assert latest["data"]["total_pages"] == 192, latest["data"]
+        assert latest["data"]["rows"][0]["time"] == "16:14:49", latest["data"]
+
+        opening = TestClient(app).get("/api/order-flow/BBCA?date=2026-10-06&limit=50&page=192").json()
+        assert opening["success"], opening
+        assert opening["data"]["page"] == 192, opening["data"]
+        assert opening["data"]["rows"][0]["time"] == "08:58:00", opening["data"]
+    finally:
+        of_mod.IdxEdgeProvider = real
+
+
 def main():
     test_dates_payload()
     test_dates_route()
     test_dates_route_empty_unsuccessful()
     test_order_flow_date_param_reaches_provider()
+    test_order_flow_page_passthrough_and_last_page()
     print("OK: test_order_flow lolos")
 
 
