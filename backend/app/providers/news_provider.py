@@ -47,6 +47,44 @@ _FEED_TTL = 120
 _ARTICLE_TTL = 3600
 
 _feed_cache: dict = {"ts": 0.0, "items": []}
+_bing_cache: dict[str, dict] = {}
+
+
+async def _fetch_publisher_feeds(
+    client: httpx.AsyncClient,
+) -> list[dict]:
+    """Feed penerbit (tidak tergantung emiten) — cache global bersama."""
+    now = time.time()
+    if _feed_cache["items"] and now - _feed_cache["ts"] < _FEED_TTL:
+        return list(_feed_cache["items"])
+    pool: list[dict] = []
+    for url, source in FEEDS:
+        pool.extend(await _fetch_feed(client, url, source))
+    _feed_cache["ts"] = now
+    _feed_cache["items"] = pool
+    return list(pool)
+
+
+async def _fetch_bing_all(
+    client: httpx.AsyncClient, code: str
+) -> list[dict]:
+    """Bing News per emiten — cache per kode agar tidak tercampur."""
+    now = time.time()
+    entry = _bing_cache.get(code)
+    if entry and now - entry["ts"] < _FEED_TTL:
+        return list(entry["items"])
+    pages = await asyncio.gather(*[
+        _fetch_bing_page(client, code, page * _BING_PAGE_SIZE)
+        for page in range(_BING_MAX_PAGES)
+    ])
+    pool: list[dict] = []
+    for rows in pages:
+        if rows:
+            pool.extend(rows)
+        else:
+            break
+    _bing_cache[code] = {"ts": now, "items": pool}
+    return list(pool)
 
 
 def _strip_html(text: str) -> str:
@@ -178,25 +216,9 @@ async def fetch_news(
     Kembalikan pool penuh (terbaru dulu); pemotongan halaman dilakukan
     pemanggil/route agar tombol 'More' bisa memuat batch lama.
     """
-    now = time.time()
-    if _feed_cache["items"] and now - _feed_cache["ts"] < _FEED_TTL:
-        pool = list(_feed_cache["items"])
-    else:
-        pool = []
-        async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
-            for url, source in FEEDS:
-                pool.extend(await _fetch_feed(client, url, source))
-            pages = await asyncio.gather(*[
-                _fetch_bing_page(client, code, page * _BING_PAGE_SIZE)
-                for page in range(_BING_MAX_PAGES)
-            ])
-            for rows in pages:
-                if rows:
-                    pool.extend(rows)
-                else:
-                    break
-        _feed_cache["ts"] = now
-        _feed_cache["items"] = pool
+    async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
+        pool = await _fetch_publisher_feeds(client)
+        pool.extend(await _fetch_bing_all(client, code))
 
     cutoff = datetime.now(timezone.utc).timestamp() - _MAX_AGE_DAYS * 86400
     code_l = code.lower()
