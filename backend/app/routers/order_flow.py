@@ -43,15 +43,19 @@ def order_flow_payload(data: Optional[dict]) -> Optional[dict]:
         "code": data.get("code"),
         "date": data.get("date"),
         "total": data.get("total"),
+        "page": data.get("page", 1),
+        "per_page": data.get("per_page"),
+        "total_pages": data.get("total_pages", 1),
         "rows": rows,
     }
 
 
 @router.get("/order-flow/{ticker}")
-async def order_flow(ticker: str, date: Optional[str] = None, limit: int = 50):
+async def order_flow(ticker: str, date: Optional[str] = None, limit: int = 50, page: int = 1):
     limit = max(1, min(int(limit or 50), _MAX_LIMIT))
+    page = max(1, int(page or 1))
     data = await IdxEdgeProvider().fetch_done_details(
-        ticker.upper(), date=date or None, per_page=limit
+        ticker.upper(), date=date or None, page=page, per_page=limit
     )
     payload = order_flow_payload(data)
     if not payload:

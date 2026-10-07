@@ -99,11 +99,42 @@ def test_order_flow_date_param_reaches_provider():
         of_mod.IdxEdgeProvider = real
 
 
+def test_order_flow_page_param_reaches_provider():
+    seen = {}
+
+    class _Spy(_FakeProvider):
+        async def fetch_done_details(self, code, date=None, page=1, per_page=100):
+            seen["args"] = (code, date, page, per_page)
+            return {
+                "code": code,
+                "date": date or "2026-10-06",
+                "total": 250,
+                "page": page,
+                "per_page": per_page,
+                "total_pages": 3,
+                "data": [{"time": "09:00:01", "price_num": 100, "lot": 1, "value_raw": 10000, "buyer": "A", "seller": "B"}],
+            }
+
+    real = _use(_Spy())
+    try:
+        app = FastAPI()
+        app.include_router(order_flow_router)
+        data = TestClient(app).get("/api/order-flow/BBCA?date=2026-10-06&limit=100&page=2").json()
+        assert data["success"], data
+        assert seen["args"][2] == 2, seen
+        assert data["data"]["page"] == 2, data
+        assert data["data"]["total_pages"] == 3, data
+        assert data["data"]["total"] == 250, data
+    finally:
+        of_mod.IdxEdgeProvider = real
+
+
 def main():
     test_dates_payload()
     test_dates_route()
     test_dates_route_empty_unsuccessful()
     test_order_flow_date_param_reaches_provider()
+    test_order_flow_page_param_reaches_provider()
     print("OK: test_order_flow lolos")
 
 
