@@ -147,10 +147,11 @@ _TOP_WAIT = 3.0
 
 
 def _norm_top_item(item: Any) -> Any:
-    """Normalisasi defensif item top-aktif; field mentah dipertahankan.
+    """Normalisasi item top-aktif dari pesan snapshot|top5 WS.
 
-    Bentuk item provider belum terverifikasi (belum teramati saat pasar buka),
-    jadi kita petakan nama alternatif tanpa membuang field aslinya.
+    Bentuk terverifikasi (market buka):
+    {"ticker","metric","count","last_price","last_change_pct"}.
+    Field mentah dipertahankan agar tidak ada info yang hilang.
     """
     if not isinstance(item, dict):
         return item
