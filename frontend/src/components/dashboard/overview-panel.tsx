@@ -194,23 +194,17 @@ export function OverviewPanel({ ticker, onOpenArticle, onOpenNews, liveTrades, l
               </span>
             )}
           </h4>
-          {dates.length > 0 && (
-            <label className="flex items-center gap-1.5 text-[11px] text-text-muted">
-              Tanggal
-              <select
-                value={selDate ?? ""}
-                onChange={(e) => void changeDate(e.target.value)}
-                className="bg-surface-2 border border-border rounded px-1.5 py-1 text-text-primary text-[11px]"
-                aria-label="Tanggal running trade"
-              >
-                {dates.map((d) => (
-                  <option key={d} value={d}>
-                    {formatTradeDate(d)}
-                  </option>
-                ))}
-              </select>
-            </label>
-          )}
+          <label className="flex items-center gap-1.5 text-[11px] text-text-muted">
+            Tanggal
+            <input
+              type="date"
+              value={selDate ?? ""}
+              max={new Date().toISOString().slice(0, 10)}
+              onChange={(e) => void changeDate(e.target.value)}
+              className="bg-surface-2 border border-border rounded px-1.5 py-1 text-text-primary text-[11px]"
+              aria-label="Tanggal running trade"
+            />
+          </label>
           {flow?.date && (
             <span className="text-[11px] text-text-muted">
               Tanggal <span className="text-text-primary">{formatTradeDate(flow.date)}</span>
@@ -229,12 +223,13 @@ export function OverviewPanel({ ticker, onOpenArticle, onOpenNews, liveTrades, l
         ) : (
           <>
           <div className="max-h-80 overflow-auto rounded-lg border border-border/60">
-            <table className="w-full text-[11px] min-w-[520px]">
+            <table className="w-full text-[11px] min-w-[600px]">
               <thead className="sticky top-0 bg-surface-2">
                 <tr className="text-text-muted">
                   <th className="py-1.5 px-2 text-left font-semibold whitespace-nowrap">Time</th>
-                  <th className="py-1.5 px-2 text-left font-semibold">Action</th>
+                  <th className="py-1.5 px-2 text-left font-semibold">Code</th>
                   <th className="py-1.5 px-2 text-right font-semibold">Price</th>
+                  <th className="py-1.5 px-2 text-left font-semibold">Action</th>
                   <th className="py-1.5 px-2 text-right font-semibold">Lot</th>
                   <th className="py-1.5 px-2 text-right font-semibold">Val</th>
                   <th className="py-1.5 px-2 text-left font-semibold">Buyer</th>
@@ -246,8 +241,9 @@ export function OverviewPanel({ ticker, onOpenArticle, onOpenNews, liveTrades, l
                 {rows.map((r, i) => (
                   <tr key={`${r.time}-${i}`}>
                     <td className="py-1.5 px-2 text-text-secondary tabular-nums whitespace-nowrap">{r.time || "-"}</td>
-                    <td className="py-1.5 px-2"><ActionBadge action={r.action} /></td>
+                    <td className="py-1.5 px-2 text-text-primary font-semibold">{flow?.code ?? ticker}</td>
                     <td className="py-1.5 px-2 text-right text-text-primary tabular-nums">{r.price != null ? fmtRp(r.price) : "-"}</td>
+                    <td className="py-1.5 px-2"><ActionBadge action={r.action} /></td>
                     <td className="py-1.5 px-2 text-right text-text-primary tabular-nums">{r.lot != null ? fmtCompact(r.lot) : "-"}</td>
                     <td className="py-1.5 px-2 text-right text-text-primary tabular-nums">{fullVal(r.value)}</td>
                     <td className="py-1.5 px-2"><BrokerBadge code={r.buyer} kind={r.buyer_type} /></td>
