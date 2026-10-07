@@ -106,6 +106,11 @@ class LiveFeed:
         self._subs: dict[str, set["asyncio.Queue[str]"]] = {}
         self._state: dict[str, dict] = {}
         self._snapshotted: set[str] = set()
+        # Cuplikan pasar terakhir dari pesan snapshot/top5 (bukan per-kode).
+        self._top: list = []
+        self._boards: dict = {}
+        self._window_seconds: Optional[int] = None
+        self._market: dict = {}
         self._task: Optional["asyncio.Task[None]"] = None
         self._lock = asyncio.Lock()
 
@@ -182,6 +187,7 @@ class LiveFeed:
         """Sebar satu pesan provider ke subscriber yang cocok."""
         typ = message.get("type")
         if typ == "snapshot":
+            self._capture_market(message)
             for code in self._union_codes():
                 self._snapshotted.add(code)
                 view = extract_view(message, {code})
@@ -199,8 +205,36 @@ class LiveFeed:
                 if view is not None:
                     for q in self._subs.get(code, ()):
                         q.put_nowait(json.dumps(view))
-        elif typ in ("top5", "filter_applied"):
-            pass
+        elif typ == "top5":
+            self._capture_market(message)
+        # "filter_applied": tidak ada state yang perlu disimpan.
+
+    def _capture_market(self, message: dict) -> None:
+        """Simpan top-aktif/boards/window/status pasar dari snapshot|top5."""
+        top = message.get("top")
+        if isinstance(top, list):
+            self._top = top
+        boards = message.get("boards")
+        if isinstance(boards, dict):
+            self._boards = boards
+        window = message.get("window_seconds")
+        if isinstance(window, int):
+            self._window_seconds = window
+        market = message.get("market")
+        if isinstance(market, dict):
+            self._market = market
+
+    def latest_top(self) -> dict:
+        """Cuplikan 5 saham teraktif terakhir (list mentah dari provider)."""
+        return {
+            "top": list(self._top),
+            "boards": dict(self._boards),
+            "window_seconds": self._window_seconds,
+        }
+
+    def latest_market(self) -> dict:
+        """Status pasar terakhir (status/label/next_open) dari snapshot."""
+        return dict(self._market)
 
     async def _run_loop(self) -> None:
         try:
