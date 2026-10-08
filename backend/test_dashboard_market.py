@@ -130,6 +130,64 @@ def test_quote_payload_and_route():
         settings.idx_edge_api_key = old
 
 
+def test_quote_payload_bar_stats():
+    price = {"last_price": 144.0, "lot": 17020785.0, "value": 222314109000,
+             "freq": 44554, "market_state": "closed", "market_label": "tutup"}
+    bar = {"date": "2026-10-07", "open": 124.0, "high": 144.0, "low": 122.0,
+           "avg": 130.61331131319736, "f_buy": 164385000.0, "f_sell": 66157900.0,
+           "value": 222314109000.0, "volume": 1702078500.0, "freq": 44554.0}
+    payload = quote_payload("FORU", price, "Fortune Indonesia Tbk", 124.0, {}, bar)
+    assert payload is not None
+    assert abs(payload["avg"] - 130.61331131319736) < 1e-6, payload["avg"]
+    assert abs(payload["f_buy_value"] - 164385000.0 * 130.61331131319736) < 1.0, payload["f_buy_value"]
+    assert abs(payload["f_sell_value"] - 66157900.0 * 130.61331131319736) < 1.0, payload["f_sell_value"]
+    # tanpa bar -> field ada tapi None, tidak error
+    p2 = quote_payload("FORU", price, "Fortune", 124.0, {}, None)
+    assert p2 is not None and p2["avg"] is None
+    assert p2["f_buy_value"] is None and p2["f_sell_value"] is None
+
+
+def test_quote_route_includes_latest_bar_stats():
+    price = {"last_price": 144.0, "lot": 17020785.0, "value": 222314109000,
+             "freq": 44554, "market_state": "closed", "market_label": "tutup"}
+    bar = {"date": "2026-10-07", "open": 124.0, "high": 144.0, "low": 122.0,
+           "avg": 130.0, "f_buy": 1000.0, "f_sell": 500.0, "volume": 2000.0}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        url = str(request.url)
+        if url.endswith("/api/price/FORU"):
+            return httpx.Response(200, json=price)
+        if "/api/history/FORU" in url:
+            return httpx.Response(200, json={"rows": [
+                bar,
+                {"date": "2026-10-06", "open": 124.0, "high": 133.0, "low": 120.0,
+                 "close": 124.0, "volume": 1870544700.0, "avg": 127.0},
+            ]})
+        if "/api/search" in url:
+            return httpx.Response(200, json=[
+                {"stock_code": "FORU", "stock_name": "Fortune Indonesia Tbk"}])
+        return httpx.Response(404, json={"detail": "x"})
+
+    p, old = _provider(handler)
+    real_quote = quote_mod.IdxEdgeProvider
+    quote_mod.IdxEdgeProvider = lambda: p  # noqa: E731
+    quote_mod._prev_cache.clear()
+    quote_mod._session_cache.clear()
+    quote_mod._name_cache.clear()
+    try:
+        app = FastAPI()
+        app.include_router(quote_router)
+        r = TestClient(app).get("/api/quote/FORU")
+        assert r.status_code == 200, r.text
+        d = r.json()["data"]
+        assert d["avg"] == 130.0, d
+        assert d["f_buy_value"] == 130000.0, d
+        assert d["f_sell_value"] == 65000.0, d
+    finally:
+        quote_mod.IdxEdgeProvider = real_quote
+        settings.idx_edge_api_key = old
+
+
 def test_quote_disabled_returns_unsuccessful():
     old = settings.idx_edge_api_key
     settings.idx_edge_api_key = ""
@@ -179,6 +237,8 @@ def main():
     test_period_to_limit()
     test_history_route_uses_period_limit()
     test_quote_payload_and_route()
+    test_quote_payload_bar_stats()
+    test_quote_route_includes_latest_bar_stats()
     test_quote_disabled_returns_unsuccessful()
     test_search_payload_and_route()
     print("OK: test_dashboard_market lolos")

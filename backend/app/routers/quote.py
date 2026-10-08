@@ -13,8 +13,8 @@ router = APIRouter(prefix="/api", tags=["quote"])
 _NAME_TTL = 24 * 3600
 _name_cache: dict[str, tuple[float, str | None]] = {}
 
-# Cache close sesi sebelumnya per ticker per hari (1 request history/hari).
-_prev_cache: dict[str, tuple[str, Optional[float]]] = {}
+# Cache close sesi sebelumnya + bar terbaru per ticker per hari (1 request history/hari).
+_prev_cache: dict[str, tuple[str, Optional[float], Optional[dict]]] = {}
 
 # Tracker O/H/L sesi hari ini dari harga live (reset harian, perkiraan).
 _session_cache: dict[str, tuple[str, dict]] = {}
@@ -24,12 +24,20 @@ def _today_wib() -> str:
     return (datetime.now(timezone.utc) + timedelta(hours=7)).date().isoformat()
 
 
+def _fnum(v) -> Optional[float]:
+    try:
+        return float(v) if v is not None else None
+    except (TypeError, ValueError):
+        return None
+
+
 def quote_payload(
     code: str,
     price: dict | None,
     name: str | None,
     prev_close: Optional[float] = None,
     session: Optional[dict] = None,
+    bar: Optional[dict] = None,
 ) -> dict | None:
     """Normalisasi respons /api/price + nama → struktur untuk header UI."""
     if not price:
@@ -58,6 +66,9 @@ def quote_payload(
         change = last - prev_close
         change_pct = change / prev_close * 100
     session = session or {}
+    avg = _fnum((bar or {}).get("avg"))
+    f_buy = _fnum((bar or {}).get("f_buy"))
+    f_sell = _fnum((bar or {}).get("f_sell"))
     return {
         "ticker": code,
         "name": name,
@@ -74,16 +85,22 @@ def quote_payload(
         "day_high": session.get("high"),
         "day_low": session.get("low"),
         "day_volume": lot,
+        "avg": avg,
+        "f_buy_value": f_buy * avg if (f_buy is not None and avg is not None) else None,
+        "f_sell_value": f_sell * avg if (f_sell is not None and avg is not None) else None,
     }
 
 
-async def prev_close_of(provider: IdxEdgeProvider, code: str) -> Optional[float]:
-    """Close bar harian terakhir dengan date < hari ini (WIB = close sesi lalu)."""
+async def prev_close_and_bar(
+    provider: IdxEdgeProvider, code: str
+) -> tuple[Optional[float], Optional[dict]]:
+    """Close sesi sebelumnya + bar harian terbaru (avg/f_buy/f_sell) dalam 1 fetch."""
     today = _today_wib()
     cached = _prev_cache.get(code)
     if cached and cached[0] == today:
-        return cached[1]
-    prev = None
+        return cached[1], cached[2]
+    prev: Optional[float] = None
+    bar: Optional[dict] = None
     try:
         # API menolak limit < 20; ambil 20 bar terakhir lalu pilih yang di bawah hari ini.
         rows = await provider.fetch_history(code, limit=20)
@@ -96,10 +113,16 @@ async def prev_close_of(provider: IdxEdgeProvider, code: str) -> Optional[float]
                 prev = float(prev)
             except (TypeError, ValueError):
                 prev = None
+        # Bar terbaru mentah (history_series membuang avg/f_buy/f_sell).
+        for r in rows or []:
+            d = str(r.get("date") or "")
+            if d and (bar is None or d > str(bar.get("date") or "")):
+                bar = r
     except Exception:  # noqa: BLE001 — pelengkap, bukan fatal
         prev = None
-    _prev_cache[code] = (today, prev)
-    return prev
+        bar = None
+    _prev_cache[code] = (today, prev, bar)
+    return prev, bar
 
 
 def track_session(code: str, last: float) -> dict:
@@ -146,12 +169,12 @@ async def get_quote(ticker: str):
     else:
         name = await resolve_name(provider, code)
         _name_cache[code] = (time.time(), name)
-    prev = await prev_close_of(provider, code)
+    prev, bar = await prev_close_and_bar(provider, code)
     session: dict = {}
     try:
         last = float((price or {}).get("last_price") or 0)
         session = track_session(code, last)
     except (TypeError, ValueError):
         session = {}
-    payload = quote_payload(code, price, name, prev, session)
+    payload = quote_payload(code, price, name, prev, session, bar)
     return {"success": payload is not None, "ticker": code, "data": payload}

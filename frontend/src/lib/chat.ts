@@ -70,6 +70,9 @@ export interface QuoteData {
   day_high?: number | null;
   day_low?: number | null;
   day_volume?: number | null;
+  avg?: number | null;
+  f_buy_value?: number | null;
+  f_sell_value?: number | null;
 }
 
 export const FALLBACK_TICKER = "IHSG";

@@ -12,6 +12,8 @@ import {
 import { useLiveTicker } from "@/lib/live";
 import { ChartSettings, DEFAULT_ACTIVE, DEFAULT_OVERLAY, OVERLAY_KEY, normalizeOverlay, type ChartType, type IndicatorId, type OverlayParams } from "./chart-settings";
 import { DashboardChart } from "./dashboard-chart";
+import { QuoteStatsCard } from "./quote-stats-card";
+import { isIndexTicker } from "@/lib/index-stats";
 import { StockTabs } from "./stock-tabs";
 import { ACTIVE_PERIODS, PERIODS, StockPanel, type Period } from "./stock-panel";
 
@@ -227,6 +229,37 @@ export function DashboardPanel({
       />
 
       <div className="shrink-0 px-4 pt-1 pb-0 relative">
+        <div className="absolute right-5 top-2 z-10 flex items-center gap-1.5 flex-wrap justify-end max-w-[85%] rounded-lg bg-surface-0/70 backdrop-blur px-1 py-0.5">
+          {PERIODS.map((p) => {
+            const enabled = ACTIVE_PERIODS.includes(p);
+            const on = period === p;
+            return (
+              <button
+                key={p}
+                type="button"
+                disabled={!enabled || (loading && p === period)}
+                onClick={() => setPeriod(p)}
+                className={`px-2.5 py-1 rounded-full text-[11px] font-medium transition-colors ${
+                  on
+                    ? "bg-emerald-500/15 text-emerald-500 border border-emerald-500/60"
+                    : enabled
+                      ? "text-text-secondary border border-border hover:text-text-primary hover:border-border"
+                      : "text-text-muted border border-border/60 cursor-not-allowed"
+                }`}
+              >
+                {p}
+              </button>
+            );
+          })}
+          <ChartSettings
+            active={active}
+            onToggle={toggle}
+            params={params}
+            onSaveParams={(p) => setParams(normalizeOverlay(p))}
+            chartType={chartType}
+            onChartType={setChartType}
+          />
+        </div>
         {loading && !series.length ? (
           <div className="h-64 flex items-center justify-center text-sm text-text-muted">
             Memuat chart…
@@ -244,39 +277,7 @@ export function DashboardPanel({
         ) : null}
       </div>
 
-      <div className="px-4 pt-1 pb-1 flex items-center gap-1.5 flex-wrap">
-        {PERIODS.map((p) => {
-          const enabled = ACTIVE_PERIODS.includes(p);
-          const on = period === p;
-          return (
-            <button
-              key={p}
-              type="button"
-              disabled={!enabled || (loading && p === period)}
-              onClick={() => setPeriod(p)}
-              className={`px-2.5 py-1 rounded-full text-[11px] font-medium transition-colors ${
-                on
-                  ? "bg-emerald-500/15 text-emerald-500 border border-emerald-500/60"
-                  : enabled
-                    ? "text-text-secondary border border-border hover:text-text-primary hover:border-border"
-                    : "text-text-muted border border-border/60 cursor-not-allowed"
-              }`}
-            >
-              {p}
-            </button>
-          );
-        })}
-        <div className="ml-auto flex items-center gap-1">
-          <ChartSettings
-            active={active}
-            onToggle={toggle}
-            params={params}
-            onSaveParams={(p) => setParams(normalizeOverlay(p))}
-            chartType={chartType}
-            onChartType={setChartType}
-          />
-        </div>
-      </div>
+      <QuoteStatsCard ticker={ticker} quote={displayQuote} series={series} index={isIndexTicker(ticker)} />
 
       <StockTabs
         ticker={ticker}
