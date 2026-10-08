@@ -73,12 +73,13 @@ export function OverviewPanel({ ticker, onOpenArticle, onOpenNews, liveTrades, l
   const [selDate, setSelDate] = useState<string | null>(null);
   const [page, setPage] = useState(1);
   const lastLoaded = useRef<string>("");
-  const viewingLatest = selDate == null || selDate === dates[0];
+  const lastLiveDate = useRef<string | null>(null);
+  const viewingLatest = selDate == null || dates.length === 0 || selDate >= dates[0];
   const totalPages = Math.max(1, flow?.total_pages ?? 1);
   const rows = useMemo(
     () =>
       viewingLatest && page === 1 && liveTrades.length
-        ? mergeTradeRows(flow?.rows ?? [], liveTrades, 100)
+        ? mergeTradeRows(flow?.rows ?? [], liveTrades, 100, flow?.date ?? selDate)
         : (flow?.rows ?? []).slice(0, 100),
     [liveTrades, flow, viewingLatest, page]
   );
@@ -118,6 +119,7 @@ export function OverviewPanel({ ticker, onOpenArticle, onOpenNews, liveTrades, l
     setSelDate(null);
     setPage(1);
     lastLoaded.current = "";
+    lastLiveDate.current = null;
     setBrokers(null);
     setNews(undefined);
     setError(null);
@@ -180,6 +182,19 @@ export function OverviewPanel({ ticker, onOpenArticle, onOpenNews, liveTrades, l
     await loadFlow(selDate, p, () => false);
   };
 
+  useEffect(() => {
+    let newest: string | null = null;
+    for (const t of liveTrades) {
+      const d = t.tradeDate ?? null;
+      if (d && (newest == null || d > newest)) newest = d;
+    }
+    if (!newest || newest === lastLiveDate.current) return;
+    lastLiveDate.current = newest;
+    if (selDate != null && newest <= selDate) return;
+    void changeDate(newest);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [liveTrades, selDate]);
+
   return (
     <div className="mt-2 space-y-3 pb-1">
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 items-start">
@@ -216,6 +231,11 @@ export function OverviewPanel({ ticker, onOpenArticle, onOpenNews, liveTrades, l
             </span>
           )}
         </div>
+        {hideBrokers && (
+          <p className="mb-2 text-[11px] text-text-muted">
+            Tick live tak tersedia untuk indeks — tabel dari data history.
+          </p>
+        )}
         {flow === undefined && !rows.length ? (
           <p className="py-4 text-center text-xs text-text-muted">Memuat running trade…</p>
         ) : !rows.length ? (

@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { mergeTradeRows, reduceLiveMessage, wsUrl } from "./live";
+import { mergeTradeRows, reduceLiveMessage, todayWib, wsUrl } from "./live";
 import type { OrderFlowRow } from "./chat";
 import type { LiveTrade } from "./live";
 
@@ -104,5 +104,43 @@ describe("mergeTradeRows", () => {
 
   test("tanpa live tetap mengembalikan tape REST", () => {
     expect(mergeTradeRows([rest("10:00:01")], [])).toHaveLength(1);
+  });
+
+  test("tick live dicap tanggal WIB hari ini", () => {
+    const next = reduceLiveMessage(EMPTY, "BBCA", {
+      type: "trade",
+      data: { t: "BBCA", time: "10:47:07", action: "BUY", price: 6075, lot: 1 },
+    });
+    expect(next.trades[0].tradeDate).toBe(todayWib());
+    expect(/^\d{4}-\d{2}-\d{2}$/.test(next.trades[0].tradeDate ?? "")).toBe(true);
+  });
+
+  test("live beda tanggal tampil di depan history kemarin", () => {
+    const out = mergeTradeRows(
+      [rest("16:14:11")],
+      [live("10:47:07", { tradeDate: "2026-10-08" })],
+      100,
+      "2026-10-07"
+    );
+    expect(out.map((r) => (r as LiveTrade).tradeDate ?? "2026-10-07")).toEqual([
+      "2026-10-08",
+      "2026-10-07",
+    ]);
+  });
+
+  test("jam sama beda tanggal bukan duplikat", () => {
+    const out = mergeTradeRows(
+      [rest("10:47:07")],
+      [live("10:47:07", { tradeDate: "2026-10-08" })],
+      100,
+      "2026-10-07"
+    );
+    expect(out).toHaveLength(2);
+  });
+
+  test("kompatibel: tanpa tanggal pakai perilaku lama", () => {
+    const out = mergeTradeRows([rest("10:00:01")], [live("10:00:01")]);
+    expect(out).toHaveLength(1);
+    expect(out.map((r) => r.time)).toEqual(["10:00:01", ...[]].slice(0, 1));
   });
 });
