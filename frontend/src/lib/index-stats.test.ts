@@ -59,7 +59,7 @@ describe("buildIndexStats", () => {
     expect(byKey.lot.value).toBe("165.83M");
     expect(byKey.chg.value).toBe("+7.39");
     expect(byKey.high.value).toBe("6,179.09");
-    expect(byKey.val.value).toBe("1,887,228");
+    expect(byKey.val.value).toBe("1.89M");
     expect(byKey.pct.value).toBe("0.12%");
     expect(byKey.low.value).toBe("6,137.66");
     expect(byKey.avg.value).toBe("0");
@@ -71,6 +71,11 @@ describe("buildIndexStats", () => {
     expect(title.changeText).toBe("-46.20 (-0.75%)");
     expect(byKey.chg.tone).toBe("down");
     expect(byKey.pct.tone).toBe("down");
+  });
+
+  test("Val triliun diringkas agar muat", () => {
+    const { byKey } = cellsOf({ ...ihsg, value: 8715185031500 });
+    expect(byKey.val.value).toBe("8.72T");
   });
 
   test("field kosong -> '-'; quote null -> null", () => {

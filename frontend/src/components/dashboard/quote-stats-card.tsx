@@ -3,6 +3,7 @@
 import { useMemo } from "react";
 import type { HistoryPoint, QuoteData } from "@/lib/chat";
 import { fmtPct, fmtRp } from "@/lib/format";
+import { buildIndexStats } from "@/lib/index-stats";
 import { buildQuoteStats, type StatTone } from "@/lib/quote-stats";
 
 const TONE_TEXT: Record<StatTone, string> = {
@@ -46,10 +47,13 @@ interface Props {
   ticker: string;
   quote: QuoteData | null;
   series: HistoryPoint[];
+  index?: boolean;
 }
 
-export function QuoteStatsCard({ ticker, quote, series }: Props) {
-  const stats = buildQuoteStats(quote);
+export function QuoteStatsCard({ ticker, quote, series, index }: Props) {
+  const stats = index
+    ? (buildIndexStats(ticker, quote)?.cells ?? [])
+    : buildQuoteStats(quote);
   if (!quote || !stats.length) return null;
 
   const up = (quote.change ?? 0) >= 0;
@@ -70,7 +74,7 @@ export function QuoteStatsCard({ ticker, quote, series }: Props) {
           )}
         </div>
 
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+        <div className={`grid gap-2 ${index ? "grid-cols-3" : "grid-cols-2 md:grid-cols-4"}`}>
           {stats.map((s) => (
             <div key={s.key} className={`rounded-lg px-2.5 py-2 ${TONE_BG[s.tone]}`}>
               <div className="text-[10px] uppercase tracking-wide text-text-muted">{s.label}</div>
