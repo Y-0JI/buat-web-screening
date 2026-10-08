@@ -6,7 +6,6 @@ import {
   fmtRp,
 } from "@/lib/format";
 import {
-  formatTradeDate,
   getBrokerSummary,
   getNews,
   getOrderFlow,
@@ -220,11 +219,6 @@ export function OverviewPanel({ ticker, onOpenArticle, onOpenNews, liveTrades, l
               aria-label="Tanggal running trade"
             />
           </label>
-          {flow?.date && (
-            <span className="text-[11px] text-text-muted">
-              Tanggal <span className="text-text-primary">{formatTradeDate(flow.date)}</span>
-            </span>
-          )}
           {flow?.total != null && (
             <span className="text-[11px] text-text-muted">
               Total Transaksi: <span className="text-text-primary font-semibold">{flow.total.toLocaleString("id-ID")}</span>
