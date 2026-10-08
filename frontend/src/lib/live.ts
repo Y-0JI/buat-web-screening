@@ -14,6 +14,14 @@ export interface LiveQuote {
 
 export interface LiveTrade extends OrderFlowRow {
   ticker: string;
+  /** Tanggal tick diterima (ISO YYYY-MM-DD, WIB); null bila tak diketahui. */
+  tradeDate?: string | null;
+}
+
+/** Tanggal hari ini dalam WIB (ISO YYYY-MM-DD) untuk mencap tick live. */
+export function todayWib(now: Date = new Date()): string {
+  const wib = new Date(now.getTime() + 7 * 60 * 60 * 1000);
+  return wib.toISOString().slice(0, 10);
 }
 
 export function wsUrl(ticker: string): string {
@@ -58,6 +66,7 @@ export function reduceLiveMessage(
       buyer_type: null,
       seller_type: null,
       board: (d.board as string | null) ?? null,
+      tradeDate: todayWib(),
     };
     return {
       quote:
@@ -68,6 +77,7 @@ export function reduceLiveMessage(
     };
   }
   if (msg.type === "snapshot" && Array.isArray(msg.recent)) {
+    const stamped = todayWib();
     const rows: LiveTrade[] = (msg.recent as Record<string, unknown>[]).map((d) => ({
       ticker,
       time: (d.time as string | null) ?? null,
@@ -80,6 +90,7 @@ export function reduceLiveMessage(
       buyer_type: null,
       seller_type: null,
       board: (d.board as string | null) ?? null,
+      tradeDate: (d.tradeDate as string | null) ?? stamped,
     }));
     return { ...prev, trades: rows };
   }
@@ -89,10 +100,13 @@ export function reduceLiveMessage(
 export function mergeTradeRows(
   rest: OrderFlowRow[],
   live: LiveTrade[],
-  cap = 50
+  cap = 50,
+  restDate?: string | null
 ): OrderFlowRow[] {
+  const dateOf = (r: OrderFlowRow): string =>
+    ((r as LiveTrade).tradeDate as string | null | undefined) ?? restDate ?? "";
   const key = (r: OrderFlowRow) =>
-    `${r.time ?? ""}|${r.price ?? ""}|${r.lot ?? ""}|${r.buyer ?? ""}|${r.seller ?? ""}`;
+    `${dateOf(r)}|${r.time ?? ""}|${r.price ?? ""}|${r.lot ?? ""}|${r.buyer ?? ""}|${r.seller ?? ""}`;
   const seen = new Set<string>();
   const out: OrderFlowRow[] = [];
   for (const r of rest) {
@@ -106,7 +120,9 @@ export function mergeTradeRows(
       out.push(l);
     }
   }
-  out.sort((a, b) => String(b.time ?? "").localeCompare(String(a.time ?? "")));
+  out.sort((a, b) =>
+    `${dateOf(b)}|${b.time ?? ""}`.localeCompare(`${dateOf(a)}|${a.time ?? ""}`)
+  );
   return out.slice(0, cap);
 }
 
