@@ -12,7 +12,9 @@ import {
 import { useLiveTicker } from "@/lib/live";
 import { ChartSettings, DEFAULT_ACTIVE, DEFAULT_OVERLAY, OVERLAY_KEY, normalizeOverlay, type ChartType, type IndicatorId, type OverlayParams } from "./chart-settings";
 import { DashboardChart } from "./dashboard-chart";
+import { IndexQuoteStrip } from "./index-quote-strip";
 import { QuoteStatsCard } from "./quote-stats-card";
+import { isIndexTicker } from "@/lib/index-stats";
 import { StockTabs } from "./stock-tabs";
 import { ACTIVE_PERIODS, PERIODS, StockPanel, type Period } from "./stock-panel";
 
@@ -218,14 +220,18 @@ export function DashboardPanel({
         </button>
       </div>
 
-      <StockPanel
-        ticker={ticker}
-        quote={displayQuote}
-        series={series}
-        period={period}
-        loading={loading}
-        error={error}
-      />
+      {isIndexTicker(ticker) ? (
+        <IndexQuoteStrip ticker={ticker} quote={displayQuote} />
+      ) : (
+        <StockPanel
+          ticker={ticker}
+          quote={displayQuote}
+          series={series}
+          period={period}
+          loading={loading}
+          error={error}
+        />
+      )}
 
       <div className="shrink-0 px-4 pt-1 pb-0 relative">
         <div className="absolute right-5 top-2 z-10 flex items-center gap-1.5 flex-wrap justify-end max-w-[85%] rounded-lg bg-surface-0/70 backdrop-blur px-1 py-0.5">
@@ -276,7 +282,9 @@ export function DashboardPanel({
         ) : null}
       </div>
 
-      <QuoteStatsCard ticker={ticker} quote={displayQuote} series={series} />
+      {!isIndexTicker(ticker) && (
+        <QuoteStatsCard ticker={ticker} quote={displayQuote} series={series} />
+      )}
 
       <StockTabs
         ticker={ticker}
